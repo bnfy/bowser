@@ -1,13 +1,17 @@
+/* Same material world in two lights: warm stone by day, warm graphite by
+   night, brass accent in both. The theme follows Electron's nativeTheme
+   (Settings → Appearance), which drives prefers-color-scheme here. */
 :root {
-  --bg: #1c1b1a;
-  --surface: #232220;
-  --surface-raised: #2c2a27;
-  --border: #3a3733;
-  --text: #ede9e3;
-  --text-dim: #9c968d;
-  --accent: #c08a3e;
-  --accent-dim: rgba(192, 138, 62, 0.16);
-  --danger: #c0563e;
+  --bg: #e9e6e0;
+  --surface: #f1efea;
+  --surface-raised: #faf9f6;
+  --border: #cfc9bf;
+  --text: #26231f;
+  --text-dim: #6f695f;
+  --accent: #9a6b23;
+  --accent-dim: rgba(154, 107, 35, 0.14);
+  --danger: #a8442e;
+  --on-danger: #fdf6f2;
 
   --font-ui: -apple-system, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
@@ -15,6 +19,21 @@
   --titlebar-h: 40px;
   --toolbar-h: 44px;
   --radius: 6px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1b1a;
+    --surface: #232220;
+    --surface-raised: #2c2a27;
+    --border: #3a3733;
+    --text: #ede9e3;
+    --text-dim: #9c968d;
+    --accent: #c08a3e;
+    --accent-dim: rgba(192, 138, 62, 0.16);
+    --danger: #c0563e;
+    --on-danger: #ede9e3;
+  }
 }
 
 * { box-sizing: border-box; }
@@ -138,7 +157,7 @@ body:not(.mac) #trafficSpacer {
   transition: opacity 100ms ease, background 100ms ease;
 }
 .tab:hover .tab-close { opacity: 1; }
-.tab-close:hover { background: var(--danger); color: var(--text); }
+.tab-close:hover { background: var(--danger); color: var(--on-danger); }
 
 #tabIndicator {
   position: absolute;
@@ -181,7 +200,7 @@ body:not(.mac) #trafficSpacer {
   color: var(--text-dim);
 }
 #windowControls button:hover { background: var(--surface-raised); color: var(--text); }
-#windowControls button.close-btn:hover { background: var(--danger); color: var(--text); }
+#windowControls button.close-btn:hover { background: var(--danger); color: var(--on-danger); }
 
 /* ---------- Row 2: toolbar / address bar ---------- */
 

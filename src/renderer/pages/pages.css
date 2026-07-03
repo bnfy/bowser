@@ -1,17 +1,35 @@
+/* Token roles mirror styles.css: warm stone by day, warm graphite by
+   night. Theme follows nativeTheme via prefers-color-scheme. */
 :root {
-  --bg: #1c1b1a;
-  --surface: #232220;
-  --surface-raised: #2c2a27;
-  --border: #3a3733;
-  --text: #ede9e3;
-  --text-dim: #9c968d;
-  --accent: #c08a3e;
-  --accent-dim: rgba(192, 138, 62, 0.16);
-  --danger: #c0563e;
+  --bg: #e9e6e0;
+  --surface: #f1efea;
+  --surface-raised: #faf9f6;
+  --border: #cfc9bf;
+  --text: #26231f;
+  --text-dim: #6f695f;
+  --accent: #9a6b23;
+  --accent-dim: rgba(154, 107, 35, 0.14);
+  --danger: #a8442e;
+  --on-danger: #fdf6f2;
 
   --font-ui: -apple-system, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
   --radius: 6px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1b1a;
+    --surface: #232220;
+    --surface-raised: #2c2a27;
+    --border: #3a3733;
+    --text: #ede9e3;
+    --text-dim: #9c968d;
+    --accent: #c08a3e;
+    --accent-dim: rgba(192, 138, 62, 0.16);
+    --danger: #c0563e;
+    --on-danger: #ede9e3;
+  }
 }
 
 * { box-sizing: border-box; }
@@ -87,7 +105,7 @@ button {
   cursor: pointer;
 }
 button:hover { color: var(--text); border-color: var(--text-dim); }
-button.danger:hover { color: var(--text); background: var(--danger); border-color: var(--danger); }
+button.danger:hover { color: var(--on-danger); background: var(--danger); border-color: var(--danger); }
 
 .spacer { flex: 1 1 auto; }
 

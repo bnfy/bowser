@@ -130,6 +130,11 @@ extension-API layer never reaches it — tracked upstream in
 userData, written through a shared debounced `JsonStore` and flushed on
 quit. History is capped at 5000 entries, the download log at 200.
 
+**Theming:** one warm graphite/brass identity in two lights. Light is the
+default palette; dark is a `prefers-color-scheme` override, and Settings →
+Appearance (System/Light/Dark) drives Electron's `nativeTheme` so the
+chrome, internal pages, and web content all follow one switch — no restart.
+
 **Address bar:** typed input is normalized in `main.js` —
 `normalizeAddressInput()` decides between "has a scheme," "looks like a
 domain," and "treat as a search query" (engine selectable in Settings:

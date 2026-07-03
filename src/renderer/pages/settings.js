@@ -1,4 +1,5 @@
 (async () => {
+  const theme = document.getElementById('theme');
   const searchEngine = document.getElementById('searchEngine');
   const adblockEnabled = document.getElementById('adblockEnabled');
   const homePage = document.getElementById('homePage');
@@ -11,10 +12,13 @@
     opt.textContent = label;
     searchEngine.append(opt);
   }
+  theme.value = settings.theme ?? 'system';
   searchEngine.value = settings.searchEngine;
   adblockEnabled.checked = settings.adblockEnabled;
   homePage.value = settings.homePage;
 
+  theme.addEventListener('change', () =>
+    window.bowserPages.settings.set({ theme: theme.value }));
   searchEngine.addEventListener('change', () =>
     window.bowserPages.settings.set({ searchEngine: searchEngine.value }));
   adblockEnabled.addEventListener('change', () =>

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, WebContentsView, session, ipcMain, Menu } = require('electron');
+const { app, BrowserWindow, WebContentsView, session, ipcMain, Menu, nativeTheme } = require('electron');
 const path = require('path');
 const crypto = require('crypto');
 const { setupAdBlocker, setAdBlockEnabled, getBlocker } = require('./adblock');
@@ -28,6 +28,16 @@ let win = null;
 
 /** @type {import('electron-chrome-extensions').ElectronChromeExtensions | null} */
 let extensionHost = null;
+
+// Window background behind everything, matching the CSS --bg tokens so
+// resizes and load flashes stay in-theme.
+const chromeBackgroundColor = () => (nativeTheme.shouldUseDarkColors ? '#1c1b1a' : '#e9e6e0');
+
+// nativeTheme.themeSource drives prefers-color-scheme in every renderer —
+// chrome UI, internal pages, and the web content itself see one theme.
+function applyTheme() {
+  nativeTheme.themeSource = settings.getSettings().theme;
+}
 
 function findTabByWebContents(wc) {
   for (const tab of tabs.values()) {
@@ -344,7 +354,7 @@ function createMainWindow() {
     height: 800,
     minWidth: 640,
     minHeight: 480,
-    backgroundColor: '#1c1b1a',
+    backgroundColor: chromeBackgroundColor(),
     frame: false,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
@@ -365,6 +375,11 @@ function createMainWindow() {
 
 app.whenReady().then(async () => {
   const ses = session.defaultSession;
+
+  applyTheme();
+  nativeTheme.on('updated', () => {
+    if (win && !win.isDestroyed()) win.setBackgroundColor(chromeBackgroundColor());
+  });
 
   setupPermissionPolicy(ses);
   setupDownloads(ses, broadcastDownloads);
@@ -402,7 +417,10 @@ app.whenReady().then(async () => {
     }
   });
 
-  settings.onSettingsChanged((s) => setAdBlockEnabled(s.adblockEnabled));
+  settings.onSettingsChanged((s) => {
+    setAdBlockEnabled(s.adblockEnabled);
+    applyTheme();
+  });
 
   registerIpcHandlers();
   buildMenu();

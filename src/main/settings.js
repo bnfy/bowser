@@ -7,11 +7,14 @@ const SEARCH_ENGINES = {
   brave: { label: 'Brave Search', url: (q) => `https://search.brave.com/search?q=${encodeURIComponent(q)}` },
 };
 
+const THEMES = ['system', 'light', 'dark'];
+
 const DEFAULTS = {
   searchEngine: 'duckduckgo',
   adblockEnabled: true,
   // Empty string = the built-in bowser://newtab page.
   homePage: '',
+  theme: 'system',
 };
 
 let store = null;
@@ -34,6 +37,7 @@ function setSettings(partial) {
   }
   if (typeof partial.adblockEnabled === 'boolean') clean.adblockEnabled = partial.adblockEnabled;
   if (typeof partial.homePage === 'string') clean.homePage = partial.homePage.trim();
+  if (THEMES.includes(partial.theme)) clean.theme = partial.theme;
   s.update((data) => Object.assign(data, clean));
   for (const fn of listeners) fn(getSettings());
   return getSettings();
