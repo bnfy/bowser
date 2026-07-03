@@ -51,6 +51,7 @@ const tabs = new Map();
 /** Display order of tab ids — the single source of truth for the strip. */
 let tabOrder = [];
 let activeTabId = null;
+const tabsWantingAddressBarFocus = new Set();
 
 // Height (in CSS px) the renderer's chrome (title/tab row + toolbar) takes
 // up. The renderer measures its own layout and reports it here, so this
@@ -154,15 +155,23 @@ function createTab(url = newTabUrl()) {
   wc.on('did-start-loading', () => { tab.isLoading = true; broadcastTabs(); });
   wc.on('did-stop-loading', () => { tab.isLoading = false; syncNavState(); broadcastTabs(); });
   wc.on('did-navigate', (_e, url) => {
+    const shouldReclaimChromeFocus = url === tab.url && tabsWantingAddressBarFocus.has(id) && activeTabId === id;
+    if (url !== tab.url) tabsWantingAddressBarFocus.delete(id);
     tab.blockedCount = 0;
     syncNavState();
     history.addVisit(url, wc.getTitle());
     broadcastTabs();
+    if (shouldReclaimChromeFocus) reclaimAddressBarFocus();
   });
   wc.on('did-navigate-in-page', (_e, url, isMainFrame) => {
     syncNavState();
     if (isMainFrame) history.addVisit(url, wc.getTitle());
     broadcastTabs();
+  });
+
+  wc.on('focus', () => {
+    const shouldReclaimChromeFocus = tabsWantingAddressBarFocus.has(id) && activeTabId === id;
+    if (shouldReclaimChromeFocus) reclaimAddressBarFocus();
   });
 
   // Open target="_blank" / window.open() as a new managed tab instead of a
@@ -177,23 +186,41 @@ function createTab(url = newTabUrl()) {
   return id;
 }
 
-function setActiveTab(id, { focusContent = true } = {}) {
+function setActiveTab(id, { focusContent = true, focusAddress = false } = {}) {
   const next = tabs.get(id);
   if (!next) return;
 
-  const prev = activeTabId ? tabs.get(activeTabId) : null;
+  const prevId = activeTabId;
+  const prev = prevId ? tabs.get(prevId) : null;
   if (prev) win.contentView.removeChildView(prev.view);
 
   activeTabId = id;
+  if (prevId && prevId !== id) tabsWantingAddressBarFocus.delete(prevId);
+  const shouldFocusAddress = focusAddress && !focusContent;
+  if (shouldFocusAddress) {
+    tabsWantingAddressBarFocus.add(id);
+  } else {
+    tabsWantingAddressBarFocus.delete(id);
+    next.view.setVisible(true);
+  }
+  if (shouldFocusAddress) next.view.setVisible(false);
   win.contentView.addChildView(next.view);
   resizeActiveView();
   // Focusing the tab's WebContentsView gives it OS keyboard focus. For a
   // blank new tab we instead want the chrome's address bar, and OS focus
-  // can't reliably be stolen back from a child view once granted — so skip
-  // focusing the content and let focusAddressBar() claim the chrome.
+  // can be claimed asynchronously by the attached child view, so blank-tab
+  // activation keeps reclaiming focus until the user navigates or switches.
   if (focusContent) next.view.webContents.focus();
   extensionHost?.selectTab(next.view.webContents);
   broadcastTabs();
+  if (shouldFocusAddress) {
+    reclaimAddressBarFocus();
+    setImmediate(() => {
+      if (activeTabId !== id || !tabs.has(id)) return;
+      next.view.setVisible(true);
+      reclaimAddressBarFocus();
+    });
+  }
 }
 
 function closeTab(id) {
@@ -204,6 +231,7 @@ function closeTab(id) {
   if (wasActive) win.contentView.removeChildView(tab.view);
 
   const closedIndex = tabOrder.indexOf(id);
+  tabsWantingAddressBarFocus.delete(id);
   tabs.delete(id);
   tabOrder = tabOrder.filter((tid) => tid !== id);
   tab.view.webContents.close();
@@ -272,8 +300,23 @@ function focusAddressBar() {
   // WebContentsView; reclaim it for the chrome window's own webContents
   // before asking its renderer to focus the input, or the caret shows in
   // the DOM but keystrokes keep routing to the page.
+  win.focus();
+  win.blurWebView();
   win.webContents.focus();
   win.webContents.send('chrome:focus-address-bar');
+}
+
+function reclaimAddressBarFocus() {
+  // WebContentsView focus can settle after Electron emits focus/navigation
+  // callbacks, so reassert once on the next main-process turn as well.
+  focusAddressBar();
+  setImmediate(focusAddressBar);
+}
+
+function refocusAddressBarIfWanted() {
+  if (activeTabId && tabsWantingAddressBarFocus.has(activeTabId)) {
+    reclaimAddressBarFocus();
+  }
 }
 
 function registerIpcHandlers() {
@@ -283,15 +326,17 @@ function registerIpcHandlers() {
     // the chrome so the address bar can take it. A url means the caller has
     // somewhere specific to go, so focus the page content.
     const blank = !url;
-    setActiveTab(id, { focusContent: !blank });
-    if (blank) focusAddressBar();
+    setActiveTab(id, { focusContent: !blank, focusAddress: blank });
     return id;
   });
   ipcMain.handle('tabs:close', (_e, id) => closeTab(id));
   ipcMain.handle('tabs:switch', (_e, id) => setActiveTab(id));
   ipcMain.handle('tabs:navigate', (_e, id, url) => {
     const tab = tabs.get(id);
-    if (tab) tab.view.webContents.loadURL(normalizeAddressInput(url));
+    if (tab) {
+      tabsWantingAddressBarFocus.delete(id);
+      tab.view.webContents.loadURL(normalizeAddressInput(url));
+    }
   });
   ipcMain.handle('tabs:back', (_e, id) => tabs.get(id)?.view.webContents.navigationHistory.goBack());
   ipcMain.handle('tabs:forward', (_e, id) => tabs.get(id)?.view.webContents.navigationHistory.goForward());
@@ -343,7 +388,7 @@ function buildMenu() {
     {
       label: 'File',
       submenu: [
-        { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: () => { setActiveTab(createTab(), { focusContent: false }); focusAddressBar(); } },
+        { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: () => setActiveTab(createTab(), { focusContent: false, focusAddress: true }) },
         { label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: () => activeTabId && closeTab(activeTabId) },
         { type: 'separator' },
         ...(isMac ? [] : [{ label: 'Check for Updates…', click: checkForUpdatesManually }, { type: 'separator' }]),
@@ -410,6 +455,7 @@ function createMainWindow() {
 
   win.loadFile(path.join(__dirname, '../renderer/index.html'));
   win.on('resize', resizeActiveView);
+  win.on('focus', refocusAddressBarIfWanted);
   win.on('closed', () => { win = null; });
 }
 
@@ -468,8 +514,7 @@ app.whenReady().then(async () => {
 
   const firstTabId = createTab();
   win.webContents.once('did-finish-load', () => {
-    setActiveTab(firstTabId, { focusContent: false });
-    focusAddressBar();
+    setActiveTab(firstTabId, { focusContent: false, focusAddress: true });
   });
 
   // Web store + preinstalled extensions load in the background — network
@@ -480,6 +525,7 @@ app.whenReady().then(async () => {
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
+    refocusAddressBarIfWanted();
   });
 });
 
