@@ -30,7 +30,7 @@
     "publish": {
       "provider": "github",
       "owner": "bnfy",
-      "repo": "Bowser-releases"
+      "repo": "bowser"
     },
     "directories": {
       "output": "dist"
