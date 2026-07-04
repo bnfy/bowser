@@ -52,7 +52,7 @@ async function checkForUpdatesManually() {
       dialog.showMessageBox({
         type: 'info',
         message: 'You’re up to date',
-        detail: `Browser Starter ${app.getVersion()} is the latest version.`,
+        detail: `Bowser ${app.getVersion()} is the latest version.`,
       });
     }
     // If newer, the download starts automatically and the

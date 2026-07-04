@@ -1,4 +1,4 @@
-# Browser Starter
+# Bowser
 
 A minimal Electron browser: custom-drawn chrome (tabs, toolbar, address
 bar) with ad/tracker blocking wired in at the network layer, independent of
@@ -20,8 +20,8 @@ app's userData directory so subsequent launches are instant. Delete the
 
 To build an installable app: `npm run dist` (or `npm run dist:dir` for a
 quick unpacked build in `dist/`). Targets: macOS dmg/zip, Windows NSIS,
-Linux AppImage. No custom icon is set yet, so builds use the stock
-Electron icon.
+Linux AppImage. `build/icon.png` (1024×1024) is the app icon source;
+electron-builder derives the .icns/.ico from it automatically.
 
 ## Auto-updates
 
@@ -93,8 +93,8 @@ Request-level blocking isn't bound by MV3's rule caps; cosmetic filtering
 (hiding leftover ad *elements*) rides on the library's session preload,
 which reports DOM state and gets `insertCSS`/`executeJavaScript` responses.
 Blocked requests are counted per tab (`request-blocked` → webContents id)
-and surface as the brass badge at the right end of the address bar. The
-whole engine can be toggled off in Settings.
+and surface as the accent-colored badge at the right end of the address
+bar. The whole engine can be toggled off in Settings.
 
 **Internal pages** (`bowser://newtab`, `bookmarks`, `history`, `downloads`,
 `settings`) are served over a privileged custom scheme by `pages.js` from
@@ -130,10 +130,12 @@ extension-API layer never reaches it — tracked upstream in
 userData, written through a shared debounced `JsonStore` and flushed on
 quit. History is capped at 5000 entries, the download log at 200.
 
-**Theming:** one warm graphite/brass identity in two lights. Light is the
-default palette; dark is a `prefers-color-scheme` override, and Settings →
-Appearance (System/Light/Dark) drives Electron's `nativeTheme` so the
-chrome, internal pages, and web content all follow one switch — no restart.
+**Theming:** one green identity in two lights — bone by day, charcoal by
+night, pine (deep) or sage (bright) as the accent depending on which.
+Light is the default palette; dark is a `prefers-color-scheme` override,
+and Settings → Appearance (System/Light/Dark) drives Electron's
+`nativeTheme` so the chrome, internal pages, and web content all follow
+one switch — no restart.
 
 **Address bar:** typed input is normalized in `main.js` —
 `normalizeAddressInput()` decides between "has a scheme," "looks like a
@@ -162,7 +164,6 @@ DuckDuckGo, Google, Bing, Brave).
   table; granting a specific site camera access needs a prompt UI.
 - **Address bar suggestions** from history/bookmarks while typing.
 - **Find in page**, error pages for failed loads, and a context menu.
-- **App icon** for packaged builds.
 - **Session restore** — tabs don't survive a restart.
 
 ## Known rough edges

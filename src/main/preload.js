@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('browserAPI', {
   openPage: (name) => ipcRenderer.invoke('tabs:open-page', name),
   getAllTabs: () => ipcRenderer.invoke('tabs:get-all'),
   getDownloadsSummary: () => ipcRenderer.invoke('downloads:summary'),
+  getExtensions: () => ipcRenderer.invoke('extensions:list'),
 
   reportChromeLayout: (height) => ipcRenderer.send('chrome:layout', { height }),
 

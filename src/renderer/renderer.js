@@ -17,6 +17,10 @@
   const downloadsBadge = document.getElementById('downloadsBadge');
   const historyBtn = document.getElementById('historyBtn');
   const settingsBtn = document.getElementById('settingsBtn');
+  const extensionsWrap = document.getElementById('extensionsWrap');
+  const extensionsBtn = document.getElementById('extensionsBtn');
+  const extensionsPopover = document.getElementById('extensionsPopover');
+  const extensionsEmpty = document.getElementById('extensionsEmpty');
   const actionList = document.getElementById('actionList');
 
   let tabIndicator = document.getElementById('tabIndicator');
@@ -28,6 +32,10 @@
 
   let state = { tabs: [], activeTabId: null };
   let addressBarEditing = false;
+  let extensionsOpen = false;
+  let installedExtensionCount = 0;
+  let actionObserver = null;
+  let actionObserveAttempts = 0;
 
   // Icon set: 16px grid, 1.5px rounded strokes, currentColor (see styles.css).
   const ICONS = {
@@ -72,6 +80,171 @@
     if (!tab) return '';
     if (tab.url.startsWith('bowser://newtab') || tab.url.startsWith('file://')) return '';
     return tab.url;
+  }
+
+  function visibleExtensionActionCount() {
+    return actionList.shadowRoot?.querySelectorAll('.action').length ?? 0;
+  }
+
+  function installExtensionActionStyles(root) {
+    if (root.getElementById('bowserExtensionActionStyles')) return;
+    const style = document.createElement('style');
+    style.id = 'bowserExtensionActionStyles';
+    style.textContent = `
+:host {
+  display: flex;
+  flex-flow: row wrap;
+  gap: 6px;
+}
+
+.action {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  background-color: transparent;
+  background-size: 20px;
+  color: var(--text-dim);
+}
+
+.action:hover {
+  background-color: var(--accent-dim);
+}
+
+.action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.action.no-icon::after {
+  content: none;
+  display: none;
+}
+
+.fallback-icon {
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid currentColor;
+  border-radius: 4px;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.action:hover .fallback-icon {
+  color: var(--accent);
+}
+`;
+    root.append(style);
+  }
+
+  function normalizeExtensionActions() {
+    const root = actionList.shadowRoot;
+    if (!root) return;
+
+    for (const action of root.querySelectorAll('.action')) {
+      const label = action.getAttribute('aria-label') || action.dataset.label || action.title;
+      const hadMissingIconFallback = action.classList.contains('no-icon');
+      if (label) {
+        action.dataset.label = label;
+        action.dataset.letter ||= label.trim().charAt(0);
+        action.setAttribute('aria-label', label);
+      }
+      action.removeAttribute('title');
+
+      if (hadMissingIconFallback) {
+        action.classList.remove('no-icon');
+        action.style.backgroundImage = '';
+      }
+
+      const needsFallback = hadMissingIconFallback || (!action.style.backgroundImage && action.dataset.label);
+      let fallback = action.querySelector('.fallback-icon');
+      if (needsFallback) {
+        if (!fallback) {
+          fallback = document.createElement('span');
+          fallback.className = 'fallback-icon';
+          action.prepend(fallback);
+        }
+        fallback.textContent = action.dataset.letter || action.dataset.label?.trim().charAt(0) || '';
+      } else if (fallback) {
+        fallback.remove();
+      }
+    }
+  }
+
+  function syncExtensionActions() {
+    const root = actionList.shadowRoot;
+    if (root) {
+      installExtensionActionStyles(root);
+      normalizeExtensionActions();
+    }
+    renderExtensionsSummary();
+  }
+
+  function observeExtensionActions() {
+    const root = actionList.shadowRoot;
+    if (!root) {
+      if (actionObserveAttempts < 20) {
+        actionObserveAttempts += 1;
+        requestAnimationFrame(observeExtensionActions);
+      }
+      return;
+    }
+    if (actionObserver) return;
+
+    installExtensionActionStyles(root);
+    actionObserver = new MutationObserver(syncExtensionActions);
+    actionObserver.observe(root, {
+      attributes: true,
+      attributeFilter: ['class', 'style', 'title'],
+      childList: true,
+      subtree: true,
+    });
+    root.addEventListener('pointerover', normalizeExtensionActions, true);
+    root.addEventListener('focusin', normalizeExtensionActions, true);
+    syncExtensionActions();
+  }
+
+  function renderExtensionsSummary() {
+    const actionCount = visibleExtensionActionCount();
+    const hasInstalledExtensions = installedExtensionCount > 0;
+    const waitingForActions = hasInstalledExtensions && !actionList.shadowRoot;
+    extensionsEmpty.hidden = actionCount > 0 || waitingForActions;
+    extensionsEmpty.textContent = hasInstalledExtensions
+      ? 'No extension actions available.'
+      : 'No extensions installed.';
+  }
+
+  async function refreshExtensionsSummary() {
+    try {
+      const extensions = await window.browserAPI.getExtensions();
+      installedExtensionCount = extensions.length;
+    } catch {
+      installedExtensionCount = 0;
+    }
+    renderExtensionsSummary();
+  }
+
+  function setExtensionsOpen(open) {
+    extensionsOpen = open;
+    extensionsPopover.hidden = !open;
+    extensionsBtn.setAttribute('aria-expanded', String(open));
+    extensionsBtn.classList.toggle('active', open);
+    chromeEl.classList.toggle('extensions-open', open);
+    requestAnimationFrame(reportLayout);
+
+    if (open) {
+      refreshExtensionsSummary();
+      actionObserveAttempts = 0;
+      observeExtensionActions();
+      requestAnimationFrame(() => {
+        const firstAction = actionList.shadowRoot?.querySelector('.action');
+        (firstAction || extensionsPopover).focus();
+      });
+    }
   }
 
   function render() {
@@ -206,6 +379,19 @@
   downloadsBtn.addEventListener('click', () => window.browserAPI.openPage('downloads'));
   historyBtn.addEventListener('click', () => window.browserAPI.openPage('history'));
   settingsBtn.addEventListener('click', () => window.browserAPI.openPage('settings'));
+  extensionsBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setExtensionsOpen(!extensionsOpen);
+  });
+  document.addEventListener('click', (e) => {
+    if (extensionsOpen && !extensionsWrap.contains(e.target)) setExtensionsOpen(false);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && extensionsOpen) {
+      setExtensionsOpen(false);
+      extensionsBtn.focus();
+    }
+  });
 
   addressInput.addEventListener('focus', () => {
     addressBarEditing = true;
@@ -249,6 +435,9 @@
     render();
   });
   window.browserAPI.getDownloadsSummary().then(renderDownloads);
+  refreshExtensionsSummary();
+
+  customElements.whenDefined('browser-action-list').then(observeExtensionActions);
 
   // --- Report chrome height so the main process can size the active
   // WebContentsView to fill exactly the remaining space. ---

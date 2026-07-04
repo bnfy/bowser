@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';" />
-  <title>Browser Starter</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self'; font-src 'self' https://fonts.gstatic.com;" />
+  <title>Bowser</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -30,7 +31,16 @@
         <input id="addressInput" class="mono" spellcheck="false" autocomplete="off" placeholder="Search or enter address" />
         <div id="shieldBadge" title="Ads/trackers blocked on this page" hidden>0</div>
       </div>
-      <browser-action-list id="actionList"></browser-action-list>
+      <div id="extensionsWrap">
+        <button id="extensionsBtn" class="nav-btn" title="Extensions" aria-haspopup="dialog" aria-expanded="false" aria-controls="extensionsPopover">
+          <svg viewBox="0 0 16 16"><rect x="3" y="3" width="4" height="4" rx="1"/><rect x="9" y="3" width="4" height="4" rx="1"/><rect x="3" y="9" width="4" height="4" rx="1"/><rect x="9" y="9" width="4" height="4" rx="1"/></svg>
+        </button>
+        <div id="extensionsPopover" class="toolbar-popover" role="dialog" aria-labelledby="extensionsTitle" tabindex="-1" hidden>
+          <div id="extensionsTitle" class="popover-title">Extensions</div>
+          <browser-action-list id="actionList" alignment="right"></browser-action-list>
+          <div id="extensionsEmpty" class="popover-empty" hidden>No extensions installed.</div>
+        </div>
+      </div>
       <button id="starBtn" class="nav-btn" title="Bookmark this page (Ctrl/Cmd+D)">
         <svg viewBox="0 0 16 16"><path id="starPath" d="M8 2.25l1.79 3.63 4.01.58-2.9 2.83.68 3.99L8 11.4l-3.58 1.88.68-3.99-2.9-2.83 4.01-.58z"/></svg>
       </button>

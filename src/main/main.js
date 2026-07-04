@@ -2,7 +2,7 @@ const { app, BrowserWindow, WebContentsView, session, ipcMain, Menu, nativeTheme
 const path = require('path');
 const crypto = require('crypto');
 const { setupAdBlocker, setAdBlockEnabled, getBlocker } = require('./adblock');
-const { createExtensionHost, initWebStore } = require('./extensions');
+const { createExtensionHost, initWebStore, listExtensions } = require('./extensions');
 const { registerPagesScheme, setupPages } = require('./pages');
 const { setupPermissionPolicy } = require('./permissions');
 const { setupAutoUpdater, checkForUpdatesManually } = require('./updater');
@@ -20,7 +20,7 @@ registerPagesScheme();
 // Strip the app and Electron tokens from the UA so sites (and the Chrome
 // Web Store in particular) treat us as a plain Chrome build.
 app.userAgentFallback = app.userAgentFallback
-  .replace(/\sbrowser-starter\/[\d.]+/i, '')
+  .replace(/\sbowser\/[\d.]+/i, '')
   .replace(/\sElectron\/[\d.]+/, '');
 
 /** @type {BrowserWindow | null} */
@@ -31,7 +31,7 @@ let extensionHost = null;
 
 // Window background behind everything, matching the CSS --bg tokens so
 // resizes and load flashes stay in-theme.
-const chromeBackgroundColor = () => (nativeTheme.shouldUseDarkColors ? '#1c1b1a' : '#e9e6e0');
+const chromeBackgroundColor = () => (nativeTheme.shouldUseDarkColors ? '#0e0e0e' : '#f4f4f1');
 
 // nativeTheme.themeSource drives prefers-color-scheme in every renderer —
 // chrome UI, internal pages, and the web content itself see one theme.
@@ -366,6 +366,7 @@ function registerIpcHandlers() {
   });
   ipcMain.handle('tabs:get-all', () => ({ tabs: serializeTabs(), activeTabId }));
   ipcMain.handle('downloads:summary', () => ({ activeCount: activeCount() }));
+  ipcMain.handle('extensions:list', () => listExtensions(session.defaultSession));
 
   ipcMain.on('chrome:layout', (_e, { height }) => {
     if (typeof height === 'number' && height > 0) {
