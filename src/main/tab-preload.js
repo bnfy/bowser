@@ -32,6 +32,10 @@ if (window.location.protocol === 'bowser:') {
       list: () => ipcRenderer.invoke('pages:extensions:list'),
       remove: (id) => ipcRenderer.invoke('pages:extensions:remove', id),
     },
+    permissions: {
+      list: () => ipcRenderer.invoke('pages:permissions:list'),
+      remove: (key) => ipcRenderer.invoke('pages:permissions:remove', key),
+    },
     clearBrowsingData: () => ipcRenderer.invoke('pages:clear-browsing-data'),
   });
 }

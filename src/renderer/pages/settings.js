@@ -74,6 +74,57 @@
 
   refreshExtensions();
 
+  // --- Site permissions ---
+  const permissionList = document.getElementById('permissionList');
+  const PERMISSION_LABELS = { media: 'Camera/microphone', geolocation: 'Location', notifications: 'Notifications' };
+
+  async function refreshPermissions() {
+    const decisions = await window.bowserPages.permissions.list();
+    permissionList.replaceChildren();
+
+    const entries = Object.entries(decisions);
+    if (entries.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.textContent = 'No saved decisions. Sites ask the first time they need something.';
+      permissionList.append(empty);
+      return;
+    }
+
+    for (const [key, decision] of entries.sort(([a], [b]) => a.localeCompare(b))) {
+      const [origin, permission] = key.split('|');
+      const row = document.createElement('div');
+      row.className = 'row';
+
+      const main = document.createElement('div');
+      main.className = 'main';
+      const title = document.createElement('div');
+      title.className = 'title';
+      title.textContent = new URL(origin).host;
+      main.append(title);
+
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.textContent = `${PERMISSION_LABELS[permission] ?? permission} — ${decision === 'allow' ? 'Allowed' : 'Blocked'}`;
+
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+      const remove = document.createElement('button');
+      remove.className = 'danger';
+      remove.textContent = 'Remove';
+      remove.addEventListener('click', async () => {
+        await window.bowserPages.permissions.remove(key);
+        refreshPermissions();
+      });
+      actions.append(remove);
+
+      row.append(main, meta, actions);
+      permissionList.append(row);
+    }
+  }
+
+  refreshPermissions();
+
   // --- Ad-block exceptions ---
   const exceptionInput = document.getElementById('exceptionInput');
   const exceptionAdd = document.getElementById('exceptionAdd');

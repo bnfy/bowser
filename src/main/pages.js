@@ -6,6 +6,7 @@ const history = require('./history');
 const downloads = require('./downloads');
 const settings = require('./settings');
 const { listExtensions, removeExtension } = require('./extensions');
+const { listDecisions, removeDecision } = require('./permissions');
 
 // Internal chrome pages (bookmarks, history, downloads, settings, the new
 // tab page) are served over a dedicated `bowser://` scheme instead of
@@ -77,6 +78,9 @@ function setupPages(hooks = {}) {
 
   handle('pages:extensions:list', () => listExtensions(session.defaultSession));
   handle('pages:extensions:remove', (id) => removeExtension(session.defaultSession, id));
+
+  handle('pages:permissions:list', () => listDecisions());
+  handle('pages:permissions:remove', (key) => removeDecision(String(key)));
 
   // The settings page promises "cookies, cache & site data" — clear both.
   handle('pages:clear-browsing-data', () =>
