@@ -13,10 +13,12 @@ npm install
 npm start                       # run in dev (electron .)
 npm run dist                    # installable build: macOS dmg/zip, Windows NSIS, Linux AppImage
 npm run dist:dir                # quick unpacked build in dist/, no installer
-GH_TOKEN=<token> npm run release  # build, sign, publish to GitHub Releases
+npm run release                 # scripts/release.sh: clean, build, sign, publish to GitHub Releases
 ```
 
 There is no test suite and no linter configured in this repo — don't assume `npm test` or `npm run lint` exist.
+
+`npm run release` bumps nothing itself — bump `version` in `package.json` (and consider the `electron` devDependency, since Chromium can't be swapped out of a running app) *before* running it. It shells out to `scripts/release.sh`, which authenticates via the `gh` CLI's own cached session (no `GH_TOKEN` needed locally), builds unpublished, then uses `gh release create`/`gh release upload` directly instead of electron-builder's own GitHub publisher — that publisher races its per-artifact upload tasks against each other on first publish for a tag and can leave a release missing `latest-mac.yml` or a blockmap; shelling out to `gh` sequentially avoids that. The script is safe to re-run: if the release for the current version already exists, it fills in/overwrites assets (`--clobber`) instead of failing. It also wipes `dist/` before building so stale artifacts from earlier versions or renamed builds never linger.
 
 First launch is slower than usual: the ad blocker fetches and compiles EasyList + EasyPrivacy, then caches the compiled engine in the app's userData directory (`adblock-engine.v<N>.bin`) so later launches are instant. Delete that file to force a refresh.
 
