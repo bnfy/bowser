@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;" />
+  <title>Page failed to load</title>
+  <link rel="icon" href="icon.svg" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" />
+  <link rel="stylesheet" href="pages.css" />
+</head>
+<body class="newtab-body">
+  <div class="mark">
+    <div class="dot"></div>
+    <h1 class="section-title">This page didn't load</h1>
+    <p id="errorUrl" class="section-hint"></p>
+    <p id="errorDetail" class="section-hint"></p>
+    <nav class="newtab-links">
+      <a id="retryLink" href="bowser://newtab/">Try again</a>
+      <a href="bowser://newtab/">New tab</a>
+    </nav>
+  </div>
+  <script src="error.js"></script>
+</body>
+</html>

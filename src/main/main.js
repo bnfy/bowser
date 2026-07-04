@@ -10,6 +10,7 @@ const { setupDownloads, activeCount } = require('./downloads');
 const settings = require('./settings');
 const bookmarks = require('./bookmarks');
 const history = require('./history');
+const { JsonStore } = require('./store');
 
 const NEW_TAB_URL = 'bowser://newtab/';
 const newTabUrl = () => settings.getSettings().homePage || NEW_TAB_URL;
@@ -60,8 +61,14 @@ let chromeHeight = 88;
 
 function normalizeAddressInput(input) {
   const trimmed = input.trim();
-  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)) return trimmed; // has a scheme
+  const scheme = trimmed.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//)?.[1]?.toLowerCase();
+  if (scheme) {
+    // Script-executing schemes must never be navigable from the address bar.
+    if (['javascript', 'data', 'vbscript'].includes(scheme)) return settings.searchUrlFor(trimmed);
+    return trimmed;
+  }
   if (/^localhost(:\d+)?(\/|$)/.test(trimmed)) return `http://${trimmed}`;
+  if (/^(\d{1,3}\.){3}\d{1,3}(:\d+)?(\/|$)/.test(trimmed)) return `http://${trimmed}`; // bare IPv4
   const looksLikeDomain = /^[^\s]+\.[a-zA-Z]{2,}(\/[^\s]*)?$/.test(trimmed);
   if (looksLikeDomain) return `https://${trimmed}`;
   return settings.searchUrlFor(trimmed);
@@ -74,7 +81,34 @@ function serializeTabs() {
     .map(({ view, ...rest }) => rest);
 }
 
+// Open tabs persist across launches (restored in app.whenReady).
+let sessionStore = null;
+const ensureSessionStore = () => (sessionStore ??= new JsonStore('session', { urls: [], activeIndex: 0 }));
+
+function persistSession() {
+  if (tabs.size === 0) return; // don't wipe the saved session during teardown
+  ensureSessionStore().update((d) => {
+    d.urls = tabOrder
+      .map((id) => {
+        const url = tabs.get(id)?.url;
+        // Persist the address that failed, not the error page wrapping it,
+        // so the next launch retries the real destination.
+        if (url?.startsWith('bowser://error')) {
+          try {
+            return new URL(url).searchParams.get('url') || url;
+          } catch {
+            return url;
+          }
+        }
+        return url;
+      })
+      .filter(Boolean);
+    d.activeIndex = Math.max(0, tabOrder.indexOf(activeTabId));
+  });
+}
+
 function broadcastTabs() {
+  persistSession();
   if (!win || win.isDestroyed()) return;
   win.webContents.send('tabs:updated', { tabs: serializeTabs(), activeTabId });
 }
@@ -180,6 +214,15 @@ function createTab(url = newTabUrl()) {
     }
   });
 
+  // Show a real error page instead of leaving a blank/stale view.
+  // errorCode -3 (ERR_ABORTED) fires for cancelled loads (stop button,
+  // rapid re-navigation) and must not be treated as a failure.
+  wc.on('did-fail-load', (_e, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    if (!isMainFrame || errorCode === -3 || !validatedURL) return;
+    const q = new URLSearchParams({ url: validatedURL, code: String(errorCode), desc: errorDescription });
+    wc.loadURL(`bowser://error/?${q}`).catch(() => {});
+  });
+
   wc.on('found-in-page', (_e, result) => {
     if (id === activeTabId) {
       win.webContents.send('chrome:find-result', { activeMatchOrdinal: result.activeMatchOrdinal, matches: result.matches });
@@ -194,13 +237,22 @@ function createTab(url = newTabUrl()) {
     return { action: 'deny' };
   });
 
-  wc.loadURL(url);
+  // Load failures surface via the did-fail-load handler above; the
+  // rejected promise here is the same event and must not crash main.
+  wc.loadURL(url).catch(() => {});
   return id;
 }
 
 function setActiveTab(id, { focusContent = true, focusAddress = false } = {}) {
   const next = tabs.get(id);
   if (!next) return;
+
+  // Re-selecting the active tab must be a no-op: the extension host's
+  // selectTab delegate calls back into this function, so without this
+  // guard an extension-initiated tab activation recurses through
+  // extensionHost.selectTab → onActivated → delegate → here until the
+  // stack overflows (crashes the main process).
+  if (id === activeTabId) return;
 
   const prevId = activeTabId;
   const prev = prevId ? tabs.get(prevId) : null;
@@ -235,9 +287,17 @@ function setActiveTab(id, { focusContent = true, focusAddress = false } = {}) {
   }
 }
 
+/** URLs of recently closed tabs, oldest first (Cmd/Ctrl+Shift+T pops). */
+const recentlyClosedUrls = [];
+
 function closeTab(id) {
   const tab = tabs.get(id);
   if (!tab) return;
+
+  if (tab.url && !tab.url.startsWith('bowser://newtab')) {
+    recentlyClosedUrls.push(tab.url);
+    if (recentlyClosedUrls.length > 25) recentlyClosedUrls.shift();
+  }
 
   const wasActive = id === activeTabId;
   if (wasActive) win.contentView.removeChildView(tab.view);
@@ -259,6 +319,11 @@ function closeTab(id) {
     return; // setActiveTab already broadcasts
   }
   broadcastTabs();
+}
+
+function reopenClosedTab() {
+  const url = recentlyClosedUrls.pop();
+  if (url) setActiveTab(createTab(url));
 }
 
 function reorderTab(id, toIndex) {
@@ -434,6 +499,7 @@ function buildMenu() {
       submenu: [
         { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: () => setActiveTab(createTab(), { focusContent: false, focusAddress: true }) },
         { label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: () => activeTabId && closeTab(activeTabId) },
+        { label: 'Reopen Closed Tab', accelerator: 'CmdOrCtrl+Shift+T', click: reopenClosedTab },
         { label: 'Print…', accelerator: 'CmdOrCtrl+P', click: () => activeTabId && tabs.get(activeTabId)?.view.webContents.print() },
         { type: 'separator' },
         ...(isMac ? [] : [{ label: 'Check for Updates…', click: checkForUpdatesManually }, { type: 'separator' }]),
@@ -508,6 +574,16 @@ function createMainWindow() {
   win.on('resize', resizeActiveView);
   win.on('focus', refocusAddressBarIfWanted);
   win.on('closed', () => { win = null; });
+
+  // Tabs survive window close (macOS dock-reopen recreates the window);
+  // re-attach the active tab's view or the new window sits over nothing.
+  // First launch has no activeTabId yet — app.whenReady handles that one.
+  win.webContents.once('did-finish-load', () => {
+    if (!activeTabId || !tabs.has(activeTabId)) return;
+    const id = activeTabId;
+    activeTabId = null; // force setActiveTab to treat it as a fresh attach
+    setActiveTab(id);
+  });
 }
 
 app.whenReady().then(async () => {
@@ -563,9 +639,15 @@ app.whenReady().then(async () => {
   buildMenu();
   createMainWindow();
 
-  const firstTabId = createTab();
+  // Restore the previous session's tabs; fall back to a single new tab.
+  const saved = ensureSessionStore().data;
+  const restoredIds = saved.urls.map((u) => createTab(u));
+  const fresh = restoredIds.length === 0;
+  const firstTabId = fresh
+    ? createTab()
+    : restoredIds[Math.min(Math.max(0, saved.activeIndex), restoredIds.length - 1)];
   win.webContents.once('did-finish-load', () => {
-    setActiveTab(firstTabId, { focusContent: false, focusAddress: true });
+    setActiveTab(firstTabId, { focusContent: !fresh, focusAddress: fresh });
   });
 
   // Web store + preinstalled extensions load in the background — network

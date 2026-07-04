@@ -12,7 +12,7 @@ const { listExtensions, removeExtension } = require('./extensions');
 // file:// so they get a real origin, and so ordinary web content can never
 // link into arbitrary local files.
 const PAGES_DIR = path.join(__dirname, '../renderer/pages');
-const KNOWN_PAGES = new Set(['newtab', 'bookmarks', 'history', 'downloads', 'settings']);
+const KNOWN_PAGES = new Set(['newtab', 'bookmarks', 'history', 'downloads', 'settings', 'error']);
 
 /** Must run before app 'ready'. */
 function registerPagesScheme() {
@@ -78,7 +78,9 @@ function setupPages(hooks = {}) {
   handle('pages:extensions:list', () => listExtensions(session.defaultSession));
   handle('pages:extensions:remove', (id) => removeExtension(session.defaultSession, id));
 
-  handle('pages:clear-browsing-data', () => session.defaultSession.clearStorageData());
+  // The settings page promises "cookies, cache & site data" — clear both.
+  handle('pages:clear-browsing-data', () =>
+    Promise.all([session.defaultSession.clearStorageData(), session.defaultSession.clearCache()]));
 }
 
 module.exports = { registerPagesScheme, setupPages };

@@ -1,5 +1,12 @@
-const { app, dialog } = require('electron');
+const { app, dialog, BrowserWindow } = require('electron');
 const { autoUpdater } = require('electron-updater');
+
+// Attach update dialogs to the browser window so they can't appear behind
+// it; fall back to an unparented dialog if no window exists.
+function showDialog(options) {
+  const parent = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+  return parent ? dialog.showMessageBox(parent, options) : dialog.showMessageBox(options);
+}
 
 // Auto-update = replacing the whole app (Chromium included) — same model
 // Chrome itself uses. electron-updater reads the `build.publish` config
@@ -10,17 +17,15 @@ const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
 let updateDownloaded = false;
 
 function promptRestart(info) {
-  dialog
-    .showMessageBox({
-      type: 'info',
-      buttons: ['Restart Now', 'Later'],
-      defaultId: 0,
-      message: `Update ${info.version} downloaded`,
-      detail: 'Restart to apply it. The update includes the latest Chromium engine.',
-    })
-    .then(({ response }) => {
-      if (response === 0) autoUpdater.quitAndInstall();
-    });
+  showDialog({
+    type: 'info',
+    buttons: ['Restart Now', 'Later'],
+    defaultId: 0,
+    message: `Update ${info.version} downloaded`,
+    detail: 'Restart to apply it. The update includes the latest Chromium engine.',
+  }).then(({ response }) => {
+    if (response === 0) autoUpdater.quitAndInstall();
+  });
 }
 
 function setupAutoUpdater() {
@@ -43,13 +48,13 @@ function setupAutoUpdater() {
 /** Menu-triggered check with visible feedback. */
 async function checkForUpdatesManually() {
   if (!app.isPackaged) {
-    dialog.showMessageBox({ type: 'info', message: 'Updates are only available in packaged builds.' });
+    showDialog({ type: 'info', message: 'Updates are only available in packaged builds.' });
     return;
   }
   try {
     const result = await autoUpdater.checkForUpdates();
     if (!result?.updateInfo || result.updateInfo.version === app.getVersion()) {
-      dialog.showMessageBox({
+      showDialog({
         type: 'info',
         message: 'You’re up to date',
         detail: `Bowser ${app.getVersion()} is the latest version.`,
@@ -58,7 +63,7 @@ async function checkForUpdatesManually() {
     // If newer, the download starts automatically and the
     // update-downloaded handler prompts for restart.
   } catch (err) {
-    dialog.showMessageBox({ type: 'warning', message: 'Update check failed', detail: err.message });
+    showDialog({ type: 'warning', message: 'Update check failed', detail: err.message });
   }
 }
 

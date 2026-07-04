@@ -86,6 +86,15 @@
   function addressDisplayValue(tab) {
     if (!tab) return '';
     if (tab.url.startsWith('bowser://newtab') || tab.url.startsWith('file://')) return '';
+    // The error page carries the failed URL in its query — show that, so
+    // the user sees (and can edit/retry) the address they typed.
+    if (tab.url.startsWith('bowser://error')) {
+      try {
+        return new URL(tab.url).searchParams.get('url') || tab.url;
+      } catch {
+        return tab.url;
+      }
+    }
     return tab.url;
   }
 
@@ -152,15 +161,20 @@
     const root = actionList.shadowRoot;
     if (!root) return;
 
+    // Every write below is guarded to only touch the DOM when the value
+    // actually changes: this runs inside a MutationObserver watching these
+    // same nodes, so an unconditional write (setAttribute/textContent emit
+    // mutation records even for identical values) re-triggers the observer
+    // forever and freezes the renderer.
     for (const action of root.querySelectorAll('.action')) {
       const label = action.getAttribute('aria-label') || action.dataset.label || action.title;
       const hadMissingIconFallback = action.classList.contains('no-icon');
       if (label) {
-        action.dataset.label = label;
+        if (action.dataset.label !== label) action.dataset.label = label;
         action.dataset.letter ||= label.trim().charAt(0);
-        action.setAttribute('aria-label', label);
+        if (action.getAttribute('aria-label') !== label) action.setAttribute('aria-label', label);
       }
-      action.removeAttribute('title');
+      if (action.hasAttribute('title')) action.removeAttribute('title');
 
       if (hadMissingIconFallback) {
         action.classList.remove('no-icon');
@@ -175,7 +189,8 @@
           fallback.className = 'fallback-icon';
           action.prepend(fallback);
         }
-        fallback.textContent = action.dataset.letter || action.dataset.label?.trim().charAt(0) || '';
+        const letter = action.dataset.letter || action.dataset.label?.trim().charAt(0) || '';
+        if (fallback.textContent !== letter) fallback.textContent = letter;
       } else if (fallback) {
         fallback.remove();
       }
@@ -270,7 +285,9 @@
       const favicon = document.createElement('div');
       favicon.className =
         'tab-favicon' + (tab.isLoading ? ' loading' : tab.favicon ? ' has-icon' : '');
-      if (tab.favicon && !tab.isLoading) favicon.style.backgroundImage = `url("${tab.favicon}")`;
+      if (tab.favicon && !tab.isLoading) {
+        favicon.style.backgroundImage = `url("${tab.favicon.replace(/[\\"]/g, '\\$&')}")`;
+      }
 
       const title = document.createElement('div');
       title.className = 'tab-title';
@@ -446,9 +463,19 @@
     findLastQuery = query;
   }
 
+  // Search live as the user types; Enter/Shift+Enter step through matches.
+  findInput.addEventListener('input', () => {
+    if (!findInput.value) {
+      findCount.textContent = '';
+      findLastQuery = null;
+      if (state.activeTabId) window.browserAPI.stopFindInPage(state.activeTabId);
+      return;
+    }
+    runFind({ forward: true, findNext: false });
+  });
   findInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
-      runFind({ forward: true, findNext: findInput.value === findLastQuery });
+      runFind({ forward: !e.shiftKey, findNext: findInput.value === findLastQuery });
     }
   });
   findPrevBtn.addEventListener('click', () => runFind({ forward: false, findNext: true }));
