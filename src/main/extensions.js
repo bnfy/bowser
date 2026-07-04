@@ -4,7 +4,6 @@ const path = require('path');
 const { ElectronChromeExtensions } = require('electron-chrome-extensions');
 const {
   installChromeWebStore,
-  installExtension,
   uninstallExtension,
 } = require('electron-chrome-web-store');
 
@@ -144,15 +143,40 @@ function sanitizeManifests() {
   return changed;
 }
 
-// Extensions preinstalled on first run. Both are MV3 password managers that
-// run in "standalone" mode here: their desktop-app integration (biometric
-// unlock) uses native messaging with a code-signature allowlist of approved
-// browsers, which a custom shell can't join — you sign in inside the
-// extension instead.
-const PREINSTALLED = [
-  { id: 'aeblfdkhhhdcdjpifhhbdiojplfjncoa', name: '1Password' },
-  { id: 'fdjamakpfbbddfjaooikfcpapjohcfmg', name: 'Dashlane' },
-];
+// Extensions known to be unstable in this Electron environment: MV3
+// password managers whose service workers depend on chrome.webRequest and
+// other bindings Electron's extension runtime doesn't fully provide. Our
+// sanitize/shim keeps them from crash-looping their own worker, but
+// electron-chrome-extensions still faults inside Chromium when the worker
+// ultimately fails to start (V8 traced-reference use-after-free, SIGSEGV
+// at 0x130) — which took the whole app down repeatedly. They never worked
+// here anyway (biometric desktop-app unlock needs native messaging behind
+// a browser code-signature allowlist a custom shell can't join). So rather
+// than preinstall them, we block them: any copy already on disk from a
+// previous version is removed on startup before it can load, and the web
+// store is prevented from (re)installing them. Other extensions the user
+// adds manually are unaffected.
+const BLOCKED_EXTENSIONS = new Map([
+  ['aeblfdkhhhdcdjpifhhbdiojplfjncoa', '1Password'],
+  ['fdjamakpfbbddfjaooikfcpapjohcfmg', 'Dashlane'],
+]);
+
+/** Delete blocked extensions from disk so they never load. Runs before
+ * installChromeWebStore(), which would otherwise load them from the
+ * profile and crash the browser process. */
+function removeBlockedExtensionsFromDisk() {
+  for (const [id, name] of BLOCKED_EXTENSIONS) {
+    const dir = path.join(extensionsDir(), id);
+    if (fs.existsSync(dir)) {
+      try {
+        fs.rmSync(dir, { recursive: true, force: true });
+        console.log(`[extensions] removed blocked extension ${name} from disk`);
+      } catch (err) {
+        console.warn(`[extensions] could not remove blocked ${name}:`, err.message);
+      }
+    }
+  }
+}
 
 /** @type {ElectronChromeExtensions | null} */
 let extensions = null;
@@ -193,24 +217,29 @@ function createExtensionHost(session, delegate) {
 
 /**
  * Enables "Add to Chrome" on chromewebstore.google.com, loads previously
- * installed extensions from disk, auto-updates them, and installs the
- * preconfigured ones on first run. Network-bound — call without awaiting
- * so first-run installs don't block the window.
+ * installed extensions from disk, and auto-updates them. No extensions are
+ * preinstalled — the ones we used to bundle crash the browser process (see
+ * BLOCKED_EXTENSIONS); they're removed here instead. Network-bound — call
+ * without awaiting so store setup doesn't block the window.
  */
 async function initWebStore(session) {
-  // Clean up manifests from previous runs/updates before anything loads.
+  // Purge known-unstable extensions before anything loads them, then clean
+  // up manifests of whatever remains from previous runs/updates.
+  removeBlockedExtensionsFromDisk();
   sanitizeManifests();
 
   await installChromeWebStore({ session });
 
-  const loaded = new Set(session.extensions.getAllExtensions().map((e) => e.id));
-  for (const { id, name } of PREINSTALLED) {
-    if (loaded.has(id)) continue;
-    try {
-      await installExtension(id, { session });
-      console.log(`[extensions] installed ${name}`);
-    } catch (err) {
-      console.warn(`[extensions] could not install ${name}:`, err.message);
+  // Defensive: if a blocked extension somehow loaded anyway (e.g. an
+  // in-session store install), unload it so it can't crash the process.
+  for (const id of BLOCKED_EXTENSIONS.keys()) {
+    if (session.extensions.getExtension(id)) {
+      try {
+        await uninstallExtension(id, { session });
+        console.log(`[extensions] uninstalled blocked ${BLOCKED_EXTENSIONS.get(id)}`);
+      } catch (err) {
+        console.warn(`[extensions] could not uninstall blocked ${id}:`, err.message);
+      }
     }
   }
 
