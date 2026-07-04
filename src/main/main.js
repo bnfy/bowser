@@ -161,17 +161,23 @@ function createTab(url = newTabUrl()) {
     syncNavState();
     history.addVisit(url, wc.getTitle());
     broadcastTabs();
-    if (shouldReclaimChromeFocus) reclaimAddressBarFocus();
+    if (shouldReclaimChromeFocus) reclaimAddressBarFocus(id);
   });
   wc.on('did-navigate-in-page', (_e, url, isMainFrame) => {
     syncNavState();
     if (isMainFrame) history.addVisit(url, wc.getTitle());
     broadcastTabs();
   });
+  wc.once('did-finish-load', () => {
+    if (shouldReclaimAddressBarFocus(id)) {
+      reclaimAddressBarFocus(id, { consume: true });
+    }
+  });
 
   wc.on('focus', () => {
-    const shouldReclaimChromeFocus = tabsWantingAddressBarFocus.has(id) && activeTabId === id;
-    if (shouldReclaimChromeFocus) reclaimAddressBarFocus();
+    if (shouldReclaimAddressBarFocus(id)) {
+      reclaimAddressBarFocus(id, { consume: true });
+    }
   });
 
   // Open target="_blank" / window.open() as a new managed tab instead of a
@@ -214,11 +220,11 @@ function setActiveTab(id, { focusContent = true, focusAddress = false } = {}) {
   extensionHost?.selectTab(next.view.webContents);
   broadcastTabs();
   if (shouldFocusAddress) {
-    reclaimAddressBarFocus();
+    reclaimAddressBarFocus(id);
     setImmediate(() => {
       if (activeTabId !== id || !tabs.has(id)) return;
       next.view.setVisible(true);
-      reclaimAddressBarFocus();
+      reclaimAddressBarFocus(id);
     });
   }
 }
@@ -306,16 +312,25 @@ function focusAddressBar() {
   win.webContents.send('chrome:focus-address-bar');
 }
 
-function reclaimAddressBarFocus() {
+function shouldReclaimAddressBarFocus(id) {
+  return activeTabId === id && tabsWantingAddressBarFocus.has(id);
+}
+
+function reclaimAddressBarFocus(id, { consume = false } = {}) {
+  if (!shouldReclaimAddressBarFocus(id)) return;
   // WebContentsView focus can settle after Electron emits focus/navigation
   // callbacks, so reassert once on the next main-process turn as well.
   focusAddressBar();
-  setImmediate(focusAddressBar);
+  setImmediate(() => {
+    if (!shouldReclaimAddressBarFocus(id)) return;
+    focusAddressBar();
+    if (consume) tabsWantingAddressBarFocus.delete(id);
+  });
 }
 
 function refocusAddressBarIfWanted() {
-  if (activeTabId && tabsWantingAddressBarFocus.has(activeTabId)) {
-    reclaimAddressBarFocus();
+  if (activeTabId && shouldReclaimAddressBarFocus(activeTabId)) {
+    reclaimAddressBarFocus(activeTabId);
   }
 }
 
