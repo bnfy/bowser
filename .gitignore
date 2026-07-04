@@ -4,5 +4,5 @@ out/
 .cache/
 *.log
 .DS_Store
-brand/Branding.ai
+brand/
 .superpowers/
