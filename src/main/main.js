@@ -1,5 +1,6 @@
 const { app, BrowserWindow, WebContentsView, session, ipcMain, Menu, nativeTheme, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
 const { setupAdBlocker, setAdBlockEnabled, getBlocker } = require('./adblock');
 const { createExtensionHost, initWebStore, listExtensions } = require('./extensions');
@@ -35,6 +36,48 @@ if (!app.requestSingleInstanceLock()) {
       if (win.isMinimized()) win.restore();
       win.focus();
     }
+  });
+
+  // Self-heal an extension-state crash loop caused by an unclean exit.
+  //
+  // Our extensions run with a sanitized/shimmed service worker (see
+  // extensions.js). When the process exits uncleanly (crash, force-quit,
+  // OOM), the profile's extension + service-worker state can be left in a
+  // shape where, on the next launch, a preinstalled extension's worker
+  // fails to start and electron-chrome-extensions faults inside Chromium
+  // (V8 traced-reference use-after-free, SIGSEGV at 0x130) — crash-looping
+  // until the state is cleared by hand. Clearing ONLY the Service Worker
+  // cache is NOT enough (verified): the worker still fails to start against
+  // the pre-existing extension registration. Only a full reset of the
+  // extension + service-worker state — so everything re-registers cleanly,
+  // like a first install — recovers reliably.
+  //
+  // A sentinel written on start and removed on a clean quit detects the
+  // unclean case. Scoped to extension/worker dirs only: cookies, history,
+  // bookmarks, downloads and settings (separate files) are untouched. The
+  // preinstalled managers reinstall automatically on the next launch.
+  //
+  // Trade-off: a user-installed (non-preinstalled) extension would need
+  // re-adding after an unclean exit. Acceptable versus a hard crash loop,
+  // and unclean exits are rare with the single-instance lock and the
+  // renderer-freeze fix in place. Must run before app 'ready'.
+  const VOLATILE_EXTENSION_DIRS = [
+    'Service Worker', 'Extensions', 'Extension State', 'Extension Scripts', 'Extension Rules',
+  ];
+  const runningSentinel = path.join(app.getPath('userData'), '.running');
+  try {
+    if (fs.existsSync(runningSentinel)) {
+      for (const dir of VOLATILE_EXTENSION_DIRS) {
+        fs.rmSync(path.join(app.getPath('userData'), dir), { recursive: true, force: true });
+      }
+    }
+    fs.mkdirSync(app.getPath('userData'), { recursive: true });
+    fs.writeFileSync(runningSentinel, String(process.pid));
+  } catch (err) {
+    console.warn('[recovery] extension-state sentinel handling failed:', err.message);
+  }
+  app.on('will-quit', () => {
+    try { fs.rmSync(runningSentinel, { force: true }); } catch {}
   });
 }
 
