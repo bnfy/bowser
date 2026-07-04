@@ -161,6 +161,9 @@ function createTab(url = newTabUrl()) {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // Chromium's built-in PDF viewer is a plugin; without this flag
+      // PDFs download instead of rendering inline.
+      plugins: true,
       // Exposes a data API to our own bowser:// pages ONLY — see the
       // guards in tab-preload.js and pages.js. Web content gets nothing.
       preload: path.join(__dirname, 'tab-preload.js'),
