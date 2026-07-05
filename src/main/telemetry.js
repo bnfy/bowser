@@ -1,8 +1,8 @@
 const { app, net } = require('electron');
 
-// TODO: no backend exists yet — point this at the real collector before
-// shipping. Expected to accept a JSON POST and return any 2xx.
-const PING_ENDPOINT = 'https://api.getbowser.com/ping';
+// The collector Worker in cloudflare/ping-worker — accepts a JSON POST,
+// returns 204.
+const PING_ENDPOINT = 'https://bowser-ping.bnfy-441.workers.dev/ping';
 
 // Opt-in only (Settings → usagePing, off by default). Fire-and-forget: a
 // failed or blocked ping must never affect startup or show the user
