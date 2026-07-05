@@ -48,6 +48,7 @@
     "mac": {
       "category": "public.app-category.productivity",
       "extendInfo": {
+        "CFBundleDisplayName": "Blanc Browser",
         "CFBundleDocumentTypes": [
           {
             "CFBundleTypeRole": "Viewer",
