@@ -97,6 +97,22 @@ tab-model surface, not just menu wiring.
   (mirrors Chrome's speaker-on-favicon convention). A "pinned" section header (same dim-rule
   style as `.island-ghead` group headers) sits above pinned rows in the switcher list,
   distinct from group headers since a tab can be pinned and grouped simultaneously.
+  Both buttons follow the existing `.row-close` convention exactly: always present in
+  the row's flex layout (space reserved, no hover reflow), `opacity: 0` and
+  hover/focus-revealed when the tab is in its default state, but persistently visible
+  and accent-filled — like the `.shield` badge and `.row-private` tag already are —
+  when the tab is actually pinned or muted, so pinned/muted state reads at a glance
+  without hovering.
+- **Panel width:** `#islandPanel` grows from a fixed `560px` to a fixed `620px`. Sized
+  from the row math, not a round guess: `.island-row` reserves 10px gaps between every
+  child, and adding the pin + mute buttons (18px each) plus their two new gaps costs a
+  "busy" row (favicon, title, domain, shield, pin, mute, group chip, close) about 56px
+  it didn't spend before — shrinking that row's available title space from roughly
+  284px to 228px inside the old 560px panel. +60px on the panel restores the original
+  228px→284px-ish title budget so existing rows don't feel more cramped than they do
+  today; only rows that also show a pinned/muted tab's icon in its filled, hover-independent
+  state spend part of that budget, which is expected. Still a fixed constant, not a
+  live resize — `max-width: calc(100vw - 24px)` continues to guard narrow windows.
 
 ## Menu-rebuild strategy (technical)
 
@@ -123,5 +139,8 @@ packaged or `npm start` run, plus the Playwright driver where applicable:
 - Menu-rebuild throttling: load a page and confirm the menu doesn't visibly flicker/reopen
   while it's loading (~10 broadcasts/s).
 - Restart the app and confirm pinned state survived, muted state did not.
+- Panel width: with a pinned+muted+grouped+shielded tab in the list, confirm its title
+  isn't more truncated than an equivalent row was before this change; confirm the panel
+  still fits on a narrow window via `max-width: calc(100vw - 24px)`.
 - Chrome documents (`index.html`/`overlay.html`) load once at window creation — verify
   visual changes with a fresh `npm start`, not `Cmd/Ctrl+R`.
