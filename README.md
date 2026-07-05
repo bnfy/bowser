@@ -1,4 +1,4 @@
-# Blanc
+# Blanc Browser
 
 ![Blanc's Island chrome floating over github.com — tab dots, the current domain, and the ad-block counter in a single pill](docs/island-chrome.png)
 
