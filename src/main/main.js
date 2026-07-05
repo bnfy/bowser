@@ -342,7 +342,7 @@ function persistSession() {
             /* keep the error url */
           }
         }
-        return url ? { url, groupId: tab.groupId ?? null } : null;
+        return url ? { id, url, groupId: tab.groupId ?? null } : null;
       })
       .filter(Boolean);
     d.urls = entries.map((e) => e.url);
@@ -352,7 +352,13 @@ function persistSession() {
     // Only update when the active tab is actually in the persisted list —
     // during startup (no active tab yet) or with a private tab active,
     // indexOf is -1 and writing 0 would corrupt the last good index.
-    const idx = persistable.indexOf(activeTabId);
+    // Indexed into `entries` (what d.urls is built from), not the wider
+    // tab list — a tab with no persistable url (an adopted window.open
+    // child before its first navigation commits) is dropped from d.urls,
+    // and an index computed on the unfiltered list would restore focus to
+    // the wrong tab. -1 (startup, private or url-less active tab) keeps
+    // the last good index, as before.
+    const idx = entries.findIndex((e) => e.id === activeTabId);
     if (idx >= 0) d.activeIndex = idx;
   });
 }
@@ -470,7 +476,7 @@ function dominantColor(image) {
  * visually abuts the chrome strip. Fails harmlessly for hidden views;
  * setActiveTab resamples on activation. */
 async function samplePageTint(tab) {
-  if (!tabs.has(tab.id)) return;
+  if (!tabs.has(tab.id) || tab.view.webContents.isDestroyed()) return;
   if (tab.private || !/^https?:\/\//.test(tab.url)) {
     if (tab.pageBg) {
       tab.pageBg = null;
@@ -572,21 +578,25 @@ function closeGroup(groupId) {
   for (const id of ids) closeTab(id);
 }
 
-function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = null } = {}) {
+const TAB_WEB_PREFERENCES = {
+  contextIsolation: true,
+  nodeIntegration: false,
+  sandbox: true,
+  // Chromium's built-in PDF viewer is a plugin; without this flag
+  // PDFs download instead of rendering inline.
+  plugins: true,
+  // Exposes a data API to our own bowser:// pages ONLY — see the
+  // guards in tab-preload.js and pages.js. Web content gets nothing.
+  preload: path.join(__dirname, 'tab-preload.js'),
+};
+
+function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = null, view = null } = {}) {
   const id = crypto.randomUUID();
-  const view = new WebContentsView({
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      // Chromium's built-in PDF viewer is a plugin; without this flag
-      // PDFs download instead of rendering inline.
-      plugins: true,
-      // Exposes a data API to our own bowser:// pages ONLY — see the
-      // guards in tab-preload.js and pages.js. Web content gets nothing.
-      preload: path.join(__dirname, 'tab-preload.js'),
-    },
-  });
+  // An adopted view (window.open child, see the window-open handler) arrives
+  // already constructed by Chromium with the opener relationship wired up;
+  // everything else gets a fresh one.
+  const adopted = !!view;
+  view ??= new WebContentsView({ webPreferences: TAB_WEB_PREFERENCES });
 
   const tab = {
     id,
@@ -664,6 +674,16 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
     }
   });
 
+  // Web content must never navigate a tab into the privileged bowser://
+  // scheme (Chrome blocks web → chrome:// identically). Main-initiated
+  // loads (address bar, commands, error pages) go through loadURL, which
+  // doesn't fire will-navigate, so only page-initiated hops are caught.
+  wc.on('will-navigate', (event, targetUrl) => {
+    if (/^bowser:/i.test(targetUrl) && !wc.getURL().startsWith('bowser://')) {
+      event.preventDefault();
+    }
+  });
+
   // Show a real error page instead of leaving a blank/stale view.
   // errorCode -3 (ERR_ABORTED) fires for cancelled loads (stop button,
   // rapid re-navigation) and must not be treated as a failure.
@@ -672,6 +692,14 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
     const q = new URLSearchParams({ url: validatedURL, code: String(errorCode), desc: errorDescription });
     wc.loadURL(`bowser://error/?${q}`).catch(() => {});
   });
+
+  // Adopted window.open children are script-closable — window.close() by
+  // the page, child.close() by the opener — the only tabs whose
+  // webContents can die outside closeTab. Route destruction through
+  // closeTab so the strip, groups, and active-tab selection stay
+  // consistent (re-entry is safe: closeTab removes the map entry before
+  // calling wc.close(), so this fires on an id that's already gone).
+  wc.once('destroyed', () => closeTab(id));
 
   // A tab whose renderer dies (OOM, GPU fault, kill -9) otherwise sits
   // blank forever; loadURL spawns a fresh renderer, so route it to the
@@ -702,34 +730,84 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
     }
   });
 
-  // Open target="_blank" links as managed tabs, but let window.open with
-  // explicit features ('new-window': OAuth/SSO popups, payment flows)
-  // become a REAL child window — those flows need window.opener +
-  // postMessage back to the page that opened them, and detaching them
-  // into an opener-less tab breaks sign-in (observed: GitHub's "Sign in
-  // with Google" looping until accounts.google.com 400'd on corrupted
-  // state). Cmd/Ctrl+click arrives as 'background-tab' — open it without
-  // stealing focus (browser convention). Children of a private tab stay
-  // private — a popup must not silently start recording history again.
-  wc.setWindowOpenHandler(({ url: targetUrl, disposition }) => {
-    if (disposition === 'new-window') {
+  // Open target="_blank"/featureless window.open as managed tabs, but let
+  // window.open with explicit features ('new-window': OAuth/SSO popups,
+  // payment flows) become a REAL child window. Both paths MUST preserve
+  // window.opener: sign-in flows deliver their result back to the opening
+  // page via postMessage, and an opener-less child breaks them (observed:
+  // GitHub's "Sign in with Google" looping until accounts.google.com 400'd
+  // on corrupted state; later, Google auth flows opened as target=_blank
+  // dead-ending at accounts.google.com/gis_transform with a 400). So tabs
+  // are ADOPTED via createWindow — Chromium constructs the child wired to
+  // its opener, and createTab takes the view in as a normal managed tab —
+  // never re-created from just the URL. outlivesOpener on both paths:
+  // Electron's default destroys children with their opener, but closing a
+  // tab must not tear down the tabs (or popups) it spawned — Chrome never
+  // does. Electron only inherits the security subset of webPreferences
+  // into window.open children, so plugins (inline PDFs) is re-asserted via
+  // override — but ONLY plugins: overriding preload forces the child out
+  // of its opener's context and severs window.opener, defeating the whole
+  // adoption. Adopted tabs therefore lack tab-preload; that bridge only
+  // matters on bowser:// pages, and the guards below keep web content
+  // from opening or navigating into bowser:// at all.
+  // Cmd/Ctrl+click arrives as 'background-tab' — open it without stealing
+  // focus (browser convention). Children of a private tab stay private —
+  // a popup must not silently start recording history again. Applied
+  // recursively via did-create-window so a popup's own window.open
+  // children (a "Terms" link inside an OAuth popup) land back in managed
+  // tabs instead of falling through to bare Electron windows.
+  const applyWindowOpenPolicy = (targetWc) => {
+    targetWc.setWindowOpenHandler(({ url: targetUrl, disposition }) => {
+      // Web content must not mint privileged internal pages (Chrome blocks
+      // web → chrome:// the same way). Only bowser:// pages themselves may
+      // open bowser:// children.
+      if (/^bowser:/i.test(targetUrl) && !targetWc.getURL().startsWith('bowser://')) {
+        return { action: 'deny' };
+      }
+      if (disposition === 'new-window') {
+        return {
+          action: 'allow',
+          outlivesOpener: true,
+          overrideBrowserWindowOptions: {
+            autoHideMenuBar: true,
+            webPreferences: {
+              contextIsolation: true,
+              nodeIntegration: false,
+              sandbox: true,
+            },
+          },
+        };
+      }
+      // Children stay in their opener's group, like Chrome's tab groups.
       return {
         action: 'allow',
-        overrideBrowserWindowOptions: {
-          autoHideMenuBar: true,
-          webPreferences: {
-            contextIsolation: true,
-            nodeIntegration: false,
-            sandbox: true,
-          },
+        outlivesOpener: true,
+        overrideBrowserWindowOptions: { webPreferences: { plugins: true } },
+        createWindow: (options) => {
+          // options.webContents is the guest Chromium already created,
+          // wired to its opener. The view must WRAP it — constructing a
+          // fresh webContents here throws "Invalid webContents. Created
+          // window should be connected to webContents passed with options".
+          const view = new WebContentsView({ webContents: options.webContents });
+          const newId = createTab(targetUrl, { private: tab.private, groupId: tab.groupId, view });
+          // Activation is deferred: createWindow runs mid-window-open,
+          // before Chromium has finished wiring the guest, and attaching
+          // the view to the window at that point silently fails to take.
+          if (disposition !== 'background-tab') setImmediate(() => setActiveTab(newId));
+          return view.webContents;
         },
       };
-    }
-    // Children stay in their opener's group, like Chrome's tab groups.
-    const newId = createTab(targetUrl, { private: tab.private, groupId: tab.groupId });
-    if (disposition !== 'background-tab') setActiveTab(newId);
-    return { action: 'deny' };
-  });
+    });
+    targetWc.on('did-create-window', (childWindow) => {
+      // Adopted children run their own createTab wiring; only real popup
+      // windows need the policy grafted on.
+      const isManagedTab = [...tabs.values()].some(
+        (t) => t.view.webContents.id === childWindow.webContents.id
+      );
+      if (!isManagedTab) applyWindowOpenPolicy(childWindow.webContents);
+    });
+  };
+  applyWindowOpenPolicy(wc);
 
   attachContextMenu(wc, {
     openBackgroundTab: (targetUrl) => createTab(targetUrl, { private: tab.private, groupId: tab.groupId }),
@@ -738,13 +816,19 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
 
   // Load failures surface via the did-fail-load handler above; the
   // rejected promise here is the same event and must not crash main.
-  wc.loadURL(url).catch(() => {});
+  // Adopted window.open children are loaded by Chromium itself as part of
+  // the window-open dance — a competing loadURL here would cancel it.
+  if (!adopted) wc.loadURL(url).catch(() => {});
   return id;
 }
 
 function setActiveTab(id, { focusContent = true, focusAddress = false } = {}) {
   const next = tabs.get(id);
   if (!next) return;
+  // A script-closed adopted tab prunes itself via its 'destroyed' handler,
+  // but a deferred activation (the window-open setImmediate) can race the
+  // event — never attach or focus a dead webContents.
+  if (next.view.webContents.isDestroyed()) return;
 
   // Re-selecting the active tab is a no-op.
   if (id === activeTabId) return;
