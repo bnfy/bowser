@@ -236,18 +236,18 @@ button.danger:hover { color: var(--on-danger); background: var(--danger); border
   border-radius: 0;
 }
 .icon-swatch:hover { border: none; }
+/* The PNGs bake the native macOS icon shape (rounded tile + transparent
+   margins), so the swatch draws no box of its own — just a selection ring. */
 .icon-swatch img {
-  width: 52px;
-  height: 52px;
-  border-radius: 13px;
-  border: 1px solid var(--border);
-  box-sizing: border-box;
+  width: 58px;
+  height: 58px;
+  border-radius: 14px;
+  /* Follows the tile's alpha shape — keeps light-on-light tiles legible,
+     the way the Dock shades white icons. */
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.18));
 }
 .icon-swatch.active { color: var(--text); }
-.icon-swatch.active img {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
+.icon-swatch.active img { outline: 2px solid var(--accent); }
 
 /* Accent-colored toggle built on a checkbox. */
 .toggle {
