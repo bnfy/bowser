@@ -57,7 +57,7 @@ async function checkForUpdatesManually() {
       showDialog({
         type: 'info',
         message: 'You’re up to date',
-        detail: `Bowser ${app.getVersion()} is the latest version.`,
+        detail: `Blanc ${app.getVersion()} is the latest version.`,
       });
     }
     // If newer, the download starts automatically and the

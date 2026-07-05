@@ -15,7 +15,7 @@ const APP_ICONS = ['default', 'midnight', 'cream', 'forest', 'sage'];
 const DEFAULTS = {
   searchEngine: 'duckduckgo',
   adblockEnabled: true,
-  // Empty string = the built-in bowser://newtab page.
+  // Empty string = the built-in blanc://newtab page.
   homePage: '',
   theme: 'system',
   appIcon: 'default',
