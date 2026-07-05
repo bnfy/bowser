@@ -16,10 +16,10 @@ const bookmarks = require('./bookmarks');
 const history = require('./history');
 const { JsonStore } = require('./store');
 
-const NEW_TAB_URL = 'bowser://newtab/';
+const NEW_TAB_URL = 'blanc://newtab/';
 const newTabUrl = () => settings.getSettings().homePage || NEW_TAB_URL;
 // The query flag tells the newtab page to show private copy + theme.
-const PRIVATE_NEW_TAB_URL = 'bowser://newtab/?private=1';
+const PRIVATE_NEW_TAB_URL = 'blanc://newtab/?private=1';
 
 // Dev runs (`npm start`) get their own userData so a dev instance never
 // shares — and corrupts — the installed app's profile: two Chromium
@@ -28,6 +28,19 @@ const PRIVATE_NEW_TAB_URL = 'bowser://newtab/?private=1';
 // dev and installed builds within seconds of each other).
 if (!app.isPackaged) {
   app.setPath('userData', `${app.getPath('userData')}-Dev`);
+}
+
+// One-time migration for existing installs: userData's location is
+// derived from productName, so the Bowser -> Blanc rename would otherwise
+// start every existing user on an empty profile. Copy the old directory
+// forward exactly once, before anything (JsonStores, adblock cache,
+// single-instance lock) touches the new one.
+if (app.isPackaged) {
+  const oldUserDataDir = path.join(app.getPath('appData'), 'Bowser');
+  const newUserDataDir = app.getPath('userData');
+  if (!fs.existsSync(newUserDataDir) && fs.existsSync(oldUserDataDir)) {
+    fs.cpSync(oldUserDataDir, newUserDataDir, { recursive: true });
+  }
 }
 
 // One instance per profile: a second launch defers to the first.
@@ -63,7 +76,7 @@ if (!app.requestSingleInstanceLock()) {
   }
 }
 
-// URLs handed over by the OS when Bowser is the default browser. macOS
+// URLs handed over by the OS when Blanc is the default browser. macOS
 // delivers them via 'open-url' (which can fire before 'ready' — those queue
 // until the window and session restore are up); Windows/Linux pass them on
 // the command line, at startup or through 'second-instance'.
@@ -99,7 +112,7 @@ function localDocumentUrl(input) {
 }
 
 // http(s) links, plus local document paths (Windows/Linux file
-// associations and `bowser file.html` pass a bare path on the command
+// associations and `blanc file.html` pass a bare path on the command
 // line; macOS double-clicks arrive via 'open-file' below instead).
 const urlsFromArgv = (argv) =>
   argv.map((a) => (/^https?:\/\//.test(a) ? a : localDocumentUrl(a))).filter(Boolean);
@@ -124,7 +137,7 @@ app.on('open-url', (event, url) => {
   openExternalUrl(url);
 });
 
-// Double-clicked local files (Bowser is declared as an HTML viewer via
+// Double-clicked local files (Blanc is declared as an HTML viewer via
 // CFBundleDocumentTypes) arrive as 'open-file', not 'open-url'. Same
 // queueing as links: pre-ready events wait for the window + session
 // restore, then land as the active tab.
@@ -140,7 +153,7 @@ registerPagesScheme();
 // Strip the app and Electron tokens from the UA so sites treat us as a
 // plain Chrome build.
 app.userAgentFallback = app.userAgentFallback
-  .replace(/\sbowser\/[\d.]+/i, '')
+  .replace(/\sblanc\/[\d.]+/i, '')
   .replace(/\sElectron\/[\d.]+/, '');
 
 // Hide the FedCM API. Must happen before app 'ready', and silently no-ops
@@ -384,7 +397,7 @@ function persistSession() {
         let url = tab?.url;
         // Persist the address that failed, not the error page wrapping it,
         // so the next launch retries the real destination.
-        if (url?.startsWith('bowser://error')) {
+        if (url?.startsWith('blanc://error')) {
           try {
             url = new URL(url).searchParams.get('url') || url;
           } catch {
@@ -634,7 +647,7 @@ const TAB_WEB_PREFERENCES = {
   // Chromium's built-in PDF viewer is a plugin; without this flag
   // PDFs download instead of rendering inline.
   plugins: true,
-  // Exposes a data API to our own bowser:// pages ONLY — see the
+  // Exposes a data API to our own blanc:// pages ONLY — see the
   // guards in tab-preload.js and pages.js. Web content gets nothing.
   preload: path.join(__dirname, 'tab-preload.js'),
 };
@@ -732,12 +745,12 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
     }
   });
 
-  // Web content must never navigate a tab into the privileged bowser://
+  // Web content must never navigate a tab into the privileged blanc://
   // scheme (Chrome blocks web → chrome:// identically). Main-initiated
   // loads (address bar, commands, error pages) go through loadURL, which
   // doesn't fire will-navigate, so only page-initiated hops are caught.
   wc.on('will-navigate', (event, targetUrl) => {
-    if (/^bowser:/i.test(targetUrl) && !wc.getURL().startsWith('bowser://')) {
+    if (/^blanc:/i.test(targetUrl) && !wc.getURL().startsWith('blanc://')) {
       event.preventDefault();
     }
   });
@@ -748,7 +761,7 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
   wc.on('did-fail-load', (_e, errorCode, errorDescription, validatedURL, isMainFrame) => {
     if (!isMainFrame || errorCode === -3 || !validatedURL) return;
     const q = new URLSearchParams({ url: validatedURL, code: String(errorCode), desc: errorDescription });
-    wc.loadURL(`bowser://error/?${q}`).catch(() => {});
+    wc.loadURL(`blanc://error/?${q}`).catch(() => {});
   });
 
   // Adopted window.open children are script-closable — window.close() by
@@ -765,7 +778,7 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
   wc.on('render-process-gone', (_e, details) => {
     if (details.reason === 'clean-exit') return;
     const q = new URLSearchParams({ url: tab.url, code: details.reason, desc: 'The page crashed' });
-    wc.loadURL(`bowser://error/?${q}`).catch(() => {});
+    wc.loadURL(`blanc://error/?${q}`).catch(() => {});
   });
 
   // A page's beforeunload can block close/navigation; surface Chrome's
@@ -806,8 +819,8 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
   // override — but ONLY plugins: overriding preload forces the child out
   // of its opener's context and severs window.opener, defeating the whole
   // adoption. Adopted tabs therefore lack tab-preload; that bridge only
-  // matters on bowser:// pages, and the guards below keep web content
-  // from opening or navigating into bowser:// at all.
+  // matters on blanc:// pages, and the guards below keep web content
+  // from opening or navigating into blanc:// at all.
   // Cmd/Ctrl+click arrives as 'background-tab' — open it without stealing
   // focus (browser convention). Children of a private tab stay private —
   // a popup must not silently start recording history again. Applied
@@ -817,9 +830,9 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
   const applyWindowOpenPolicy = (targetWc) => {
     targetWc.setWindowOpenHandler(({ url: targetUrl, disposition }) => {
       // Web content must not mint privileged internal pages (Chrome blocks
-      // web → chrome:// the same way). Only bowser:// pages themselves may
-      // open bowser:// children.
-      if (/^bowser:/i.test(targetUrl) && !targetWc.getURL().startsWith('bowser://')) {
+      // web → chrome:// the same way). Only blanc:// pages themselves may
+      // open blanc:// children.
+      if (/^blanc:/i.test(targetUrl) && !targetWc.getURL().startsWith('blanc://')) {
         return { action: 'deny' };
       }
       if (disposition === 'new-window') {
@@ -952,7 +965,7 @@ function closeTab(id) {
   if (!tab) return;
 
   // Closed private tabs are gone — reopen-closed-tab must not resurrect them.
-  if (tab.url && !tab.private && !tab.url.startsWith('bowser://newtab')) {
+  if (tab.url && !tab.private && !tab.url.startsWith('blanc://newtab')) {
     recentlyClosedUrls.push(tab.url);
     if (recentlyClosedUrls.length > 25) recentlyClosedUrls.shift();
   }
@@ -1132,7 +1145,7 @@ function registerIpcHandlers() {
   ipcMain.handle('tabs:toggle-bookmark', () => toggleBookmarkForActiveTab());
   ipcMain.handle('tabs:open-page', (_e, name) => {
     if (['bookmarks', 'history', 'downloads', 'settings'].includes(name)) {
-      openInternalPage(`bowser://${name}/`);
+      openInternalPage(`blanc://${name}/`);
     }
   });
   ipcMain.handle('tabs:get-all', () => ({ tabs: serializeTabs(), activeTabId, groups }));
@@ -1235,8 +1248,8 @@ function buildMenu() {
         { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: () => zoomActiveTab(-ZOOM_STEP) },
         { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', click: resetZoomForActiveTab },
         { type: 'separator' },
-        { label: 'Downloads', accelerator: 'CmdOrCtrl+Shift+J', click: () => openInternalPage('bowser://downloads/') },
-        { label: 'Settings', accelerator: 'CmdOrCtrl+,', click: () => openInternalPage('bowser://settings/') },
+        { label: 'Downloads', accelerator: 'CmdOrCtrl+Shift+J', click: () => openInternalPage('blanc://downloads/') },
+        { label: 'Settings', accelerator: 'CmdOrCtrl+,', click: () => openInternalPage('blanc://settings/') },
         { type: 'separator' },
         { role: 'toggleDevTools' },
       ],
@@ -1259,8 +1272,8 @@ function buildMenu() {
       label: 'Favorites',
       submenu: [
         { label: 'Add to Favorites', accelerator: 'CmdOrCtrl+D', click: toggleBookmarkForActiveTab },
-        { label: 'Show Favorites', accelerator: isMac ? 'Cmd+Alt+B' : 'Ctrl+Shift+O', click: () => openInternalPage('bowser://bookmarks/') },
-        { label: 'Show History', accelerator: 'CmdOrCtrl+Y', click: () => openInternalPage('bowser://history/') },
+        { label: 'Show Favorites', accelerator: isMac ? 'Cmd+Alt+B' : 'Ctrl+Shift+O', click: () => openInternalPage('blanc://bookmarks/') },
+        { label: 'Show History', accelerator: 'CmdOrCtrl+Y', click: () => openInternalPage('blanc://history/') },
       ],
     },
   ];
