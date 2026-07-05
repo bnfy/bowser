@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('browserAPI', {
   toggleBookmark: () => ipcRenderer.invoke('tabs:toggle-bookmark'),
   toggleTabPinned: (id) => ipcRenderer.invoke('tabs:toggle-pinned', id),
   toggleTabMuted: (id) => ipcRenderer.invoke('tabs:toggle-muted', id),
+  duplicateTab: (id) => ipcRenderer.invoke('tabs:duplicate', id),
   openPage: (name) => ipcRenderer.invoke('tabs:open-page', name),
   getAllTabs: () => ipcRenderer.invoke('tabs:get-all'),
   findInPage: (id, query, options) => ipcRenderer.invoke('tabs:find', id, query, options),

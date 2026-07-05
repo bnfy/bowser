@@ -662,6 +662,23 @@ function toggleTabMuted(id) {
   return tab.muted;
 }
 
+function duplicateTab(id) {
+  const source = tabs.get(id);
+  if (!source) return;
+  const insertAt = tabOrder.indexOf(id) + 1;
+  const history = source.view.webContents.navigationHistory;
+  const entries = history.getAllEntries();
+  const newId = createTab(source.url, {
+    private: source.private,
+    groupId: source.groupId,
+    pinned: source.pinned,
+    // Only worth restoring if there's more than just the current page.
+    restoreHistory: entries.length > 1 ? { entries, index: history.getActiveIndex() } : null,
+  });
+  reorderTab(newId, insertAt);
+  return newId;
+}
+
 const TAB_WEB_PREFERENCES = {
   contextIsolation: true,
   nodeIntegration: false,
@@ -674,7 +691,7 @@ const TAB_WEB_PREFERENCES = {
   preload: path.join(__dirname, 'tab-preload.js'),
 };
 
-function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = null, view = null, pinned = false } = {}) {
+function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = null, view = null, pinned = false, restoreHistory = null } = {}) {
   const id = crypto.randomUUID();
   // An adopted view (window.open child, see the window-open handler) arrives
   // already constructed by Chromium with the opener relationship wired up;
@@ -913,7 +930,13 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
   // rejected promise here is the same event and must not crash main.
   // Adopted window.open children are loaded by Chromium itself as part of
   // the window-open dance — a competing loadURL here would cancel it.
-  if (!adopted) wc.loadURL(url).catch(() => {});
+  if (!adopted) {
+    // navigationHistory.restore() performs its own navigation and must be
+    // the tab's first — used by duplicateTab below instead of a plain
+    // loadURL when the source tab has real back/forward history to clone.
+    if (restoreHistory) wc.navigationHistory.restore(restoreHistory).catch(() => {});
+    else wc.loadURL(url).catch(() => {});
+  }
   scheduleMenuRebuild();
   return id;
 }
@@ -1178,6 +1201,7 @@ function registerIpcHandlers() {
   ipcMain.handle('tabs:toggle-bookmark', () => toggleBookmarkForActiveTab());
   ipcMain.handle('tabs:toggle-pinned', (_e, id) => toggleTabPinned(id));
   ipcMain.handle('tabs:toggle-muted', (_e, id) => toggleTabMuted(id));
+  ipcMain.handle('tabs:duplicate', (_e, id) => duplicateTab(id));
   ipcMain.handle('tabs:open-page', (_e, name) => {
     if (['bookmarks', 'history', 'downloads', 'settings'].includes(name)) {
       openInternalPage(`blanc://${name}/`);
@@ -1310,6 +1334,8 @@ function buildMenu() {
       submenu: [
         { label: 'Next Tab', accelerator: 'Ctrl+Tab', click: () => cycleTab(1) },
         { label: 'Previous Tab', accelerator: 'Ctrl+Shift+Tab', click: () => cycleTab(-1) },
+        { type: 'separator' },
+        { label: 'Duplicate Tab', enabled: !!activeTabId, click: () => activeTabId && duplicateTab(activeTabId) },
         { type: 'separator' },
         // "Tab or Group": with groups these jump to the nth pill cluster.
         ...Array.from({ length: 9 }, (_, i) => ({
