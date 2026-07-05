@@ -24,7 +24,7 @@
   },
   "build": {
     "appId": "me.bnfy.bowser",
-    "productName": "Bowser",
+    "productName": "Blanc",
     "publish": {
       "provider": "github",
       "owner": "bnfy",
