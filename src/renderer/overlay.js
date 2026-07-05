@@ -31,6 +31,13 @@
   let mode = null;
   /** Tab id whose inline group picker ("→ work · → none") is open. */
   let pickingTabId = null;
+  /** After a picker action re-renders the list, put focus back on that
+   * tab's "group" chip instead of dropping it on <body>. */
+  let chipFocusTabId = null;
+
+  function focusChip(tabId) {
+    islandList.querySelector(`.island-row[data-tab-id="${CSS.escape(tabId)}"] .row-grp`)?.focus();
+  }
   // The address input's value is only ours to overwrite while untouched;
   // once the user types, incoming tab updates must not clobber it.
   let inputTouched = false;
@@ -156,6 +163,7 @@
   function tabRow(tab) {
     const row = document.createElement('div');
     row.className = 'island-row' + (tab.id === state.activeTabId ? ' active' : '');
+    row.dataset.tabId = tab.id;
 
     const favicon = document.createElement('span');
     setFavicon(favicon, tab);
@@ -191,8 +199,14 @@
     grp.textContent = tab.groupId ? groupById(tab.groupId)?.name ?? 'group' : 'group';
     grp.addEventListener('click', (e) => {
       e.stopPropagation();
-      pickingTabId = pickingTabId === tab.id ? null : tab.id;
+      const opening = pickingTabId !== tab.id;
+      pickingTabId = opening ? tab.id : null;
       renderList();
+      // Opening hands focus to the name field so a fresh group is one
+      // type-and-Enter away; closing puts it back on the re-rendered chip
+      // (the click had focused the old one, now replaced).
+      if (opening) islandList.querySelector('.group-picker-input')?.focus();
+      else focusChip(tab.id);
     });
     row.append(grp);
 
@@ -219,6 +233,7 @@
         btn.textContent = `→ ${g.name}`;
         btn.addEventListener('click', () => {
           pickingTabId = null;
+          chipFocusTabId = tab.id;
           window.browserAPI.setTabGroup(tab.id, g.id);
         });
         picker.append(btn);
@@ -229,10 +244,30 @@
         none.textContent = '→ none';
         none.addEventListener('click', () => {
           pickingTabId = null;
+          chipFocusTabId = tab.id;
           window.browserAPI.setTabGroup(tab.id, null);
         });
         picker.append(none);
       }
+      // First-group creation lives here too, not just behind /group: name
+      // a new group inline and Enter moves the tab into it.
+      const create = document.createElement('input');
+      create.className = 'group-picker-input';
+      create.placeholder = 'new group…';
+      create.spellcheck = false;
+      create.autocomplete = 'off';
+      create.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const name = create.value.trim();
+          if (!name) return;
+          pickingTabId = null;
+          chipFocusTabId = tab.id;
+          window.browserAPI.groupTabByName(tab.id, name);
+        }
+        // Typed keys must not reach the row/overlay handlers.
+        e.stopPropagation();
+      });
+      picker.append(create);
       row.append(picker);
     }
 
@@ -499,6 +534,12 @@
           : [emptyRow('no matches — ↵ opens as address or search')])
       );
     } else {
+      // The list re-renders on every tabs:updated broadcast (frequent while
+      // any tab is loading) — a half-typed group name must survive that.
+      const prevPickerInput = islandList.querySelector('.group-picker-input');
+      const pickerValue = prevPickerInput?.value ?? '';
+      const pickerHadFocus = prevPickerInput && document.activeElement === prevPickerInput;
+
       const clusters = clusterTabs();
       const rows = [];
       for (const { group, tabs: gtabs } of clusters) {
@@ -508,6 +549,18 @@
         else rows.push(...gtabs.map(tabRow));
       }
       islandList.replaceChildren(...rows, newTabRow(), newPrivateTabRow());
+
+      const pickerInput = islandList.querySelector('.group-picker-input');
+      if (pickerInput && pickerValue) pickerInput.value = pickerValue;
+      if (pickerInput && pickerHadFocus) pickerInput.focus();
+
+      // A picker action just re-rendered its row away — land focus on the
+      // tab's chip rather than <body>. (Only ever set with the picker
+      // closed, so it can't fight the input restore above.)
+      if (chipFocusTabId) {
+        focusChip(chipFocusTabId);
+        chipFocusTabId = null;
+      }
     }
 
     islandHint.textContent = activeTab()?.private
@@ -570,6 +623,7 @@
     findBar.hidden = true;
     inputTouched = false;
     pickingTabId = null;
+    chipFocusTabId = null;
   });
 
   // Click on the backdrop (anywhere outside the panel) dismisses.

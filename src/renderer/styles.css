@@ -492,6 +492,21 @@ body[data-mode="palette"] #panelAnchor { top: 120px; }
 
 .group-picker { display: flex; gap: 4px; flex: 0 0 auto; }
 
+/* Inline "new group…" field in the picker — chip-shaped, mono voice. */
+.group-picker-input {
+  height: 18px;
+  width: 78px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.group-picker-input::placeholder { color: var(--text-dim); }
+.group-picker-input:focus { outline: none; border-color: var(--accent); }
+
 /* Group results in the Quick Switcher use the mono voice. */
 .island-row .row-title.mono { font-family: var(--font-mono); font-size: 12.5px; flex: 0 0 auto; }
 
