@@ -1,7 +1,7 @@
 const isPrivate = new URLSearchParams(location.search).has('private');
 const isMac = navigator.platform.startsWith('Mac');
 
-// Opened as a private tab (bowser://newtab/?private=1): private theme,
+// Opened as a private tab (blanc://newtab/?private=1): private theme,
 // and the ledger's margin copy explains the deal instead of stats.
 if (isPrivate) document.documentElement.dataset.theme = 'private';
 
