@@ -24,6 +24,10 @@ if (window.location.protocol === 'bowser:') {
       show: (id) => ipcRenderer.invoke('pages:downloads:show', id),
       clearFinished: () => ipcRenderer.invoke('pages:downloads:clear-finished'),
     },
+    start: {
+      data: () => ipcRenderer.invoke('pages:start:data'),
+      focusGroup: (id) => ipcRenderer.invoke('pages:start:focus-group', id),
+    },
     settings: {
       get: () => ipcRenderer.invoke('pages:settings:get'),
       set: (partial) => ipcRenderer.invoke('pages:settings:set', partial),

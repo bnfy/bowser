@@ -298,7 +298,138 @@ button.danger:hover { color: var(--on-danger); background: var(--danger); border
 .inline-link { color: var(--accent); text-decoration: none; }
 .inline-link:hover { text-decoration: underline; }
 
-/* ---------- new tab ---------- */
+/* ---------- new tab: "ledger" start page ----------
+   From the Start Page exploration (1a) in the Bowser Design System: one
+   left-aligned column that reads like a well-kept notebook — date,
+   "Where to?", favorites, tab groups — with the sprite denned bottom-right
+   and a quiet margin-note footer. */
+
+.ledger-body { padding: 150px 120px 140px; }
+
+.ledger { max-width: 520px; }
+.ledger-date {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+}
+.ledger-heading {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  margin: 10px 0 0;
+}
+
+.ledger-section { margin-top: 50px; }
+.ledger-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.12em;
+  text-decoration: none;
+  width: fit-content;
+}
+a.ledger-label:hover { color: var(--accent); }
+
+.ledger-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 16px;
+}
+.ledger-groups { gap: 12px; }
+
+.fav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: var(--text);
+  cursor: pointer;
+  width: fit-content;
+  max-width: 100%;
+}
+.fav .tile {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+.fav .name {
+  font-size: 14.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fav .host {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.fav:hover .name { color: var(--accent); }
+
+/* Group rows are buttons (they act on the app, not a URL) — strip the
+   global button chrome back to a bare ledger line. */
+.group-row { background: none; border: none; padding: 0; font: inherit; text-align: left; }
+.group-row:hover { background: none; border: none; color: inherit; }
+.group-row .gname { font-family: var(--font-mono); font-size: 13px; color: var(--text); }
+.group-row .gcount { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-dim); }
+.group-row:hover .gname { color: var(--accent); }
+
+.cluster { display: inline-flex; gap: 4px; align-items: center; }
+.cluster i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); opacity: 0.85; }
+
+.ledger-empty { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-dim); }
+
+/* The dog draws itself from CSS at paint time: body from `color`, markings
+   from `--sprite-accent`. These are the sprite's own pixel-art palette (per
+   the Start Page mockup), deliberately softer than the page tokens. */
+.ledger-dog {
+  position: fixed;
+  right: 110px;
+  bottom: 96px;
+  color: #3c3c3a;
+  --sprite-accent: #5d8b6b;
+}
+@media (prefers-color-scheme: dark) {
+  .ledger-dog { color: #f4f4f1; --sprite-accent: #a8c8b0; }
+}
+:root[data-theme="private"] .ledger-dog { color: #f4f4f1; --sprite-accent: #a8c8b0; }
+
+.ledger-footer {
+  position: fixed;
+  left: 120px;
+  right: 120px;
+  bottom: 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-dim);
+  opacity: 0.8;
+  user-select: none;
+}
+.ledger-version { opacity: 0.6; font-size: 11px; }
+
+@media (max-width: 900px) { .ledger-dog { display: none; } }
+@media (max-width: 720px) {
+  .ledger-body { padding: 90px 48px 140px; }
+  .ledger-footer { left: 48px; right: 48px; }
+}
+
+/* ---------- centered mark (error page) ---------- */
 
 .newtab-body {
   height: 100vh;
@@ -315,14 +446,6 @@ button.danger:hover { color: var(--on-danger); background: var(--danger); border
   margin: 0 auto 14px;
 }
 .mark p { margin: 0; font-size: 13px; letter-spacing: 0.02em; }
-.mark kbd {
-  font-family: var(--font-mono);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 1px 5px;
-  font-size: 12px;
-}
 .newtab-links {
   display: flex;
   gap: 18px;
@@ -337,19 +460,6 @@ button.danger:hover { color: var(--on-danger); background: var(--danger); border
   text-transform: uppercase;
 }
 .newtab-links a:hover { color: var(--accent); }
-
-.newtab-version {
-  position: fixed;
-  bottom: 16px;
-  left: 0;
-  right: 0;
-  text-align: center;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-dim);
-  opacity: 0.6;
-  user-select: none;
-}
 
 /* ---------- Basic-auth dialog (bowser://auth) ---------- */
 

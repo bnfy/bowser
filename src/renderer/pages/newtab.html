@@ -8,19 +8,31 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=JetBrains+Mono:wght@400;500;700&display=swap" />
   <link rel="stylesheet" href="pages.css" />
 </head>
-<body class="newtab-body">
-  <div class="mark">
-    <div class="dot"></div>
-    <p id="newTabCopy">Type a search or address above &mdash; or press <kbd id="newTabKey">Ctrl+T</kbd> for a new tab</p>
-    <p id="privateCopy" hidden>Private tab &mdash; pages you visit here aren&rsquo;t saved to history. Close the tab and the trail is gone.</p>
-    <nav class="newtab-links">
-      <a href="bowser://bookmarks/">Favorites</a>
-      <a href="bowser://history/">History</a>
-      <a href="bowser://downloads/">Downloads</a>
-      <a href="bowser://settings/">Settings</a>
-    </nav>
-  </div>
-  <div id="version" class="newtab-version"></div>
+<body class="ledger-body">
+  <main class="ledger">
+    <div id="dateLine" class="ledger-date"></div>
+    <h1 class="ledger-heading">Where to?</h1>
+
+    <section class="ledger-section">
+      <a class="ledger-label" href="bowser://bookmarks/">favorites</a>
+      <div id="favoritesList" class="ledger-list"></div>
+    </section>
+
+    <section id="groupsSection" class="ledger-section" hidden>
+      <div class="ledger-label">pick up where you left off</div>
+      <div id="groupsList" class="ledger-list ledger-groups"></div>
+    </section>
+  </main>
+
+  <bowser-sprite class="ledger-dog" scale="5"></bowser-sprite>
+
+  <footer class="ledger-footer">
+    <span id="footerLeft"></span>
+    <span id="version" class="ledger-version"></span>
+    <span id="goAnywhere"></span>
+  </footer>
+
   <script src="newtab.js"></script>
+  <script src="bowser-sprite.js"></script>
 </body>
 </html>

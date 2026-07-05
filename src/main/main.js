@@ -277,6 +277,26 @@ function serializeTabs() {
 let sessionStore = null;
 const ensureSessionStore = () => (sessionStore ??= new JsonStore('session', { urls: [], activeIndex: 0, groups: [], groupIds: [] }));
 
+// Rolling ads-blocked counter for the start page's margin note. Weeks
+// start Monday 00:00 local; the count resets lazily on the first touch
+// (read or increment) after a week boundary.
+let adblockStatsStore = null;
+const ensureAdblockStats = () => (adblockStatsStore ??= new JsonStore('adblock-stats', { weekStart: 0, blocked: 0 }));
+
+function currentWeekStart() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return d.getTime();
+}
+
+function adblockWeekStats() {
+  const s = ensureAdblockStats();
+  const week = currentWeekStart();
+  if (s.data.weekStart !== week) s.update((d) => { d.weekStart = week; d.blocked = 0; });
+  return s;
+}
+
 let isQuitting = false;
 app.on('before-quit', () => { isQuitting = true; });
 
@@ -721,7 +741,14 @@ function setActiveTab(id, { focusContent = true, focusAddress = false } = {}) {
 
   const prevId = activeTabId;
   const prev = prevId ? tabs.get(prevId) : null;
-  if (prev) win.contentView.removeChildView(prev.view);
+  if (prev) {
+    win.contentView.removeChildView(prev.view);
+    // A detached view's document still reports visibilityState 'visible',
+    // so Chromium never background-throttles its timers (the newtab sprite
+    // would keep animating at 6fps forever). Hide it explicitly;
+    // reactivation always calls setVisible(true).
+    prev.view.setVisible(false);
+  }
 
   activeTabId = id;
   if (prevId && prevId !== id) tabsWantingAddressBarFocus.delete(prevId);
@@ -1150,13 +1177,32 @@ app.whenReady().then(async () => {
   });
 
   setupDownloads(ses);
-  setupPages({ onDataChanged: refreshBookmarkFlags });
+  setupPages({
+    onDataChanged: refreshBookmarkFlags,
+    // The start page's ledger sections read live tab-group state and the
+    // rolling blocked counter, both owned here.
+    startPage: {
+      // Mirror persistSession's rule: private tabs — and groups only they
+      // hold — never surface on a start page.
+      groups: () => clusterList()
+        .filter((c) => c.group)
+        .map(({ group, tabIds }) => ({
+          id: group.id,
+          name: group.name,
+          count: tabIds.filter((id) => !tabs.get(id)?.private).length,
+        }))
+        .filter((g) => g.count > 0),
+      focusGroup,
+      blockedThisWeek: () => adblockWeekStats().data.blocked,
+    },
+  });
 
   await setupAdBlocker(ses, { enabled: settings.getSettings().adblockEnabled });
 
   // Per-tab blocked-request counter. `request.tabId` is the webContents id
   // of the frame the request came from.
   getBlocker()?.on('request-blocked', (request) => {
+    adblockWeekStats().update((d) => { d.blocked += 1; });
     for (const tab of tabs.values()) {
       if (tab.view.webContents.id === request.tabId) {
         tab.blockedCount += 1;

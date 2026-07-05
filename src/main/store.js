@@ -3,6 +3,10 @@ const fs = require('fs');
 const path = require('path');
 
 const SAVE_DELAY_MS = 250;
+// A pure trailing debounce never fires while updates keep arriving faster
+// than SAVE_DELAY_MS (e.g. the adblock counter during a blocked-request
+// stream) — cap how long a pending save can be deferred.
+const MAX_SAVE_DELAY_MS = 5000;
 
 /** All live stores, so we can flush pending writes on quit. */
 const instances = [];
@@ -23,6 +27,7 @@ class JsonStore {
     this.defaults = defaults;
     this.data = this.#load();
     this.saveTimer = null;
+    this.pendingSince = null;
     instances.push(this);
   }
 
@@ -41,6 +46,8 @@ class JsonStore {
   }
 
   #scheduleSave() {
+    this.pendingSince ??= Date.now();
+    if (Date.now() - this.pendingSince >= MAX_SAVE_DELAY_MS) return this.flush();
     clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => this.flush(), SAVE_DELAY_MS);
   }
@@ -48,6 +55,7 @@ class JsonStore {
   flush() {
     clearTimeout(this.saveTimer);
     this.saveTimer = null;
+    this.pendingSince = null;
     try {
       fs.writeFileSync(this.file, JSON.stringify(this.data, null, 2));
     } catch (err) {

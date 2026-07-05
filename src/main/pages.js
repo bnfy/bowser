@@ -75,6 +75,14 @@ function setupPages(hooks = {}) {
 
   handle('pages:app-version', () => app.getVersion());
 
+  // Start page (the ledger new tab): tab groups + the weekly blocked
+  // counter live in main.js, reached through hooks rather than a module.
+  handle('pages:start:data', () => ({
+    groups: hooks.startPage?.groups() ?? [],
+    blockedThisWeek: hooks.startPage?.blockedThisWeek() ?? 0,
+  }));
+  handle('pages:start:focus-group', (id) => hooks.startPage?.focusGroup(String(id)));
+
   // Default-browser state lives in LaunchServices/the OS, not settings.json.
   // canSet: a dev run must never register the bare Electron binary as a
   // browser, and Linux has no default-protocol-client API in Electron.
