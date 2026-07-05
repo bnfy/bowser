@@ -1,4 +1,4 @@
-// Collector for Bowser's opt-in launch ping (see src/main/telemetry.js in
+// Collector for Blanc's opt-in launch ping (see src/main/telemetry.js in
 // the main repo). Tallies anonymous counts in Workers KV — no IPs, no
 // persistent ids, no browsing data are ever stored.
 

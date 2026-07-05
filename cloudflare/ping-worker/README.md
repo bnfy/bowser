@@ -1,7 +1,7 @@
-# bowser-ping
+# blanc-ping
 
-Collector for Bowser's opt-in, anonymous launch ping (Settings → "Help
-improve Bowser"). Receives `POST /ping` with `{version, platform, arch}`
+Collector for Blanc's opt-in, anonymous launch ping (Settings → "Help
+improve Blanc"). Receives `POST /ping` with `{version, platform, arch}`
 and tallies counts in Workers KV. `GET /stats` (bearer-token gated) returns
 the current totals.
 
@@ -20,14 +20,14 @@ npx wrangler deploy
 ```
 
 `wrangler deploy` prints the live URL, something like
-`https://bowser-ping.<your-subdomain>.workers.dev`. Update
+`https://blanc-ping.<your-subdomain>.workers.dev`. Update
 `PING_ENDPOINT` in `src/main/telemetry.js` (in the repo root) to
 `<that-url>/ping`.
 
-To attach it to `api.getbowser.com` instead of the `workers.dev`
+To attach it to `api.blancbrowser.com` instead of the `workers.dev`
 subdomain, add a route in the Cloudflare dashboard (Workers & Pages →
-bowser-ping → Settings → Triggers → Custom Domains) once
-`getbowser.com`'s DNS is on Cloudflare.
+blanc-ping → Settings → Triggers → Custom Domains) once
+`blancbrowser.com`'s DNS is on Cloudflare.
 
 ## Checking the numbers
 
