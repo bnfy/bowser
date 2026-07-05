@@ -63,3 +63,31 @@ else
 fi
 
 echo "==> Done: https://github.com/$REPO/releases/tag/$TAG"
+
+# Windows (NSIS) and Linux (AppImage) can't be built here — this script runs
+# on a macOS dev machine, and cross-compiling a *signed* Windows installer
+# needs a real Windows toolchain. Instead, dispatch the CI workflow that
+# builds both on their native runners and uploads onto this same tag.
+echo "==> Dispatching Windows/Linux CI build for $TAG"
+if ! gh workflow run release-windows-linux.yml --repo "$REPO" -f tag="$TAG" 2>/tmp/bowser-release-wf-dispatch.err; then
+  echo "==> Could not dispatch release-windows-linux.yml — it may not exist on the default branch yet (workflow_dispatch only works off the default branch), or gh may be missing the 'workflow' scope." >&2
+  cat /tmp/bowser-release-wf-dispatch.err >&2
+  echo "==> Build Windows/Linux manually once resolved: gh workflow run release-windows-linux.yml --repo $REPO -f tag=$TAG" >&2
+  exit 0
+fi
+
+echo "==> Waiting for the run to register..."
+sleep 8
+RUN_ID=$(gh run list --repo "$REPO" --workflow=release-windows-linux.yml --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId')
+if [ -z "$RUN_ID" ]; then
+  echo "==> Dispatched, but couldn't find the run to watch — check: gh run list --repo $REPO --workflow=release-windows-linux.yml" >&2
+  exit 0
+fi
+
+echo "==> Watching run $RUN_ID (Windows + Linux builds, several minutes)"
+if gh run watch "$RUN_ID" --repo "$REPO" --exit-status; then
+  echo "==> Windows/Linux artifacts uploaded to $TAG"
+else
+  echo "==> Windows/Linux CI build failed or was inconclusive — see: gh run view $RUN_ID --repo $REPO --log-failed" >&2
+  exit 1
+fi

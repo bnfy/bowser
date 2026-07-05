@@ -578,7 +578,6 @@
   .download .links a { color: var(--text-dim); text-decoration: none; border-bottom: 1px solid var(--border); padding-bottom: 2px; white-space: nowrap; transition: color 0.3s, border-color 0.3s; }
   .download .links a:hover { color: var(--text); border-color: var(--accent); }
   .download .links a.primary { color: var(--accent); border-color: var(--accent); }
-  .download .links .soon { color: var(--text-dim); opacity: 0.5; padding-bottom: 2px; border-bottom: 1px dashed var(--border); cursor: default; white-space: nowrap; transition: color 0.3s, border-color 0.3s; }
   .download .meta { margin-top: 26px; font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); opacity: 0.65; white-space: nowrap; transition: color 0.3s; }
 
   footer { border-top: 1px solid var(--border); padding: 26px 40px; text-align: center; font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); position: relative; z-index: 1; transition: border-color 0.3s, color 0.3s; }
@@ -647,7 +646,7 @@
   <h1>The browser that gets out of your way.</h1>
   <p class="sub">One small pill of controls. Everything else is the page you came for.</p>
   <a class="cta" href="#download">download bowser <span class="kbd-hint dev-only" style="color: var(--bg); border-color: var(--bg); background: transparent;">⌘⇧D</span></a>
-  <p class="platforms">free · <a href="#download">macos</a> · windows &amp; linux soon</p>
+  <p class="platforms">free · <a href="#download">macos</a> · <a href="#download">windows</a> · <a href="#download">linux</a></p>
   <p class="hint">↑ that little pill is the whole interface — click it</p>
 </header>
 
@@ -810,8 +809,8 @@
   </div>
   <div class="links">
     <a class="primary" id="mac-dl" href="https://github.com/bnfy/bowser/releases/latest">macOS ↓</a>
-    <span class="soon">Windows soon</span>
-    <span class="soon">Linux soon</span>
+    <a class="primary" id="win-dl" href="https://github.com/bnfy/bowser/releases/latest">Windows ↓</a>
+    <a class="primary" id="linux-dl" href="https://github.com/bnfy/bowser/releases/latest">Linux ↓</a>
   </div>
   <p class="meta">free · no account needed · updates itself</p>
 </section>
@@ -1117,6 +1116,12 @@
       const dmgs = rel.assets.filter(a => a.name.endsWith('.dmg'));
       const dmg = dmgs.find(a => a.name.includes('arm64')) || dmgs[0];
       if (dmg) document.getElementById('mac-dl').href = dmg.browser_download_url;
+
+      const exe = rel.assets.find(a => a.name.endsWith('.exe'));
+      if (exe) document.getElementById('win-dl').href = exe.browser_download_url;
+
+      const appImage = rel.assets.find(a => a.name.endsWith('.AppImage'));
+      if (appImage) document.getElementById('linux-dl').href = appImage.browser_download_url;
     })
     .catch(() => {});
 </script>

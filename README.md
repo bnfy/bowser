@@ -15,9 +15,10 @@ builds.
 
 ## Install
 
-Grab the latest signed and notarized build from
-[Releases](https://github.com/bnfy/bowser/releases/latest) (macOS dmg/zip,
-arm64). Installed copies keep themselves current via auto-update.
+Grab the latest build from
+[Releases](https://github.com/bnfy/bowser/releases/latest): macOS (dmg/zip,
+arm64, signed & notarized), Windows (NSIS installer), or Linux (AppImage).
+Installed copies keep themselves current via auto-update.
 
 ## Run it from source
 
@@ -81,10 +82,16 @@ Packaged builds self-update via `electron-updater` against GitHub
 Releases. Chromium can't be swapped out of a running app — it's compiled
 into Electron — so, like Chrome itself, staying current means replacing
 the whole app: bump the `electron` dependency (it tracks Chromium stable)
-and `version`, then `npm run release` builds, signs, notarizes, and
-publishes (see `scripts/release.sh`). Running installs pick releases up on
-their next check (startup + every 4 h, or **Check for Updates…** in the
-menu) and prompt to restart. Dev builds (`npm start`) skip all of this.
+and `version`, then `npm run release`. That builds, signs, and notarizes
+the macOS artifacts locally (see `scripts/release.sh`), then dispatches
+[`release-windows-linux.yml`](.github/workflows/release-windows-linux.yml)
+to build the NSIS installer and AppImage on their native runners and
+upload them onto the same release. The Windows build is signed only if
+the `CSC_LINK`/`CSC_KEY_PASSWORD` repo secrets are set — without them it
+still builds, but users hit a SmartScreen "unknown publisher" warning.
+Running installs pick releases up on their next check (startup + every
+4 h, or **Check for Updates…** in the menu) and prompt to restart. Dev
+builds (`npm start`) skip all of this.
 
 ## How it's put together
 
