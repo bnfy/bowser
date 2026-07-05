@@ -3,6 +3,7 @@
   const searchEngine = document.getElementById('searchEngine');
   const adblockEnabled = document.getElementById('adblockEnabled');
   const homePage = document.getElementById('homePage');
+  const usagePing = document.getElementById('usagePing');
 
   const { settings, searchEngines } = await window.bowserPages.settings.get();
 
@@ -16,6 +17,7 @@
   searchEngine.value = settings.searchEngine;
   adblockEnabled.checked = settings.adblockEnabled;
   homePage.value = settings.homePage;
+  usagePing.checked = settings.usagePing;
 
   theme.addEventListener('change', () =>
     window.bowserPages.settings.set({ theme: theme.value }));
@@ -25,6 +27,8 @@
     window.bowserPages.settings.set({ adblockEnabled: adblockEnabled.checked }));
   homePage.addEventListener('change', () =>
     window.bowserPages.settings.set({ homePage: homePage.value }));
+  usagePing.addEventListener('change', () =>
+    window.bowserPages.settings.set({ usagePing: usagePing.checked }));
 
   // --- Default browser (live OS state, nothing stored) ---
   const defaultBrowserSetting = document.getElementById('defaultBrowserSetting');

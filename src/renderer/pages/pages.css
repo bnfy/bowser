@@ -391,20 +391,13 @@ a.ledger-label:hover { color: var(--accent); }
 
 .ledger-empty { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-dim); }
 
-/* The dog draws itself from CSS at paint time: body from `color`, markings
-   from `--sprite-accent`. These are the sprite's own pixel-art palette (per
-   the Start Page mockup), deliberately softer than the page tokens. */
+/* The sprite renders a fixed-palette pixel-art doberman (black + rust) —
+   no theme hook needed, unlike the earlier hand-drawn grid sprite. */
 .ledger-dog {
   position: fixed;
   right: 110px;
   bottom: 96px;
-  color: #3c3c3a;
-  --sprite-accent: #5d8b6b;
 }
-@media (prefers-color-scheme: dark) {
-  .ledger-dog { color: #f4f4f1; --sprite-accent: #a8c8b0; }
-}
-:root[data-theme="private"] .ledger-dog { color: #f4f4f1; --sprite-accent: #a8c8b0; }
 
 .ledger-footer {
   position: fixed;

@@ -39,6 +39,24 @@
   a { color: inherit; }
   .mono { font-family: var(--font-mono); }
 
+  /* Consent banner */
+  .consent {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    z-index: 100; display: flex; align-items: center; gap: 14px;
+    max-width: calc(100vw - 32px); flex-wrap: wrap; justify-content: center;
+    padding: 12px 16px; background: var(--surface-raised);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    font-family: var(--font-mono); font-size: 12.5px; color: var(--text-dim);
+    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.4);
+  }
+  .consent[hidden] { display: none; }
+  .consent button {
+    font-family: var(--font-mono); font-size: 12px; padding: 6px 12px;
+    border-radius: var(--radius); border: 1px solid var(--accent);
+    background: var(--accent); color: var(--bg); cursor: pointer;
+  }
+  .consent button.ghost { background: transparent; color: var(--text-dim); border-color: var(--border); }
+
   body {
     /* Subtle technical blueprint grid pattern */
     background-image: 
@@ -585,9 +603,30 @@
   footer .line b { color: var(--accent); font-weight: 400; transition: color 0.3s; }
 
   @media (max-width: 768px) {
-    .top-nav { right: 50%; transform: translateX(50%); top: 12px; }
+    .top-nav { right: 50%; transform: translateX(50%); top: 16px; }
     .hero .mark { display: none; }
-    .island .panel { width: 380px; }
+    .island { top: 60px; }
+    .island .panel { width: min(calc(100vw - 32px), 520px); }
+    .island .field input,
+    .island .field .prefix { font-size: 16px; }
+    .island .foot { display: none; }
+    
+    .hero {
+      height: auto;
+      min-height: 100dvh;
+      justify-content: flex-start;
+      padding: 130px 20px 80px;
+    }
+    .hero h1 { font-size: clamp(32px, 8vw, 42px); }
+    .hero .sub { font-size: 15px; margin: 16px auto 0; line-height: 1.5; }
+    .hero .cta { margin-top: 32px; }
+    .hero .hint {
+      white-space: normal;
+      padding: 0 16px;
+      bottom: 16px;
+      font-size: 11px;
+    }
+    
     .bento-grid {
       grid-template-columns: 1fr;
       gap: 16px;
@@ -596,6 +635,30 @@
     .bento-card {
       grid-column: span 1 !important;
       padding: 24px;
+    }
+    
+    .keysline { display: none; }
+    
+    .download { padding: 60px 20px; }
+    .download .links { flex-wrap: wrap; gap: 16px 24px; margin-top: 32px; }
+    
+    .swatches { gap: 16px; }
+    .swatch { width: 32px; height: 32px; }
+    
+    footer { padding: 20px 16px; }
+  }
+
+  @media (max-width: 480px) {
+    .consent {
+      flex-direction: column;
+      align-items: stretch;
+      text-align: center;
+      gap: 12px;
+    }
+    .consent button {
+      width: 100%;
+      padding: 10px 16px;
+      font-size: 13px;
     }
   }
 </style>
@@ -618,7 +681,7 @@
 <header class="hero">
   <svg class="mark" viewBox="0 0 178.51 193.42" aria-label="Bowser"><path fill="currentColor" d="M124.92,85.73c19.91.87,36.62,13.6,42.54,32.81,4.01,13.01,2.35,26.21-3.11,38.65-9.12,21.34-28.83,35.69-52.59,35.82l-75.29.41-.03-146.43c-11.76,5.44-23.15,7.21-36.45,3.56L24.13,12.33C31.49,1.7,43.74-2.54,56.11,1.52c18.03,5.92,38.87-9.26,61.52,7.61,4.93,5.28,8.67,10.43,12.36,16.83l48.52,13.98c-4.78,21.08-22.57,35.59-44.61,34.9l-8.97,10.89ZM97.64,72.37c14.43-3.18,28.72-4.04,43.34-5.64,12.67-1.39,22.48-10.01,26.84-21.27l-39.82-11.41c-3.29-.94-5.89-3.85-7.37-6.9-5.32-10.97-15.26-18.23-27.79-18.24-15.12-.02-27.37,4.5-40,.28-8.51-2.84-17.07.06-22.07,7.75l-18.01,27.69c16.41-.07,32.41-8.08,38.9-23.08,1.47-.78,5.11-.09,6.64,1.26-2.26,8.01-7.21,14.05-13.94,18.95l.06,67.75c12.59-19.83,31.1-32.27,53.22-37.13ZM44.44,171.03c11.05-24.63,25.93-45.09,45.58-62.98,11.2-10.2,21.86-19.66,32.13-31.44-35.94,1.4-66.09,16.9-77.79,51.58l.07,42.85ZM114.78,184.95c10.25-.07,19.38-4.5,26.63-10.41,22.25-18.16,27.9-51.76,7.95-70.6-8.42-7.95-20.18-11.46-32.07-10.49l-21.99,19.96c-21.89,19.58-38.11,43.44-48.29,72.03l67.77-.49Z"></path><path fill="currentColor" d="M106.54,33.61l-9.58-.31c-3.23-.11-6.4-4.81-3.97-7.34,8.14-.53,15.33-1.29,16.78,3.53.32,1.07-1.93,4.16-3.23,4.12Z"></path></svg>
   
-  <div class="island" id="island" title="Click to expand">
+  <div class="island" id="island" title="Tap or click to expand">
     <div class="pill">
       <div class="dots"><span class="on"></span><span></span><span></span></div>
       <span class="domain">getbowser.com</span>
@@ -647,7 +710,7 @@
   <p class="sub">One small pill of controls. Everything else is the page you came for.</p>
   <a class="cta" href="#download">download bowser <span class="kbd-hint dev-only" style="color: var(--bg); border-color: var(--bg); background: transparent;">⌘⇧D</span></a>
   <p class="platforms">free · <a href="#download">macos</a> · <a href="#download">windows</a> · <a href="#download">linux</a></p>
-  <p class="hint">↑ that little pill is the whole interface — click it</p>
+  <p class="hint">↑ that little pill is the whole interface — tap or click it</p>
 </header>
 
 <!-- ============ five-card bento box statements ============ -->
@@ -818,6 +881,12 @@
 <footer>
   <span class="line">zero bloat <b>|</b> fast focus · © 2026</span>
 </footer>
+
+<div id="consent" class="consent" hidden>
+  <span>Anonymous analytics help us gauge interest — allow?</span>
+  <button id="consentAllow">Allow</button>
+  <button id="consentDeny" class="ghost">No thanks</button>
+</div>
 
 <script>
   // ---------- Hero control pill interactivity ----------
@@ -1124,6 +1193,40 @@
       if (appImage) document.getElementById('linux-dl').href = appImage.browser_download_url;
     })
     .catch(() => {});
+
+  // ---------- Consent-gated analytics ----------
+  // Nothing Google-related loads until the visitor clicks Allow; the choice
+  // sticks in localStorage. Wrapped so a failure means no banner and no GA,
+  // never a broken page.
+  try {
+    const GA_ID = 'G-MN8BLY6GE9';
+    const loadGA = () => {
+      const s = document.createElement('script');
+      s.async = true;
+      s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+      document.head.appendChild(s);
+      window.dataLayer = window.dataLayer || [];
+      window.gtag = function () { dataLayer.push(arguments); };
+      gtag('js', new Date());
+      gtag('config', GA_ID);
+    };
+    const consent = localStorage.getItem('ga-consent');
+    if (consent === 'granted') {
+      loadGA();
+    } else if (consent !== 'denied') {
+      const banner = document.getElementById('consent');
+      banner.hidden = false;
+      document.getElementById('consentAllow').addEventListener('click', () => {
+        localStorage.setItem('ga-consent', 'granted');
+        banner.hidden = true;
+        loadGA();
+      });
+      document.getElementById('consentDeny').addEventListener('click', () => {
+        localStorage.setItem('ga-consent', 'denied');
+        banner.hidden = true;
+      });
+    }
+  } catch (e) { /* no banner, no GA */ }
 </script>
 </body>
 </html>

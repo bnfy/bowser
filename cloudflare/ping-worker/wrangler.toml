@@ -1,0 +1,11 @@
+name = "bowser-ping"
+main = "src/index.js"
+compatibility_date = "2026-07-01"
+
+# Created by `wrangler kv namespace create PINGS` — paste the returned id below.
+kv_namespaces = [
+  { binding = "PINGS", id = "2c71bddea5b842d49fee1c972b70e8d9" }
+]
+
+# STATS_TOKEN is a secret, not a var — set it with:
+#   wrangler secret put STATS_TOKEN

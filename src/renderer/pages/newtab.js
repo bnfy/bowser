@@ -3,8 +3,6 @@ const isMac = navigator.platform.startsWith('Mac');
 
 // Opened as a private tab (bowser://newtab/?private=1): private theme,
 // and the ledger's margin copy explains the deal instead of stats.
-// (Set before bowser-sprite.js loads — the dog's palette comes from the
-// .ledger-dog theme rules in pages.css.)
 if (isPrivate) document.documentElement.dataset.theme = 'private';
 
 document.getElementById('dateLine').textContent = isPrivate

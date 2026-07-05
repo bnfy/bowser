@@ -21,6 +21,8 @@ const DEFAULTS = {
   appIcon: 'default',
   // Lowercased hostnames, no protocol/path/www. prefix.
   adblockExceptions: [],
+  // Opt-in, anonymous "app launched" ping — see main/telemetry.js. Off by default.
+  usagePing: false,
 };
 
 let store = null;
@@ -42,6 +44,7 @@ function setSettings(partial) {
     clean.searchEngine = partial.searchEngine;
   }
   if (typeof partial.adblockEnabled === 'boolean') clean.adblockEnabled = partial.adblockEnabled;
+  if (typeof partial.usagePing === 'boolean') clean.usagePing = partial.usagePing;
   if (typeof partial.homePage === 'string') clean.homePage = partial.homePage.trim();
   if (THEMES.includes(partial.theme)) clean.theme = partial.theme;
   if (APP_ICONS.includes(partial.appIcon)) clean.appIcon = partial.appIcon;
