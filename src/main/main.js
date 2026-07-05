@@ -237,6 +237,9 @@ let chromeHeight = 56;
 let overlayView = null;
 /** @type {null | 'panel' | 'palette' | 'find'} */
 let overlayMode = null;
+/** Companion to overlayMode, replayed alongside it below if the overlay's
+ * first load hadn't finished when showOverlay was called. */
+let overlayPrefill = null;
 
 // Find mode keeps the overlay's bounds tight around the capsule so the
 // rest of the page stays clickable while stepping through matches. Sized
@@ -274,7 +277,7 @@ function createOverlay() {
   // would be lost — leaving an invisible view blocking clicks. Replay it.
   overlayView.webContents.once('did-finish-load', () => {
     if (overlayMode) {
-      overlayView.webContents.send('overlay:show', { mode: overlayMode });
+      overlayView.webContents.send('overlay:show', { mode: overlayMode, prefill: overlayPrefill });
       overlayView.webContents.focus();
     }
   });
@@ -301,13 +304,14 @@ function createOverlay() {
   });
 }
 
-function showOverlay(mode) {
+function showOverlay(mode, { prefill } = {}) {
   if (!hasLiveWindow() || !overlayView) return;
   overlayMode = mode;
+  overlayPrefill = prefill ?? null;
   // (Re-)adding moves the overlay to the top of the child-view stack.
   win.contentView.addChildView(overlayView);
   overlayView.setBounds(overlayBounds());
-  overlayView.webContents.send('overlay:show', { mode });
+  overlayView.webContents.send('overlay:show', { mode, prefill });
   overlayView.webContents.focus();
   win.webContents.send('chrome:island-state', { mode });
 }
@@ -573,10 +577,10 @@ function scheduleSampleTint(tab) {
 function clusterList() {
   const list = [];
   for (const g of groups) {
-    const tabIds = tabOrder.filter((id) => tabs.get(id)?.groupId === g.id);
+    const tabIds = tabOrder.filter((id) => tabs.get(id)?.groupId === g.id && !tabs.get(id)?.pinned);
     if (tabIds.length) list.push({ group: g, tabIds });
   }
-  const loose = tabOrder.filter((id) => tabs.get(id) && !tabs.get(id).groupId);
+  const loose = tabOrder.filter((id) => tabs.get(id) && !tabs.get(id).groupId && !tabs.get(id).pinned);
   if (loose.length) list.push({ group: null, tabIds: loose });
   return list;
 }
@@ -631,7 +635,12 @@ function focusGroup(groupId) {
   const group = groups.find((g) => g.id === groupId);
   if (!group) return;
   group.collapsed = false;
-  const first = tabOrder.find((id) => tabs.get(id)?.groupId === groupId);
+  const groupTabIds = tabOrder.filter((id) => tabs.get(id)?.groupId === groupId);
+  // Prefer the first unpinned member — a pinned tab in this group renders
+  // in the pinned shelf/section, not this group's own cluster, so jumping
+  // to it here would look like landing in the wrong place. Only fall back
+  // to a pinned one if the group has no unpinned tabs at all.
+  const first = groupTabIds.find((id) => !tabs.get(id)?.pinned) ?? groupTabIds[0];
   // setActiveTab broadcasts, but no-ops when the tab is already active —
   // the unfold still has to reach the renderers.
   if (first && first !== activeTabId) setActiveTab(first);
@@ -1069,8 +1078,9 @@ function reorderTab(id, toIndex) {
  * first tab, unfolding it (Island Tab Groups design). Without groups the
  * browser convention stands: 1–8 jump to that tab, 9 to the last. */
 function selectTabAtIndex(index) {
-  if (groups.length) {
-    const cluster = clusterList()[index];
+  const clusters = clusterList();
+  if (groups.length && clusters.length) {
+    const cluster = clusters[index];
     if (!cluster) return;
     if (cluster.group) focusGroup(cluster.group.id);
     else setActiveTab(cluster.tabIds[0]);
@@ -1276,6 +1286,32 @@ function scheduleMenuRebuild() {
   }, 100);
 }
 
+/** Native-menu items for every open tab, ordered pinned-first then by
+ * cluster (matching the pill and panel switcher). Clicking jumps to it.
+ * Titles/domains reflect state as of the last menu rebuild, not the
+ * current instant — see the Global Constraints note on this. */
+function tabMenuItems() {
+  const pinnedIds = tabOrder.filter((id) => tabs.get(id)?.pinned);
+  const orderedIds = [...pinnedIds, ...clusterList().flatMap((c) => c.tabIds)];
+  return orderedIds.map((id) => {
+    const tab = tabs.get(id);
+    const group = tab.groupId ? groups.find((g) => g.id === tab.groupId) : null;
+    let domain = tab.url;
+    try {
+      domain = new URL(tab.url).hostname || tab.url;
+    } catch {
+      /* not a parseable URL (blank tab, blanc:// page) — show it as-is */
+    }
+    const label = `${tab.title || 'New Tab'} — ${domain}${group ? ` (${group.name})` : ''}`;
+    return {
+      label: label.length > 120 ? `${label.slice(0, 119)}…` : label,
+      type: 'checkbox',
+      checked: id === activeTabId,
+      click: () => setActiveTab(id),
+    };
+  });
+}
+
 function buildMenu() {
   const isMac = process.platform === 'darwin';
   const appMenu = isMac
@@ -1336,6 +1372,27 @@ function buildMenu() {
         { label: 'Previous Tab', accelerator: 'Ctrl+Shift+Tab', click: () => cycleTab(-1) },
         { type: 'separator' },
         { label: 'Duplicate Tab', enabled: !!activeTabId, click: () => activeTabId && duplicateTab(activeTabId) },
+        { label: tabs.get(activeTabId)?.pinned ? 'Unpin Tab' : 'Pin Tab', enabled: !!activeTabId, click: () => activeTabId && toggleTabPinned(activeTabId) },
+        { label: tabs.get(activeTabId)?.muted ? 'Unmute Tab' : 'Mute Tab', enabled: !!activeTabId, click: () => activeTabId && toggleTabMuted(activeTabId) },
+        { type: 'separator' },
+        {
+          label: 'New Group…',
+          enabled: !!activeTabId,
+          click: () => { if (hasLiveWindow()) { win.focus(); showOverlay('palette', { prefill: '/group ' }); } },
+        },
+        {
+          label: 'Ungroup Tab',
+          enabled: !!tabs.get(activeTabId)?.groupId,
+          click: () => activeTabId && setTabGroup(activeTabId, null),
+        },
+        {
+          label: 'Close Group',
+          enabled: !!tabs.get(activeTabId)?.groupId,
+          click: () => {
+            const groupId = tabs.get(activeTabId)?.groupId;
+            if (groupId) closeGroup(groupId);
+          },
+        },
         { type: 'separator' },
         // "Tab or Group": with groups these jump to the nth pill cluster.
         ...Array.from({ length: 9 }, (_, i) => ({
@@ -1343,6 +1400,8 @@ function buildMenu() {
           accelerator: `CmdOrCtrl+${i + 1}`,
           click: () => selectTabAtIndex(i),
         })),
+        { type: 'separator' },
+        ...tabMenuItems(),
       ],
     },
     {

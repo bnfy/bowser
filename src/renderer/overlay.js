@@ -595,7 +595,7 @@
 
   // --- Mode switching (driven by main via overlay:show / overlay:hide) ---
 
-  function applyMode(next) {
+  function applyMode(next, prefill) {
     const reshow = mode === next;
     mode = next;
     document.body.dataset.mode = next ?? '';
@@ -607,14 +607,22 @@
       if (!reshow) pickingTabId = null;
       refreshSwitcherData();
       renderPanel();
-      // A reassert (main re-focusing the same open panel) must not clobber
-      // what the user already typed.
-      if (!reshow || !inputTouched) {
+      if (prefill) {
+        // A menu-triggered command (e.g. "New Group…") arrives pre-typed —
+        // land the cursor at the end, ready to type the rest, rather than
+        // selecting the whole string the way a fresh open does below.
+        inputTouched = true;
+        addressInput.value = prefill;
+        renderList();
+      } else if (!reshow || !inputTouched) {
+        // A reassert (main re-focusing the same open panel) must not
+        // clobber what the user already typed.
         inputTouched = false;
         addressInput.value = addressDisplayValue(activeTab());
       }
       addressInput.focus();
-      addressInput.select();
+      if (prefill) addressInput.setSelectionRange(prefill.length, prefill.length);
+      else addressInput.select();
     } else if (next === 'find') {
       findInput.focus();
       findInput.select();
@@ -628,7 +636,7 @@
     findLastQuery = null;
   }
 
-  window.browserAPI.onOverlayShow(({ mode: next }) => applyMode(next));
+  window.browserAPI.onOverlayShow(({ mode: next, prefill }) => applyMode(next, prefill));
   window.browserAPI.onOverlayHide(() => {
     if (mode === 'find') resetFind();
     mode = null;
