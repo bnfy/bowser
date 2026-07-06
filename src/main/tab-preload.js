@@ -32,6 +32,7 @@ if (window.location.protocol === 'blanc:') {
     settings: {
       get: () => ipcRenderer.invoke('pages:settings:get'),
       set: (partial) => ipcRenderer.invoke('pages:settings:set', partial),
+      activateSupporter: (key) => ipcRenderer.invoke('pages:settings:supporter-activate', key),
     },
     permissions: {
       list: () => ipcRenderer.invoke('pages:permissions:list'),

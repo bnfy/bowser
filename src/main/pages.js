@@ -5,6 +5,7 @@ const bookmarks = require('./bookmarks');
 const history = require('./history');
 const downloads = require('./downloads');
 const settings = require('./settings');
+const supporter = require('./supporter');
 const { listDecisions, removeDecision } = require('./permissions');
 
 // Internal chrome pages (bookmarks, history, downloads, settings, the new
@@ -68,13 +69,29 @@ function setupPages(hooks = {}) {
   handle('pages:downloads:show', (id) => downloads.showDownloadInFolder(id));
   handle('pages:downloads:clear-finished', () => downloads.clearFinishedDownloads());
 
+  // The renderer never sees the license key or activation id — only the
+  // derived booleans. Internal pages are privileged, but least-privilege
+  // anyway (same reasoning as the preload's protocol re-check).
+  const clientSettings = () => {
+    const { supporter: record, ...rest } = settings.getSettings();
+    return {
+      ...rest,
+      supporterActive: !!record,
+      supporterActivatedAt: record?.activatedAt ?? null,
+    };
+  };
+
   handle('pages:settings:get', () => ({
-    settings: settings.getSettings(),
+    settings: clientSettings(),
     searchEngines: Object.fromEntries(
       Object.entries(settings.SEARCH_ENGINES).map(([key, { label }]) => [key, label])
     ),
   }));
-  handle('pages:settings:set', (partial) => settings.setSettings(partial ?? {}));
+  handle('pages:settings:set', (partial) => {
+    settings.setSettings(partial ?? {});
+    return clientSettings();
+  });
+  handle('pages:settings:supporter-activate', (key) => supporter.activateSupporter(key));
 
   handle('pages:app-version', () => app.getVersion());
 
