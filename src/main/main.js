@@ -779,7 +779,6 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
     broadcastTabs();
   });
   wc.on('page-favicon-updated', (_e, favicons) => {
-    console.error('[DIAG favicon] page-favicon-updated', tab.id, tab.url, favicons);
     tab.favicon = favicons[0] ?? null; // immediate, possibly low-res
     if (tab.bookmarked) bookmarks.updateFavicon(tab.url, tab.favicon);
     broadcastTabs();
@@ -798,8 +797,12 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
     tab.blockedCount = 0;
     tab.pageBg = null; // a new page's tint mustn't linger from the old one
     tab.themeColor = null;
-    console.error('[DIAG favicon] did-navigate reset', tab.id, url);
-    tab.favicon = null; // ditto — the old page's icon mustn't linger either
+    // Only clear on an actual URL change: some sites (e.g. cnn.com) fire a
+    // second did-navigate for the same URL (a client-side soft reload),
+    // and page-favicon-updated doesn't necessarily refire when nothing
+    // changed from Chromium's perspective — blanking here unconditionally
+    // would then leave a correct favicon permanently cleared.
+    if (url !== tab.url) tab.favicon = null;
     syncNavState();
     // Error responses stay out of history — a dead one-shot OAuth URL
     // recorded here resurfaces in the Quick Switcher as a destination.
