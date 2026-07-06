@@ -99,6 +99,9 @@ h1 {
   align-items: center;
   margin-bottom: 16px;
 }
+/* display:flex above would otherwise beat the UA [hidden] rule — the
+   supporter activate row relies on the hidden attribute once active. */
+.toolbar-row[hidden] { display: none; }
 
 input[type="text"], input[type="url"], select {
   background: var(--surface-raised);
