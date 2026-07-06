@@ -600,6 +600,15 @@ function clusterSlots() {
   return slots;
 }
 
+/** Cluster key → most recently active tab id there, so ⌥⌘↑/↓ lands back
+ * where you were in each group. In-memory only — a remembered tab that
+ * closed or moved simply fails the lookup and the first tab wins. */
+const lastActiveByCluster = new Map();
+
+function clusterKeyForTab(tab) {
+  return tab.pinned ? 'pinned' : (tab.groupId ?? 'loose');
+}
+
 /** A group exists only while it holds tabs — closing or moving out the
  * last one dissolves it (same convention as Chrome's tab groups). */
 function pruneEmptyGroups() {
@@ -770,6 +779,7 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
     broadcastTabs();
   });
   wc.on('page-favicon-updated', (_e, favicons) => {
+    console.error('[DIAG favicon] page-favicon-updated', tab.id, tab.url, favicons);
     tab.favicon = favicons[0] ?? null; // immediate, possibly low-res
     if (tab.bookmarked) bookmarks.updateFavicon(tab.url, tab.favicon);
     broadcastTabs();
@@ -788,6 +798,7 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
     tab.blockedCount = 0;
     tab.pageBg = null; // a new page's tint mustn't linger from the old one
     tab.themeColor = null;
+    console.error('[DIAG favicon] did-navigate reset', tab.id, url);
     tab.favicon = null; // ditto — the old page's icon mustn't linger either
     syncNavState();
     // Error responses stay out of history — a dead one-shot OAuth URL
@@ -991,6 +1002,8 @@ function setActiveTab(id, { focusContent = true, focusAddress = false } = {}) {
   // Re-selecting the active tab is a no-op.
   if (id === activeTabId) return;
 
+  lastActiveByCluster.set(clusterKeyForTab(next), id);
+
   // No window to attach to (quitting, or macOS with all windows closed):
   // just track the selection so window recreation attaches the right tab.
   // The menu bar persists on macOS even with no windows open, so it still
@@ -1127,6 +1140,33 @@ function cycleTab(direction) {
   if (!activeTabId || tabOrder.length < 2) return;
   const i = tabOrder.indexOf(activeTabId);
   setActiveTab(tabOrder[(i + direction + tabOrder.length) % tabOrder.length]);
+}
+
+/** ⌥⌘←/→: previous/next tab within the active tab's cluster, wrapping.
+ * With no groups and no pins everything is one loose cluster, so this
+ * degrades to plain tab cycling (same result as Ctrl+Tab). */
+function cycleTabInCluster(direction) {
+  if (!activeTabId) return;
+  const slot = clusterSlots().find((s) => s.tabIds.includes(activeTabId));
+  if (!slot) return cycleTab(direction);
+  if (slot.tabIds.length < 2) return;
+  const i = slot.tabIds.indexOf(activeTabId);
+  setActiveTab(slot.tabIds[(i + direction + slot.tabIds.length) % slot.tabIds.length]);
+}
+
+/** ⌥⌘↑/↓: previous/next cluster in ⌘1–9 order (pinned shelf → groups →
+ * loose), wrapping. Lands on the cluster's last-active tab and unfolds a
+ * collapsed group, consistent with focusGroup(). */
+function cycleCluster(direction) {
+  if (!activeTabId) return;
+  const slots = clusterSlots();
+  if (slots.length < 2) return;
+  const from = slots.findIndex((s) => s.tabIds.includes(activeTabId));
+  if (from === -1) return;
+  const target = slots[(from + direction + slots.length) % slots.length];
+  if (target.group) target.group.collapsed = false;
+  const remembered = lastActiveByCluster.get(target.key);
+  setActiveTab(target.tabIds.includes(remembered) ? remembered : target.tabIds[0]);
 }
 
 /** Focus an existing tab already on this internal page, or open one. */
@@ -1433,6 +1473,10 @@ function buildMenu() {
       submenu: [
         { label: 'Next Tab', accelerator: 'Ctrl+Tab', click: () => cycleTab(1) },
         { label: 'Previous Tab', accelerator: 'Ctrl+Shift+Tab', click: () => cycleTab(-1) },
+        { label: 'Next Tab in Group', accelerator: 'Alt+CmdOrCtrl+Right', click: () => cycleTabInCluster(1) },
+        { label: 'Previous Tab in Group', accelerator: 'Alt+CmdOrCtrl+Left', click: () => cycleTabInCluster(-1) },
+        { label: 'Next Group', accelerator: 'Alt+CmdOrCtrl+Down', click: () => cycleCluster(1) },
+        { label: 'Previous Group', accelerator: 'Alt+CmdOrCtrl+Up', click: () => cycleCluster(-1) },
         { type: 'separator' },
         { label: 'Duplicate Tab', enabled: !!activeTabId, click: () => activeTabId && duplicateTab(activeTabId) },
         { label: tabs.get(activeTabId)?.pinned ? 'Unpin Tab' : 'Pin Tab', enabled: !!activeTabId, click: () => activeTabId && toggleTabPinned(activeTabId) },
