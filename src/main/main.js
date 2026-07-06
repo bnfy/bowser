@@ -1311,12 +1311,12 @@ function refocusAddressBarIfWanted() {
 function registerIpcHandlers() {
   ipcMain.handle('tabs:create', (_e, url, opts) => {
     const isPrivate = !!opts?.private;
+    // A plain new tab is deliberately ungrouped — createTab defaults groupId
+    // to null and we intentionally don't pass one. Only window.open/context-
+    // menu children inherit the opener's group (see CLAUDE.md → Tab groups);
+    // don't copy that `groupId: tab.groupId` pattern into new-tab entry points.
     const id = createTab(url || (isPrivate ? PRIVATE_NEW_TAB_URL : newTabUrl()), {
       private: isPrivate,
-      // "New tab in <group>": a fresh tab joins the active tab's group,
-      // unless the caller explicitly asked to skip that (opts.ungrouped —
-      // the panel's "New tab" row, Option-clicked).
-      groupId: isPrivate || opts?.ungrouped ? null : tabs.get(activeTabId)?.groupId ?? null,
     });
     // A blank "New Tab" (no explicit url) is a launchpad — keep OS focus on
     // the chrome so the address bar can take it. A url means the caller has
@@ -1488,18 +1488,25 @@ function formatAccelerator(accelerator) {
 function listShortcuts() {
   const rows = [];
   let collapsedTabJumps = false;
-  for (const top of Menu.getApplicationMenu()?.items ?? []) {
-    for (const item of top.submenu?.items ?? []) {
+  // Walk each top-level menu's whole tree, not just its first level, so an
+  // accelerator nested inside a submenu (e.g. Help → Keyboard Shortcuts →
+  // Show All Shortcuts…, ⌘/) is still catalogued.
+  const collect = (items, category) => {
+    for (const item of items ?? []) {
+      if (item.submenu) { collect(item.submenu.items, category); continue; }
       if (!item.accelerator || item.visible === false) continue;
       if (/^CmdOrCtrl\+[1-9]$/.test(item.accelerator)) {
         if (!collapsedTabJumps) {
           collapsedTabJumps = true;
-          rows.push({ category: top.label, label: 'Tab or Group 1–9', keys: `${formatAccelerator('CmdOrCtrl+1')}–9` });
+          rows.push({ category, label: 'Tab or Group 1–9', keys: `${formatAccelerator('CmdOrCtrl+1')}–9` });
         }
         continue;
       }
-      rows.push({ category: top.label, label: item.label, keys: formatAccelerator(item.accelerator) });
+      rows.push({ category, label: item.label, keys: formatAccelerator(item.accelerator) });
     }
+  };
+  for (const top of Menu.getApplicationMenu()?.items ?? []) {
+    collect(top.submenu?.items, top.label);
   }
   const mod = process.platform === 'darwin' ? '⌘' : 'Ctrl+';
   rows.push(
@@ -1510,8 +1517,52 @@ function listShortcuts() {
   return rows;
 }
 
+// Also listed in overlay.js's COMMANDS and pages/shortcuts.js's
+// SLASH_COMMANDS — keep all three in sync when adding or changing a command.
+const SLASH_COMMANDS = [
+  ['/favorites', 'Open favorites'],
+  ['/history', 'Open browsing history'],
+  ['/downloads', 'Open downloads'],
+  ['/settings', 'Open settings'],
+  ['/clear', 'Clear browsing history'],
+  ['/new', 'Open a new tab'],
+  ['/private', 'Open a private tab (history stays untouched)'],
+  ['/close', 'Close this tab'],
+  ['/pin', 'Pin or unpin this tab'],
+  ['/mute', 'Mute or unmute this tab'],
+  ['/group <name>', 'Move this tab into a group, creating it on first use'],
+  ['/ungroup', 'Take this tab out of its group'],
+  ['/close-group', 'Close every tab in this group'],
+  ['/find', 'Find in page'],
+  ['/block-ads', 'Toggle ad & tracker blocking'],
+  ['/allow-ads', 'Allow ads on this site'],
+  ['/theme', 'Cycle appearance (system → light → dark)'],
+];
+
+// A hand-picked subset of the full inventory (blanc://shortcuts/, via
+// listShortcuts()) for a quick reference right in the Help menu — not
+// exhaustive by design, "Show All Shortcuts…" links to the rest.
+const COMMON_KEYSTROKES = [
+  ['New Tab', 'CmdOrCtrl+T'],
+  ['New Private Tab', 'CmdOrCtrl+Shift+N'],
+  ['Close Tab', 'CmdOrCtrl+W'],
+  ['Reopen Closed Tab', 'CmdOrCtrl+Shift+T'],
+  ['Search & Commands', 'CmdOrCtrl+L'],
+  ['Find in Page', 'CmdOrCtrl+F'],
+  ['Next Tab', 'Ctrl+Tab'],
+  ['Previous Tab', 'Ctrl+Shift+Tab'],
+  ['Next Tab in Group', 'Alt+CmdOrCtrl+Right'],
+  ['Previous Tab in Group', 'Alt+CmdOrCtrl+Left'],
+  ['Next Group', 'Alt+CmdOrCtrl+Down'],
+  ['Previous Group', 'Alt+CmdOrCtrl+Up'],
+];
+
 function buildMenu() {
   const isMac = process.platform === 'darwin';
+  // On Windows/Linux native menus a lone "&" marks the next char as an Alt
+  // mnemonic and is swallowed; a literal ampersand must be doubled. macOS
+  // has no mnemonics, so leave labels untouched there.
+  const mn = (label) => (isMac ? label : label.replace(/&/g, '&&'));
   const appMenu = isMac
     ? [{
         label: app.name,
@@ -1534,7 +1585,7 @@ function buildMenu() {
     {
       label: 'File',
       submenu: [
-        { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: () => setActiveTab(createTab(newTabUrl(), { groupId: tabs.get(activeTabId)?.groupId }), { focusContent: false, focusAddress: true }) },
+        { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: () => setActiveTab(createTab(newTabUrl()), { focusContent: false, focusAddress: true }) },
         { label: 'New Private Tab', accelerator: 'CmdOrCtrl+Shift+N', click: () => setActiveTab(createTab(PRIVATE_NEW_TAB_URL, { private: true }), { focusContent: false, focusAddress: true }) },
         { label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: () => activeTabId && closeTab(activeTabId) },
         { label: 'Reopen Closed Tab', accelerator: 'CmdOrCtrl+Shift+T', click: reopenClosedTab },
@@ -1548,7 +1599,7 @@ function buildMenu() {
     {
       label: 'View',
       submenu: [
-        { label: 'Search & Commands', accelerator: 'CmdOrCtrl+L', click: () => { if (hasLiveWindow()) { win.focus(); showOverlay('palette'); } } },
+        { label: mn('Search & Commands'), accelerator: 'CmdOrCtrl+L', click: () => { if (hasLiveWindow()) { win.focus(); showOverlay('palette'); } } },
         { label: 'Find…', accelerator: 'CmdOrCtrl+F', click: openFindBar },
         { label: 'Reload Tab', accelerator: 'CmdOrCtrl+R', click: () => activeTabId && tabs.get(activeTabId)?.view.webContents.reload() },
         { label: 'Hard Reload Tab (Bypass Cache)', accelerator: 'CmdOrCtrl+Shift+R', click: () => activeTabId && tabs.get(activeTabId)?.view.webContents.reloadIgnoringCache() },
@@ -1640,7 +1691,21 @@ function buildMenu() {
       label: 'Help',
       ...(isMac ? { role: 'help' } : {}),
       submenu: [
-        { label: 'Keyboard Shortcuts', accelerator: 'CmdOrCtrl+/', click: () => openInternalPage('blanc://shortcuts/') },
+        {
+          label: 'Slash Commands',
+          // Plain reference rows, not disabled — legible at a glance, and a
+          // stray click just closes the menu since none of them has a handler.
+          submenu: SLASH_COMMANDS.map(([cmd, hint]) => ({ label: mn(`${cmd} — ${hint}`) })),
+        },
+        {
+          label: 'Keyboard Shortcuts',
+          submenu: [
+            ...COMMON_KEYSTROKES.map(([label, accelerator]) => ({ label: mn(`${label} — ${formatAccelerator(accelerator)}`) })),
+            { label: `Tab or Group 1–9 — ${formatAccelerator('CmdOrCtrl+1')}–9` },
+            { type: 'separator' },
+            { label: 'Show All Shortcuts…', accelerator: 'CmdOrCtrl+/', click: () => openInternalPage('blanc://shortcuts/') },
+          ],
+        },
       ],
     },
   ];

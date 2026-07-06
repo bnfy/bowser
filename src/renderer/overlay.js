@@ -375,16 +375,10 @@
   function newTabRow() {
     const row = document.createElement('div');
     row.className = 'island-row newtab';
-    // A fresh tab joins the active tab's group (main mirrors this) unless
-    // opted out of via Option-click, which creates an ungrouped tab instead
-    // — the only way to get one once the active tab is already grouped.
-    const group = groupById(activeTab()?.groupId);
-    row.innerHTML = `${ICONS.plus}<span class="row-title"></span><span class="row-kbd">${modKey}T</span>`;
-    row.querySelector('.row-title').textContent = group ? `New tab in ${group.name}` : 'New tab';
-    if (group) row.title = `⌥-click for a new tab outside ${group.name}`;
-    row.addEventListener('click', (e) => {
+    row.innerHTML = `${ICONS.plus}<span class="row-title">New tab</span><span class="row-kbd">${modKey}T</span>`;
+    row.addEventListener('click', () => {
       window.browserAPI.closeOverlay();
-      window.browserAPI.createTab(null, { ungrouped: e.altKey }); // main reopens the panel focused on the blank tab
+      window.browserAPI.createTab(); // main reopens the panel focused on the blank tab
     });
     return row;
   }
@@ -411,7 +405,7 @@
     { cmd: '/settings', hint: 'Open settings', run: () => window.browserAPI.openPage('settings') },
     { cmd: '/clear', hint: 'Clear browsing history', run: () => window.browserAPI.clearHistory() },
     { cmd: '/new', hint: 'Open a new tab', run: () => window.browserAPI.createTab() },
-    { cmd: '/private', hint: 'Open a private tab — history stays untouched', run: () => window.browserAPI.createTab(null, { private: true }) },
+    { cmd: '/private', hint: 'Open a private tab (history stays untouched)', run: () => window.browserAPI.createTab(null, { private: true }) },
     { cmd: '/close', hint: 'Close this tab', run: () => state.activeTabId && window.browserAPI.closeTab(state.activeTabId) },
     { cmd: '/pin', hint: 'Pin or unpin this tab', run: () => state.activeTabId && window.browserAPI.toggleTabPinned(state.activeTabId) },
     { cmd: '/mute', hint: 'Mute or unmute this tab', run: () => state.activeTabId && window.browserAPI.toggleTabMuted(state.activeTabId) },

@@ -9,7 +9,7 @@ const SLASH_COMMANDS = [
   ['/settings', 'Open settings'],
   ['/clear', 'Clear browsing history'],
   ['/new', 'Open a new tab'],
-  ['/private', 'Open a private tab — history stays untouched'],
+  ['/private', 'Open a private tab (history stays untouched)'],
   ['/close', 'Close this tab'],
   ['/pin', 'Pin or unpin this tab'],
   ['/mute', 'Mute or unmute this tab'],
