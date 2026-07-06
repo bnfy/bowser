@@ -57,27 +57,39 @@
 
   // --- App icon colorways (Dock icon is macOS-only) ---
   const appIconSetting = document.getElementById('appIconSetting');
-  if (!navigator.platform.startsWith('Mac')) {
-    appIconSetting.remove();
-  } else {
-    const appIconGrid = document.getElementById('appIconGrid');
-    const APP_ICONS = [
-      ['default', 'Default'],
-      ['midnight', 'Midnight'],
-      ['cream', 'Cream'],
-      ['forest', 'Forest'],
-      ['sage', 'Sage'],
+  let supporterActive = settings.supporterActive ?? false;
+  const appIconGrid = document.getElementById('appIconGrid');
+
+  const FREE_ICONS = [
+    ['default', 'Default'],
+    ['midnight', 'Midnight'],
+    ['cream', 'Cream'],
+    ['forest', 'Forest'],
+    ['sage', 'Sage'],
+  ];
+  const SUPPORTER_ICONS = [
+    ['ember', 'Ember'],
+    ['plum', 'Plum'],
+    ['gold', 'Gold'],
+  ];
+
+  const selectAppIcon = (id) => {
+    for (const btn of appIconGrid.children) {
+      btn.classList.toggle('active', btn.dataset.icon === id);
+      btn.setAttribute('aria-checked', String(btn.dataset.icon === id));
+    }
+  };
+
+  function renderAppIconGrid(selectedId) {
+    appIconGrid.replaceChildren();
+    const entries = [
+      ...FREE_ICONS.map(([id, label]) => [id, label, false]),
+      ...SUPPORTER_ICONS.map(([id, label]) => [id, label, !supporterActive]),
     ];
-    const selectAppIcon = (id) => {
-      for (const btn of appIconGrid.children) {
-        btn.classList.toggle('active', btn.dataset.icon === id);
-        btn.setAttribute('aria-checked', String(btn.dataset.icon === id));
-      }
-    };
-    for (const [id, label] of APP_ICONS) {
+    for (const [id, label, locked] of entries) {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'icon-swatch';
+      btn.className = locked ? 'icon-swatch locked' : 'icon-swatch';
       btn.dataset.icon = id;
       btn.setAttribute('role', 'radio');
       const img = document.createElement('img');
@@ -86,14 +98,73 @@
       const name = document.createElement('span');
       name.textContent = label;
       btn.append(img, name);
-      btn.addEventListener('click', async () => {
-        await window.bowserPages.settings.set({ appIcon: id });
-        selectAppIcon(id);
-      });
+      if (locked) {
+        const tag = document.createElement('span');
+        tag.className = 'tag';
+        tag.textContent = 'supporter';
+        btn.append(tag);
+        // A locked tile points at the Supporter section instead of
+        // silently failing (main would reject the id anyway).
+        btn.addEventListener('click', () => {
+          document.getElementById('supporterTitle').scrollIntoView({ behavior: 'smooth' });
+          document.getElementById('supporterKey').focus({ preventScroll: true });
+        });
+      } else {
+        btn.addEventListener('click', async () => {
+          await window.bowserPages.settings.set({ appIcon: id });
+          selectAppIcon(id);
+        });
+      }
       appIconGrid.append(btn);
     }
-    selectAppIcon(settings.appIcon ?? 'default');
+    selectAppIcon(selectedId);
   }
+
+  if (!navigator.platform.startsWith('Mac')) {
+    appIconSetting.remove();
+  } else {
+    renderAppIconGrid(settings.appIcon ?? 'default');
+  }
+
+  // --- Supporter activation ---
+  const supporterActivateRow = document.getElementById('supporterActivateRow');
+  const supporterKey = document.getElementById('supporterKey');
+  const supporterActivateBtn = document.getElementById('supporterActivate');
+  const supporterStatus = document.getElementById('supporterStatus');
+
+  function renderSupporterState() {
+    if (!supporterActive) return;
+    supporterActivateRow.hidden = true;
+    const when = settings.supporterActivatedAt
+      ? new Date(settings.supporterActivatedAt).toLocaleDateString()
+      : null;
+    supporterStatus.textContent = when
+      ? `You’re a supporter — thank you. Activated ${when}.`
+      : 'You’re a supporter — thank you.';
+  }
+  renderSupporterState();
+
+  async function activateSupporter() {
+    supporterActivateBtn.disabled = true;
+    supporterStatus.textContent = 'Activating…';
+    const result = await window.bowserPages.settings.activateSupporter(supporterKey.value);
+    supporterActivateBtn.disabled = false;
+    if (result.ok) {
+      supporterActive = true;
+      settings.supporterActivatedAt = new Date().toISOString();
+      renderSupporterState();
+      if (navigator.platform.startsWith('Mac')) {
+        const current = appIconGrid.querySelector('.active')?.dataset.icon ?? 'default';
+        renderAppIconGrid(current);
+      }
+    } else {
+      supporterStatus.textContent = result.message;
+    }
+  }
+  supporterActivateBtn.addEventListener('click', activateSupporter);
+  supporterKey.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') activateSupporter();
+  });
 
   // --- Site permissions ---
   const permissionList = document.getElementById('permissionList');

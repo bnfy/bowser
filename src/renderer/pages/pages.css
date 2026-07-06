@@ -249,6 +249,21 @@ button.danger:hover { color: var(--on-danger); background: var(--danger); border
 .icon-swatch.active { color: var(--text); }
 .icon-swatch.active img { outline: 2px solid var(--accent); }
 
+/* Supporter-only colorways render locked until a license is activated —
+   dimmed tile plus a quiet tag; clicking scrolls to the Supporter section. */
+.icon-swatch.locked img { opacity: 0.4; filter: none; }
+.icon-swatch.locked span { color: var(--text-dim); }
+.icon-swatch .tag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
 /* Accent-colored toggle built on a checkbox. */
 .toggle {
   position: relative;
