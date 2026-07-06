@@ -91,7 +91,7 @@ body.has-consent .hero { padding-bottom: 154px; }
 .demo-island.open .pill { opacity: 0; transform: translateY(-6px) scale(0.97); pointer-events: none; }
 
 /* pill clusters: a bordered pinned-shelf capsule, then one dot cluster per
-   group, then the loose cluster — mirroring the real Island's pill. */
+   group, then the loose cluster — mirroring the real Blanc Island pill. */
 .demo-island .dots { display: flex; align-items: center; gap: 9px; }
 .demo-island .pin-shelf { display: flex; align-items: center; gap: 5px; padding: 3px 7px; border: 1px solid var(--border); border-radius: 999px; }
 .demo-island .pin-shelf > span { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); opacity: 0.55; }
@@ -167,9 +167,40 @@ body.has-consent .hero { padding-bottom: 154px; }
 .demo-island .foot { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); opacity: 0.7; padding: 8px 12px 2px; white-space: nowrap; }
 
 /* synced caption under the demo — tells the viewer what each beat shows */
-.demo-caption { min-height: 20px; margin: 18px auto 0; font-family: var(--font-mono); font-size: 13px; color: var(--text-dim); max-width: 48ch; text-wrap: balance; opacity: 1; }
+.demo-caption {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  max-width: min(56ch, calc(100vw - 48px));
+  margin: 20px auto 0;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  box-shadow: 0 14px 32px rgba(14,14,14,0.09);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text);
+  text-wrap: balance;
+  opacity: 1;
+}
+.demo-caption::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  transform: translateX(-50%) rotate(45deg);
+  background: inherit;
+  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+}
 .demo-caption.show { animation: capfade 500ms ease forwards; }
-@keyframes capfade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+@keyframes capfade { from { opacity: 0; transform: translateY(5px) scale(0.98); } to { opacity: 1; transform: none; } }
 
 @media (max-width: 720px) {
   .demo-stage { height: 420px; }

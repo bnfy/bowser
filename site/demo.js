@@ -26,7 +26,6 @@
     gmail:    { title: 'Gmail',     domain: 'mail.google.com', fav: 'gmail.com',    shield: 2 },
     notion:   { title: 'Notion',    domain: 'notion.so',       fav: 'notion.so',    shield: 1 },
     youtube:  { title: 'YouTube',   domain: 'youtube.com',     fav: 'youtube.com',  shield: 9 },
-    tiktok:   { title: 'TikTok',    domain: 'tiktok.com',      fav: 'tiktok.com',   shield: 12 },
     threads:  { title: 'Threads',   domain: 'threads.net',     fav: 'threads.net',  shield: 6 },
     scroll:   { title: 'Scroll',    domain: 'scrollapp.co',    fav: 'scrollapp.co', shield: 0 },
     nintendo: { title: 'Nintendo',  domain: 'nintendo.com',    fav: 'nintendo.com', shield: 4 },
@@ -53,15 +52,15 @@
   const SHOT_PAGES = {
     github: 'https://github.com',
     notion: 'https://www.notion.so',
-    tiktok: 'https://www.tiktok.com',
+    scroll: 'https://scrollapp.co',
     netflix: 'https://www.netflix.com',
   };
   const shots = {}; // id -> { src, ready }
   let currentShotId = null;
 
   function shotSrc(id, tries) {
-    if (id === 'tiktok' || id === 'github' || id === 'notion') {
-      return 'https://image.thum.io/get/width/' + SHOT_W + '/' + SHOT_PAGES[id] + (tries ? '?r=' + tries : '');
+    if (id === 'github' || id === 'notion' || id === 'scroll') {
+      return 'https://image.thum.io/get/width/' + SHOT_W + '/' + SHOT_PAGES[id];
     }
     return 'https://s0.wp.com/mshots/v1/' + encodeURIComponent(SHOT_PAGES[id]) + '?w=' + SHOT_W + (tries ? '&r=' + tries : '');
   }
@@ -126,29 +125,29 @@
   const LAYOUTS = {
     base: {
       pinned: ['gmail', 'notion'],
-      groups: [{ name: 'social', ids: ['youtube', 'tiktok', 'threads', 'scroll'] }],
-      loose: ['nintendo', 'msnow', 'netflix', 'github'],
+      groups: [{ name: 'social', ids: ['youtube', 'threads'] }],
+      loose: ['scroll', 'nintendo', 'msnow', 'netflix', 'github'],
     },
     pinned: {
-      pinned: ['gmail', 'notion', 'github'],
-      groups: [{ name: 'social', ids: ['youtube', 'tiktok', 'threads', 'scroll'] }],
-      loose: ['nintendo', 'msnow', 'netflix'],
+      pinned: ['gmail', 'notion', 'scroll'],
+      groups: [{ name: 'social', ids: ['youtube', 'threads'] }],
+      loose: ['nintendo', 'msnow', 'netflix', 'github'],
     },
     grouped: {
-      pinned: ['gmail', 'notion', 'github'],
+      pinned: ['gmail', 'notion', 'scroll'],
       groups: [
-        { name: 'social', ids: ['youtube', 'tiktok', 'threads', 'scroll'] },
-        { name: 'watch', ids: ['nintendo', 'netflix'] },
+        { name: 'social', ids: ['threads'] },
+        { name: 'watch', ids: ['youtube', 'netflix'] },
       ],
-      loose: ['msnow'],
+      loose: ['nintendo', 'msnow', 'github'],
     },
     folded: {
-      pinned: ['gmail', 'notion', 'github'],
+      pinned: ['gmail', 'notion', 'scroll'],
       groups: [
-        { name: 'social', ids: ['youtube', 'tiktok', 'threads', 'scroll'], collapsed: true },
-        { name: 'watch', ids: ['nintendo', 'netflix'] },
+        { name: 'social', ids: ['threads'], collapsed: true },
+        { name: 'watch', ids: ['youtube', 'netflix'] },
       ],
-      loose: ['msnow'],
+      loose: ['nintendo', 'msnow', 'github'],
     },
   };
 
@@ -320,14 +319,14 @@
 
   // ---- scenes: one linear workflow, ~3–4s each ----
   const SCENES = [
-    { view: 'rest',  layout: 'base',    current: 'github',  hold: 3200, cap: 'Real pages, one small pill of browser chrome.' },
-    { view: 'rest',  layout: 'base',    current: 'github',  scroll: true, hold: 4200, cap: 'Scroll the page and the Island stays out of the way.' },
+    { view: 'rest',  layout: 'base',    current: 'github',  hold: 3200, cap: 'Real pages, just the Blanc Island for browser chrome.' },
+    { view: 'rest',  layout: 'base',    current: 'github',  scroll: true, hold: 4200, cap: 'Scroll the page and the Blanc Island stays out of the way.' },
     { view: 'panel', layout: 'base',    current: 'github',  hold: 4300, cap: 'Open it and the whole session is already sorted.' },
-    { view: 'panel', layout: 'base',    current: 'github',  panel: 'switcher', typed: 'tik', hold: 3400, cap: 'A few letters jumps from GitHub to TikTok.' },
-    { view: 'rest',  layout: 'base',    current: 'tiktok',  hold: 2500, cap: 'Then the page gets the room back.' },
-    { view: 'panel', layout: 'pinned',  current: 'tiktok',  panel: 'commands', typed: '/pin', justPin: 'github', hold: 3800, cap: 'Commands handle the little browser chores.' },
-    { view: 'panel', layout: 'grouped', current: 'netflix', justGroup: 'watch', hold: 4200, cap: 'Nintendo and Netflix sit together in a watch group.' },
-    { view: 'panel', layout: 'folded',  current: 'netflix', hold: 4000, cap: 'Inactive groups tuck down to keep focus on this one.' },
+    { view: 'panel', layout: 'base',    current: 'github',  panel: 'switcher', typed: 'scr', hold: 3400, cap: 'A few letters jumps from GitHub to Scroll.' },
+    { view: 'rest',  layout: 'base',    current: 'scroll',  hold: 2800, cap: 'Scroll fills the window while the Blanc Island stays small.' },
+    { view: 'panel', layout: 'pinned',  current: 'scroll',  panel: 'commands', typed: '/pin', justPin: 'scroll', hold: 3800, cap: 'Commands handle the little browser chores.' },
+    { view: 'panel', layout: 'grouped', current: 'netflix', justGroup: 'watch', hold: 4200, cap: 'YouTube and Netflix sit together in a watch group.' },
+    { view: 'panel', layout: 'folded',  current: 'netflix', hold: 4000, cap: 'Folded groups stay tucked away until you jump back.' },
     { view: 'panel', layout: 'grouped', current: 'netflix', panel: 'switcher', typed: 'No', hold: 4200, cap: 'The same input finds tabs, favorites, and history.' },
     { view: 'rest',  layout: 'grouped', current: 'notion', hold: 3200, cap: 'Enter switches to Notion, with the page back in front.' },
     { view: 'panel', layout: 'grouped', current: 'github',  panel: 'commands', typed: '/allow', hold: 3400, cap: 'Need a site exception? Type /allow-ads.' },
