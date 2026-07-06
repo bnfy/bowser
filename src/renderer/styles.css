@@ -517,7 +517,7 @@ body[data-mode="palette"] #panelAnchor { top: 120px; }
   flex: 0 0 auto;
 }
 .row-pin svg,
-.row-mute svg { width: 14px; height: 14px; stroke-width: 1.75; }
+.row-mute svg { width: 14px; height: 14px; stroke-width: 1.25; }
 .island-row:hover .row-pin,
 .island-row:hover .row-mute,
 .row-pin:focus-visible,
