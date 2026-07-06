@@ -17,11 +17,16 @@ const POLAR_ORGANIZATION_ID = '6f675077-6cb1-4965-8db8-15838e5fdb38';
 // keys never touch real data (mirrors the app.isPackaged telemetry guard).
 const API_BASE = app.isPackaged ? 'https://api.polar.sh' : 'https://sandbox-api.polar.sh';
 
+// Polar keys are short tokens (well under 100 chars); this is a client-side
+// backstop against a stray paste (e.g. clipboard mishap) rather than a
+// license key, not a real format check — Polar's own API is authoritative.
+const MAX_KEY_LENGTH = 200;
+
 async function activateSupporter(key) {
   const trimmed = String(key ?? '').trim();
   if (!trimmed) return { ok: false, message: 'Enter a license key.' };
-  if (!POLAR_ORGANIZATION_ID) {
-    return { ok: false, message: 'Supporter activation isn’t configured in this build.' };
+  if (trimmed.length > MAX_KEY_LENGTH) {
+    return { ok: false, message: 'That doesn’t look like a license key.' };
   }
 
   let res;
@@ -46,18 +51,15 @@ async function activateSupporter(key) {
     } catch {
       // Body shape is informational; the 2xx status is what matters.
     }
-    settings.setSupporter({
-      key: trimmed,
-      activationId: activation?.id ?? null,
-      activatedAt: new Date().toISOString(),
-    });
-    return { ok: true };
+    const activatedAt = new Date().toISOString();
+    settings.setSupporter({ key: trimmed, activationId: activation?.id ?? null, activatedAt });
+    return { ok: true, activatedAt };
   }
   if (res.status === 404) {
     return { ok: false, message: 'That key doesn’t look right — check it against your Polar receipt.' };
   }
   if (res.status === 403) {
-    return { ok: false, message: 'This key has reached its activation limit.' };
+    return { ok: false, message: 'This key can’t be activated — it may have reached its device limit.' };
   }
   return { ok: false, message: `Activation failed (HTTP ${res.status}) — try again later.` };
 }
