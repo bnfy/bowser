@@ -86,10 +86,11 @@ function setupPages(hooks = {}) {
     searchEngines: Object.fromEntries(
       Object.entries(settings.SEARCH_ENGINES).map(([key, { label }]) => [key, label])
     ),
+    appIcons: settings.APP_ICON_LABELS,
+    supporterIcons: settings.SUPPORTER_ICON_LABELS,
   }));
   handle('pages:settings:set', (partial) => {
     settings.setSettings(partial ?? {});
-    return clientSettings();
   });
   handle('pages:settings:supporter-activate', (key) => supporter.activateSupporter(key));
 

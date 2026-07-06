@@ -54,6 +54,11 @@
 }
 
 * { box-sizing: border-box; }
+/* A plain class selector with display:flex/grid outranks the UA [hidden]
+   rule, so any hidden flex/grid child would otherwise still render as a
+   box (found via #defaultBrowserState and .toolbar-row both needing this).
+   One general override instead of a special case per element. */
+[hidden] { display: none !important; }
 
 html, body {
   margin: 0;
@@ -99,10 +104,6 @@ h1 {
   align-items: center;
   margin-bottom: 16px;
 }
-/* display:flex above would otherwise beat the UA [hidden] rule — the
-   supporter activate row relies on the hidden attribute once active. */
-.toolbar-row[hidden] { display: none; }
-
 input[type="text"], input[type="url"], select {
   background: var(--surface-raised);
   border: 1px solid var(--border);

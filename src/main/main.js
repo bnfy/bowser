@@ -131,13 +131,20 @@ function openExternalUrl(url) {
 // should open the user's mail app, not die silently (Chromium has no
 // external-protocol UI in Electron). Deliberately a small allowlist:
 // launching arbitrary registered URL schemes is a run-anything vector.
+// Checked at every point a URL becomes a navigation target: page-initiated
+// navigation (will-navigate), window.open children (setWindowOpenHandler),
+// the context menu's "Open Link" actions, and typed address-bar input.
 const HANDOFF_PROTOCOLS = new Set(['mailto:', 'tel:', 'facetime:', 'sms:']);
-function isHandoffProtocol(url) {
+function handOffToOs(url) {
+  let protocol;
   try {
-    return HANDOFF_PROTOCOLS.has(new URL(url).protocol);
+    protocol = new URL(url).protocol;
   } catch {
     return false;
   }
+  if (!HANDOFF_PROTOCOLS.has(protocol)) return false;
+  shell.openExternal(url).catch(() => {});
+  return true;
 }
 
 function flushExternalUrls() {
@@ -206,15 +213,12 @@ function applyTheme() {
 // can't be rewritten per-user, so this runs on every launch instead.
 function applyAppIcon() {
   if (process.platform !== 'darwin' || !app.dock) return;
-  const id = settings.getSettings().appIcon;
-  // A supporter icon in settings without an active license (hand-edited or
-  // copied settings.json) falls back to the default rather than honoring it.
-  const allowed =
-    settings.APP_ICONS.includes(id) ||
-    (settings.SUPPORTER_ICONS.includes(id) && settings.isSupporterActive());
-  const file = allowed ? id : 'paper';
+  // getSettings() already falls back an unauthorized/stale supporter icon
+  // (hand-edited or copied settings.json) to the default — nothing further
+  // to validate here.
+  const { appIcon } = settings.getSettings();
   const icon = nativeImage.createFromPath(
-    path.join(__dirname, '../renderer/pages', `icon-${file}.png`)
+    path.join(__dirname, '../renderer/pages', `icon-${appIcon}.png`)
   );
   if (!icon.isEmpty()) app.dock.setIcon(icon);
 }
@@ -865,10 +869,7 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
     if (/^blanc:/i.test(targetUrl) && !wc.getURL().startsWith('blanc://')) {
       event.preventDefault();
     }
-    if (isHandoffProtocol(targetUrl)) {
-      event.preventDefault();
-      shell.openExternal(targetUrl).catch(() => {});
-    }
+    if (handOffToOs(targetUrl)) event.preventDefault();
   });
 
   // Show a real error page instead of leaving a blank/stale view.
@@ -953,10 +954,7 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
       }
       // target="_blank" mailto:/tel: links otherwise spawn a dead child
       // tab — hand them to the OS like the will-navigate path does.
-      if (isHandoffProtocol(targetUrl)) {
-        shell.openExternal(targetUrl).catch(() => {});
-        return { action: 'deny' };
-      }
+      if (handOffToOs(targetUrl)) return { action: 'deny' };
       if (disposition === 'new-window') {
         return {
           action: 'allow',
@@ -1003,8 +1001,17 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
   applyWindowOpenPolicy(wc);
 
   attachContextMenu(wc, {
-    openBackgroundTab: (targetUrl) => createTab(targetUrl, { private: tab.private, groupId: tab.groupId }),
-    openTab: (targetUrl) => setActiveTab(createTab(targetUrl, { private: tab.private, groupId: tab.groupId })),
+    // "Open Link in New Tab"/"Open Link" on a mailto:/tel: link otherwise
+    // creates a dead tab — createTab() has no chance to check, since it
+    // never sees the raw link URL as a page navigation.
+    openBackgroundTab: (targetUrl) => {
+      if (handOffToOs(targetUrl)) return;
+      createTab(targetUrl, { private: tab.private, groupId: tab.groupId });
+    },
+    openTab: (targetUrl) => {
+      if (handOffToOs(targetUrl)) return;
+      setActiveTab(createTab(targetUrl, { private: tab.private, groupId: tab.groupId }));
+    },
   });
 
   // Load failures surface via the did-fail-load handler above; the
@@ -1314,10 +1321,13 @@ function registerIpcHandlers() {
   ipcMain.handle('tabs:switch', (_e, id) => setActiveTab(id));
   ipcMain.handle('tabs:navigate', (_e, id, url) => {
     const tab = tabs.get(id);
-    if (tab) {
-      tabsWantingAddressBarFocus.delete(id);
-      tab.view.webContents.loadURL(normalizeAddressInput(url));
-    }
+    if (!tab) return;
+    // Checked against the raw address-bar text, before normalizeAddressInput
+    // — a bare mailto:/tel: URI has no "://" and would otherwise fall
+    // through its domain-guessing heuristic into an unreachable https:// URL.
+    if (handOffToOs(url)) return;
+    tabsWantingAddressBarFocus.delete(id);
+    tab.view.webContents.loadURL(normalizeAddressInput(url));
   });
   ipcMain.handle('tabs:back', (_e, id) => tabs.get(id)?.view.webContents.navigationHistory.goBack());
   ipcMain.handle('tabs:forward', (_e, id) => tabs.get(id)?.view.webContents.navigationHistory.goForward());

@@ -5,7 +5,7 @@
   const homePage = document.getElementById('homePage');
   const usagePing = document.getElementById('usagePing');
 
-  const { settings, searchEngines } = await window.bowserPages.settings.get();
+  const { settings, searchEngines, appIcons, supporterIcons } = await window.bowserPages.settings.get();
 
   for (const [key, label] of Object.entries(searchEngines)) {
     const opt = document.createElement('option');
@@ -59,38 +59,24 @@
   const appIconSetting = document.getElementById('appIconSetting');
   let supporterActive = settings.supporterActive ?? false;
   const appIconGrid = document.getElementById('appIconGrid');
-
-  // 'default' is the original green colorway — the id (and file name) is
-  // frozen for saved settings, only the label moved on when Paper became
-  // the default.
-  const FREE_ICONS = [
-    ['paper', 'Paper'],
-    ['ink', 'Ink'],
-    ['graphite', 'Graphite'],
-    ['default', 'Evergreen'],
-    ['midnight', 'Midnight'],
-    ['cream', 'Cream'],
-    ['forest', 'Forest'],
-    ['sage', 'Sage'],
-  ];
-  const SUPPORTER_ICONS = [
-    ['ember', 'Ember'],
-    ['plum', 'Plum'],
-    ['gold', 'Gold'],
-  ];
+  // Tracked directly rather than re-derived from the DOM on every render —
+  // ids/labels come from main (settings.js APP_ICON_LABELS/SUPPORTER_ICON_LABELS)
+  // so there's one source of truth instead of a hand-typed second copy.
+  let selectedIcon = settings.appIcon ?? 'paper';
 
   const selectAppIcon = (id) => {
+    selectedIcon = id;
     for (const btn of appIconGrid.children) {
       btn.classList.toggle('active', btn.dataset.icon === id);
       btn.setAttribute('aria-checked', String(btn.dataset.icon === id));
     }
   };
 
-  function renderAppIconGrid(selectedId) {
+  function renderAppIconGrid() {
     appIconGrid.replaceChildren();
     const entries = [
-      ...FREE_ICONS.map(([id, label]) => [id, label, false]),
-      ...SUPPORTER_ICONS.map(([id, label]) => [id, label, !supporterActive]),
+      ...Object.entries(appIcons).map(([id, label]) => [id, label, false]),
+      ...Object.entries(supporterIcons).map(([id, label]) => [id, label, !supporterActive]),
     ];
     for (const [id, label, locked] of entries) {
       const btn = document.createElement('button');
@@ -123,7 +109,7 @@
       }
       appIconGrid.append(btn);
     }
-    selectAppIcon(selectedId);
+    selectAppIcon(selectedIcon);
     updateIconCarets();
   }
 
@@ -148,7 +134,7 @@
       appIconGrid.scrollBy({ left: CARET_SCROLL_STEP, behavior: 'smooth' }));
     appIconGrid.addEventListener('scroll', updateIconCarets);
     window.addEventListener('resize', updateIconCarets);
-    renderAppIconGrid(settings.appIcon ?? 'paper');
+    renderAppIconGrid();
   }
 
   // --- Supporter activation ---
@@ -170,18 +156,18 @@
   renderSupporterState();
 
   async function activateSupporter() {
+    // Also guards the Enter-keydown listener below — without this, OS
+    // key-repeat while holding Enter fires concurrent activation requests.
+    if (supporterActivateBtn.disabled) return;
     supporterActivateBtn.disabled = true;
     supporterStatus.textContent = 'Activating…';
     const result = await window.bowserPages.settings.activateSupporter(supporterKey.value);
     supporterActivateBtn.disabled = false;
     if (result.ok) {
       supporterActive = true;
-      settings.supporterActivatedAt = new Date().toISOString();
+      settings.supporterActivatedAt = result.activatedAt;
       renderSupporterState();
-      if (navigator.platform.startsWith('Mac')) {
-        const current = appIconGrid.querySelector('.active')?.dataset.icon ?? 'default';
-        renderAppIconGrid(current);
-      }
+      if (navigator.platform.startsWith('Mac')) renderAppIconGrid();
     } else {
       supporterStatus.textContent = result.message;
     }

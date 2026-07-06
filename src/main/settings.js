@@ -9,12 +9,26 @@ const SEARCH_ENGINES = {
 
 const THEMES = ['system', 'light', 'dark'];
 
-// Dock icon colorways — each id maps to src/renderer/pages/icon-<id>.png.
-const APP_ICONS = ['default', 'midnight', 'cream', 'forest', 'sage', 'ink', 'paper', 'graphite'];
+// Dock icon colorways — id maps to src/renderer/pages/icon-<id>.png; order
+// here is also the tile order Settings renders. 'default' is the original
+// green colorway — the id (and file name) is frozen for saved settings,
+// only the label moved on when Paper became the default.
+const APP_ICON_LABELS = {
+  paper: 'Paper',
+  ink: 'Ink',
+  graphite: 'Graphite',
+  default: 'Evergreen',
+  midnight: 'Midnight',
+  cream: 'Cream',
+  forest: 'Forest',
+  sage: 'Sage',
+};
+const APP_ICONS = Object.keys(APP_ICON_LABELS);
 
 // Supporter-only colorways — same geometry, unlocked by a Polar license
 // key (see main/supporter.js). Gated at validation time, not render time.
-const SUPPORTER_ICONS = ['ember', 'plum', 'gold'];
+const SUPPORTER_ICON_LABELS = { ember: 'Ember', plum: 'Plum', gold: 'Gold' };
+const SUPPORTER_ICONS = Object.keys(SUPPORTER_ICON_LABELS);
 
 const DEFAULTS = {
   searchEngine: 'duckduckgo',
@@ -41,8 +55,17 @@ function ensureStore() {
   return store;
 }
 
+// The appIcon read back is sanitized the same way setSettings() validates
+// writes — a stale/hand-edited supporter icon id with no active license
+// must never reach a renderer or applyAppIcon() as if it were still valid.
 function getSettings() {
-  return { ...ensureStore().data };
+  const data = { ...ensureStore().data };
+  if (!isAppIconAllowed(data.appIcon)) data.appIcon = DEFAULTS.appIcon;
+  return data;
+}
+
+function isAppIconAllowed(id) {
+  return APP_ICONS.includes(id) || (SUPPORTER_ICONS.includes(id) && isSupporterActive());
 }
 
 function setSettings(partial) {
@@ -55,12 +78,7 @@ function setSettings(partial) {
   if (typeof partial.usagePing === 'boolean') clean.usagePing = partial.usagePing;
   if (typeof partial.homePage === 'string') clean.homePage = partial.homePage.trim();
   if (THEMES.includes(partial.theme)) clean.theme = partial.theme;
-  if (
-    APP_ICONS.includes(partial.appIcon) ||
-    (SUPPORTER_ICONS.includes(partial.appIcon) && isSupporterActive())
-  ) {
-    clean.appIcon = partial.appIcon;
-  }
+  if (isAppIconAllowed(partial.appIcon)) clean.appIcon = partial.appIcon;
   if (Array.isArray(partial.adblockExceptions)) {
     clean.adblockExceptions = [
       ...new Set(
@@ -101,11 +119,14 @@ function searchUrlFor(query) {
 module.exports = {
   SEARCH_ENGINES,
   APP_ICONS,
+  APP_ICON_LABELS,
   SUPPORTER_ICONS,
+  SUPPORTER_ICON_LABELS,
   getSettings,
   setSettings,
   onSettingsChanged,
   searchUrlFor,
   isSupporterActive,
+  isAppIconAllowed,
   setSupporter,
 };
