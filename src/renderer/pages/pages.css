@@ -215,7 +215,7 @@ button.danger:hover { color: var(--on-danger); background: var(--danger); border
   padding: 16px 0;
   border-bottom: 1px solid var(--border);
 }
-.setting .label { display: flex; flex-direction: column; gap: 3px; }
+.setting .label { display: flex; flex-direction: column; gap: 3px; min-width: 160px; }
 .setting .label .hint { color: var(--text-dim); font-size: 12px; }
 .setting input[type="url"] { width: 280px; }
 
@@ -226,8 +226,9 @@ button.danger:hover { color: var(--on-danger); background: var(--danger); border
   flex: 0 0 auto;
 }
 
-/* App icon colorway picker — a row of rounded-square previews. */
-.icon-grid { display: flex; gap: 14px; }
+/* App icon colorway picker — rounded-square previews, wrapping into rows
+   now that free + supporter colorways outgrow a single line. */
+.icon-grid { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 14px; row-gap: 18px; }
 .icon-swatch {
   display: flex;
   flex-direction: column;
