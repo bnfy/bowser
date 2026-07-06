@@ -681,6 +681,7 @@ function duplicateTab(id) {
     private: source.private,
     groupId: source.groupId,
     pinned: source.pinned,
+    muted: source.muted,
     // Only worth restoring if there's more than just the current page.
     restoreHistory: entries.length > 1 ? { entries, index: history.getActiveIndex() } : null,
   });
@@ -700,7 +701,7 @@ const TAB_WEB_PREFERENCES = {
   preload: path.join(__dirname, 'tab-preload.js'),
 };
 
-function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = null, view = null, pinned = false, restoreHistory = null } = {}) {
+function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = null, view = null, pinned = false, muted = false, restoreHistory = null } = {}) {
   const id = crypto.randomUUID();
   // An adopted view (window.open child, see the window-open handler) arrives
   // already constructed by Chromium with the opener relationship wired up;
@@ -721,7 +722,7 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
     blockedCount: 0,
     private: isPrivate,
     pinned,
-    muted: false,
+    muted,
     groupId: groupId && groups.some((g) => g.id === groupId) ? groupId : null,
     // Strip tint ("faux header"): the page's top-edge color, so the chrome
     // strip can paint itself as a continuation of the site's own header.
@@ -740,6 +741,7 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
   tabOrder.push(id);
 
   const wc = view.webContents;
+  if (muted) wc.setAudioMuted(true); // keep the actual audio state in sync with tab.muted
   const syncNavState = () => {
     tab.canGoBack = wc.navigationHistory.canGoBack();
     tab.canGoForward = wc.navigationHistory.canGoForward();
@@ -1089,12 +1091,18 @@ function reorderTab(id, toIndex) {
  * first tab, unfolding it (Island Tab Groups design). Without groups the
  * browser convention stands: 1–8 jump to that tab, 9 to the last. */
 function selectTabAtIndex(index) {
+  const pinnedIds = tabOrder.filter((id) => tabs.get(id)?.pinned);
   const clusters = clusterList();
-  if (groups.length && clusters.length) {
-    const cluster = clusters[index];
-    if (!cluster) return;
-    if (cluster.group) focusGroup(cluster.group.id);
-    else setActiveTab(cluster.tabIds[0]);
+  if (groups.length && (pinnedIds.length || clusters.length)) {
+    // Pinned tabs are excluded from clusterList()'s own clusters (they get
+    // their own pill shelf/panel section instead) — surface them as a
+    // leading slot here too, so Cmd+1-9 can still reach them instead of
+    // silently skipping every pinned tab whenever a group exists.
+    const slots = pinnedIds.length ? [{ tabIds: pinnedIds }, ...clusters] : clusters;
+    const slot = slots[index];
+    if (!slot) return;
+    if (slot.group) focusGroup(slot.group.id);
+    else setActiveTab(slot.tabIds[0]);
     return;
   }
   const id = index >= 8 ? tabOrder[tabOrder.length - 1] : tabOrder[index];
@@ -1319,8 +1327,11 @@ function scheduleMenuRebuild() {
  * Titles/domains reflect state as of the last menu rebuild, not the
  * current instant — see the Global Constraints note on this. */
 function tabMenuItems() {
-  const pinnedIds = tabOrder.filter((id) => tabs.get(id)?.pinned);
-  const orderedIds = [...pinnedIds, ...clusterList().flatMap((c) => c.tabIds)];
+  // Private tabs leave no trace anywhere else in the app (history, session,
+  // favorites) — the native menu must not be the one place that leaks a
+  // private tab's real title/domain.
+  const pinnedIds = tabOrder.filter((id) => tabs.get(id)?.pinned && !tabs.get(id)?.private);
+  const orderedIds = [...pinnedIds, ...clusterList().flatMap((c) => c.tabIds).filter((id) => !tabs.get(id)?.private)];
   return orderedIds.map((id) => {
     const tab = tabs.get(id);
     const group = tab.groupId ? groups.find((g) => g.id === tab.groupId) : null;
@@ -1454,7 +1465,10 @@ function buildMenu() {
         },
         {
           label: 'Add All Open Tabs to Favorites',
-          enabled: tabOrder.some((id) => tabs.get(id) && !tabs.get(id).private && /^https?:\/\//.test(tabs.get(id).url)),
+          enabled: tabOrder.some((id) => {
+            const tab = tabs.get(id);
+            return tab && !tab.private && /^https?:\/\//.test(tab.url) && !bookmarks.isBookmarked(tab.url);
+          }),
           click: addAllTabsToFavorites,
         },
         { type: 'separator' },

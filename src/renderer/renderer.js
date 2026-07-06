@@ -154,7 +154,10 @@
     pillDots.replaceChildren(
       ...(pinnedTabs.length ? [pinnedShelf] : []),
       ...clusters.map(({ group, tabs: gtabs }) => {
-        const isActiveCluster = group ? tab?.groupId === group.id : !tab?.groupId;
+        // A pinned active tab isn't a member of any cluster here (it's
+        // excluded into the pinned shelf instead), so no cluster should
+        // ever claim to be the active one on its behalf.
+        const isActiveCluster = !tab?.pinned && (group ? tab?.groupId === group.id : !tab?.groupId);
         const folded = group && group.collapsed && !isActiveCluster;
         // The folded capsule is a button like the dots, so it stays
         // keyboard-reachable; expanded clusters are plain wrappers.
