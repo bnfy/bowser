@@ -586,6 +586,20 @@ function clusterList() {
   return list;
 }
 
+/** clusterList() plus a leading pseudo-cluster for pinned tabs, each slot
+ * tagged with a stable key — the one definition of "cluster order" shared
+ * by Cmd/Ctrl+1–9 and the ⌥⌘ arrow navigation. */
+function clusterSlots() {
+  const slots = clusterList().map(({ group, tabIds }) => ({
+    key: group ? group.id : 'loose',
+    group,
+    tabIds,
+  }));
+  const pinnedIds = tabOrder.filter((id) => tabs.get(id)?.pinned);
+  if (pinnedIds.length) slots.unshift({ key: 'pinned', group: null, tabIds: pinnedIds });
+  return slots;
+}
+
 /** A group exists only while it holds tabs — closing or moving out the
  * last one dissolves it (same convention as Chrome's tab groups). */
 function pruneEmptyGroups() {
@@ -1094,14 +1108,11 @@ function reorderTab(id, toIndex) {
  * first tab, unfolding it (Island Tab Groups design). Without groups the
  * browser convention stands: 1–8 jump to that tab, 9 to the last. */
 function selectTabAtIndex(index) {
-  const pinnedIds = tabOrder.filter((id) => tabs.get(id)?.pinned);
-  const clusters = clusterList();
-  if (groups.length && (pinnedIds.length || clusters.length)) {
-    // Pinned tabs are excluded from clusterList()'s own clusters (they get
-    // their own pill shelf/panel section instead) — surface them as a
-    // leading slot here too, so Cmd+1-9 can still reach them instead of
-    // silently skipping every pinned tab whenever a group exists.
-    const slots = pinnedIds.length ? [{ tabIds: pinnedIds }, ...clusters] : clusters;
+  // clusterSlots() surfaces pinned tabs as a leading slot, so Cmd+1-9 can
+  // still reach them instead of silently skipping every pinned tab
+  // whenever a group exists.
+  const slots = clusterSlots();
+  if (groups.length && slots.length) {
     const slot = slots[index];
     if (!slot) return;
     if (slot.group) focusGroup(slot.group.id);
