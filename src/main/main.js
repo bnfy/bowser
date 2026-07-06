@@ -194,7 +194,7 @@ function applyTheme() {
 function applyAppIcon() {
   if (process.platform !== 'darwin' || !app.dock) return;
   const id = settings.getSettings().appIcon;
-  const file = settings.APP_ICONS.includes(id) ? id : 'default';
+  const file = settings.APP_ICONS.includes(id) ? id : 'paper';
   const icon = nativeImage.createFromPath(
     path.join(__dirname, '../renderer/pages', `icon-${file}.png`)
   );

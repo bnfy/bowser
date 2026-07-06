@@ -135,12 +135,13 @@
     el.className = 'favicon' + (tab?.isLoading ? ' loading' : '');
     el.style.backgroundImage = '';
     if (!tab || tab.isLoading) return;
-    if (tab.favicon) {
+    if (tab.url.startsWith('blanc://')) {
+      // Blanc mark via CSS mask so it follows the theme — the pages' own SVG
+      // favicon always rasterizes light-scheme (see .favicon.internal).
+      el.classList.add('internal');
+    } else if (tab.favicon) {
       el.classList.add('has-icon');
       el.style.backgroundImage = `url("${tab.favicon.replace(/[\\"]/g, '\\$&')}")`;
-    } else if (tab.url.startsWith('blanc://')) {
-      el.classList.add('has-icon');
-      el.style.backgroundImage = 'url("pages/icon.svg")'; // Blanc mark
     }
   }
 

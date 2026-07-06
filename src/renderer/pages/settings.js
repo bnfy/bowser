@@ -61,8 +61,14 @@
     appIconSetting.remove();
   } else {
     const appIconGrid = document.getElementById('appIconGrid');
+    // 'default' is the original green colorway — the id (and file name) is
+    // frozen for saved settings, only the label moved on when Paper became
+    // the default.
     const APP_ICONS = [
-      ['default', 'Default'],
+      ['paper', 'Paper'],
+      ['ink', 'Ink'],
+      ['graphite', 'Graphite'],
+      ['default', 'Evergreen'],
       ['midnight', 'Midnight'],
       ['cream', 'Cream'],
       ['forest', 'Forest'],
@@ -92,7 +98,7 @@
       });
       appIconGrid.append(btn);
     }
-    selectAppIcon(settings.appIcon ?? 'default');
+    selectAppIcon(settings.appIcon ?? 'paper');
   }
 
   // --- Site permissions ---

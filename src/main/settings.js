@@ -10,7 +10,7 @@ const SEARCH_ENGINES = {
 const THEMES = ['system', 'light', 'dark'];
 
 // Dock icon colorways — each id maps to src/renderer/pages/icon-<id>.png.
-const APP_ICONS = ['default', 'midnight', 'cream', 'forest', 'sage'];
+const APP_ICONS = ['default', 'midnight', 'cream', 'forest', 'sage', 'ink', 'paper', 'graphite'];
 
 const DEFAULTS = {
   searchEngine: 'duckduckgo',
@@ -18,7 +18,7 @@ const DEFAULTS = {
   // Empty string = the built-in blanc://newtab page.
   homePage: '',
   theme: 'system',
-  appIcon: 'default',
+  appIcon: 'paper',
   // Lowercased hostnames, no protocol/path/www. prefix.
   adblockExceptions: [],
   // Opt-in, anonymous "app launched" ping — see main/telemetry.js. Off by default.

@@ -298,6 +298,14 @@ button svg {
   background-position: center;
   background-repeat: no-repeat;
 }
+/* Internal pages wear the Blanc mark tinted by the theme's text color.
+   Chromium rasterizes SVG images in a fixed light scheme (prefers-color-scheme
+   never reaches them), so the SVG is used as a mask and colored here. */
+.favicon.internal {
+  background: var(--text);
+  -webkit-mask: url("pages/icon.svg") center / contain no-repeat;
+  mask: url("pages/icon.svg") center / contain no-repeat;
+}
 .favicon.loading {
   background: transparent;
   border: 1.5px solid var(--border);
