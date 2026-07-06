@@ -372,13 +372,16 @@
   function newTabRow() {
     const row = document.createElement('div');
     row.className = 'island-row newtab';
-    // A fresh tab joins the active tab's group (main mirrors this).
+    // A fresh tab joins the active tab's group (main mirrors this) unless
+    // opted out of via Option-click, which creates an ungrouped tab instead
+    // — the only way to get one once the active tab is already grouped.
     const group = groupById(activeTab()?.groupId);
     row.innerHTML = `${ICONS.plus}<span class="row-title"></span><span class="row-kbd">${modKey}T</span>`;
     row.querySelector('.row-title').textContent = group ? `New tab in ${group.name}` : 'New tab';
-    row.addEventListener('click', () => {
+    if (group) row.title = `⌥-click for a new tab outside ${group.name}`;
+    row.addEventListener('click', (e) => {
       window.browserAPI.closeOverlay();
-      window.browserAPI.createTab(); // main reopens the panel focused on the blank tab
+      window.browserAPI.createTab(null, { ungrouped: e.altKey }); // main reopens the panel focused on the blank tab
     });
     return row;
   }

@@ -1205,8 +1205,10 @@ function registerIpcHandlers() {
     const isPrivate = !!opts?.private;
     const id = createTab(url || (isPrivate ? PRIVATE_NEW_TAB_URL : newTabUrl()), {
       private: isPrivate,
-      // "New tab in <group>": a fresh tab joins the active tab's group.
-      groupId: isPrivate ? null : tabs.get(activeTabId)?.groupId ?? null,
+      // "New tab in <group>": a fresh tab joins the active tab's group,
+      // unless the caller explicitly asked to skip that (opts.ungrouped —
+      // the panel's "New tab" row, Option-clicked).
+      groupId: isPrivate || opts?.ungrouped ? null : tabs.get(activeTabId)?.groupId ?? null,
     });
     // A blank "New Tab" (no explicit url) is a launchpad — keep OS focus on
     // the chrome so the address bar can take it. A url means the caller has
