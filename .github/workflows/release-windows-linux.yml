@@ -42,7 +42,7 @@ jobs:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
         run: |
-          if [ -n "$AZURE_CLIENT_ID" ] && [ -n "$AZURE_CODE_SIGNING_ACCOUNT" ]; then
+          if [ -n "$AZURE_CLIENT_ID" ] && [ -n "$AZURE_CODE_SIGNING_ACCOUNT" ] && [ -n "$AZURE_CERT_PROFILE" ]; then
             echo "==> Signing via Azure Trusted Signing ($AZURE_CODE_SIGNING_ACCOUNT/$AZURE_CERT_PROFILE)"
             npx electron-builder --win --publish never \
               --config.win.azureSignOptions.publisherName="$AZURE_PUBLISHER_NAME" \
@@ -53,7 +53,7 @@ jobs:
             echo "==> Signing via CSC_LINK (traditional Authenticode cert)"
             npx electron-builder --win --publish never
           else
-            echo "::warning::No Windows signing configured (neither AZURE_CLIENT_ID/AZURE_CODE_SIGNING_ACCOUNT_NAME nor CSC_LINK are set) — building an UNSIGNED installer. Users will see a SmartScreen 'unknown publisher' warning."
+            echo "::warning::No Windows signing configured (need AZURE_CLIENT_ID+AZURE_CODE_SIGNING_ACCOUNT_NAME+AZURE_CERTIFICATE_PROFILE_NAME, or CSC_LINK) — building an UNSIGNED installer. Users will see a SmartScreen 'unknown publisher' warning."
             npx electron-builder --win --publish never
           fi
 
@@ -99,7 +99,7 @@ jobs:
         run: |
           VERSION=$(node -p "require('./package.json').version")
           PRODUCT_NAME=$(node -p "require('./package.json').productName")
-          for f in "dist/$PRODUCT_NAME-$VERSION-x86_64.AppImage" "dist/$PRODUCT_NAME-$VERSION-x86_64.AppImage.blockmap" "dist/latest-linux.yml"; do
+          for f in "dist/$PRODUCT_NAME-$VERSION.AppImage" "dist/$PRODUCT_NAME-$VERSION.AppImage.blockmap" "dist/latest-linux.yml"; do
             [ -f "$f" ] || { echo "Expected build artifact missing: $f" >&2; exit 1; }
           done
 
@@ -110,7 +110,7 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           PRODUCT_NAME=$(node -p "require('./package.json').productName")
           gh release upload "${{ inputs.tag }}" \
-            "dist/$PRODUCT_NAME-$VERSION-x86_64.AppImage" \
-            "dist/$PRODUCT_NAME-$VERSION-x86_64.AppImage.blockmap" \
+            "dist/$PRODUCT_NAME-$VERSION.AppImage" \
+            "dist/$PRODUCT_NAME-$VERSION.AppImage.blockmap" \
             "dist/latest-linux.yml" \
             --repo "${{ github.repository }}" --clobber
