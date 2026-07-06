@@ -230,9 +230,12 @@ live:
 - The Cloudflare ping-worker source is renamed to `blanc-ping`
   (`cloudflare/ping-worker/`), but it hasn't been redeployed — the old
   `bowser-ping` Worker is still the one actually running.
-- The marketing site's copy points at `blancbrowser.com`, but nothing is
-  deployed there yet — `getbowser.com` is still the live site, and whether/how
-  to redirect it once the new one is up hasn't been decided.
+- The marketing site (`site/`) is live on the Cloudflare Pages project
+  `blancbrowser` (direct upload: `npx wrangler pages deploy site
+  --project-name=blancbrowser`), which serves `blancbrowser.com` and
+  `getbowser.com` from the same deployment. The page's canonical tag points
+  search engines at `blancbrowser.com`; an actual 301 redirect from
+  `getbowser.com` hasn't been set up.
 - This file's still-old-name architecture references were updated, but a
   fuller pass to make sure nothing else in the repo (scripts, docs, comments)
   assumes "Bowser" would be worth a final sweep before the first real
