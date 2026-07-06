@@ -227,10 +227,30 @@ button.danger:hover { color: var(--on-danger); background: var(--danger); border
 }
 
 /* App icon colorway picker — one row of rounded-square previews that
-   scrolls horizontally as the colorway set grows. The 3px padding keeps
-   the active tile's outline from being clipped by the scroll box. */
-.icon-grid { display: flex; gap: 14px; overflow-x: auto; min-width: 0; padding: 3px; }
+   scrolls horizontally as the colorway set grows. The scrollbar is
+   hidden in favor of the caret buttons on either end. The 3px padding
+   keeps the active tile's outline from being clipped by the scroll box. */
+.icon-scroller { display: flex; align-items: flex-start; gap: 4px; min-width: 0; }
+.icon-grid { display: flex; gap: 14px; overflow-x: auto; min-width: 0; padding: 3px; scrollbar-width: none; }
+.icon-grid::-webkit-scrollbar { display: none; }
 .icon-grid .icon-swatch { flex: 0 0 auto; }
+.icon-caret {
+  flex: 0 0 auto;
+  /* Centers on the 58px tile row (3px scroll-box padding + 29 - 11). */
+  margin-top: 21px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  color: var(--text-dim);
+}
+.icon-caret:hover { color: var(--text); background: var(--accent-dim); border: none; }
+.icon-caret[disabled] { opacity: 0.25; pointer-events: none; }
 .icon-swatch {
   display: flex;
   flex-direction: column;

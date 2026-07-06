@@ -35,7 +35,11 @@
         <span>App icon</span>
         <span class="hint">Changes the Dock icon; Finder keeps the standard one</span>
       </div>
-      <div id="appIconGrid" class="icon-grid" role="radiogroup" aria-label="App icon"></div>
+      <div class="icon-scroller">
+        <button id="appIconPrev" class="icon-caret" type="button" aria-label="Scroll colorways left"><svg width="10" height="10" viewBox="0 0 12 12"><path d="M7.5 2 3.5 6l4 4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <div id="appIconGrid" class="icon-grid" role="radiogroup" aria-label="App icon"></div>
+        <button id="appIconNext" class="icon-caret" type="button" aria-label="Scroll colorways right"><svg width="10" height="10" viewBox="0 0 12 12"><path d="M4.5 2l4 4-4 4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
     </div>
 
     <div class="setting" id="defaultBrowserSetting">

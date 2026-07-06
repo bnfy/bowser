@@ -124,11 +124,30 @@
       appIconGrid.append(btn);
     }
     selectAppIcon(selectedId);
+    updateIconCarets();
+  }
+
+  // The scroller hides its scrollbar; these carets are the only visible
+  // affordance, so they dim out at either end of the scroll range.
+  const iconPrev = document.getElementById('appIconPrev');
+  const iconNext = document.getElementById('appIconNext');
+  const CARET_SCROLL_STEP = 3 * (58 + 14); // three tiles per click
+
+  function updateIconCarets() {
+    const max = appIconGrid.scrollWidth - appIconGrid.clientWidth;
+    iconPrev.disabled = appIconGrid.scrollLeft <= 1;
+    iconNext.disabled = appIconGrid.scrollLeft >= max - 1;
   }
 
   if (!navigator.platform.startsWith('Mac')) {
     appIconSetting.remove();
   } else {
+    iconPrev.addEventListener('click', () =>
+      appIconGrid.scrollBy({ left: -CARET_SCROLL_STEP, behavior: 'smooth' }));
+    iconNext.addEventListener('click', () =>
+      appIconGrid.scrollBy({ left: CARET_SCROLL_STEP, behavior: 'smooth' }));
+    appIconGrid.addEventListener('scroll', updateIconCarets);
+    window.addEventListener('resize', updateIconCarets);
     renderAppIconGrid(settings.appIcon ?? 'paper');
   }
 
