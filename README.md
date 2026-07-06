@@ -227,9 +227,6 @@ This app was renamed from "Bowser" to Blanc — the code, package identity,
 and visual assets are done, but a few infra steps are deliberately not yet
 live:
 
-- The Cloudflare ping-worker source is renamed to `blanc-ping`
-  (`cloudflare/ping-worker/`), but it hasn't been redeployed — the old
-  `bowser-ping` Worker is still the one actually running.
 - The marketing site (`site/`) is live on the Cloudflare Pages project
   `blancbrowser` (direct upload: `npx wrangler pages deploy site
   --project-name=blancbrowser`), which serves `blancbrowser.com` and

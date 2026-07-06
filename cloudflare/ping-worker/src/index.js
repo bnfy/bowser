@@ -46,14 +46,19 @@ async function handlePing(request, env, ctx) {
   const platform = ALLOWED_PLATFORMS.has(body.platform) ? body.platform : 'unknown';
   const arch = typeof body.arch === 'string' ? body.arch.slice(0, 16) : 'unknown';
 
+  // GA mirror is queued before the KV writes so a KV failure can't cost
+  // the launch event too.
+  ctx.waitUntil(forwardToGA(env, { version, platform, arch }));
+
+  // KV get/put can throw transiently; the counts are best-effort anyway
+  // (see bump()), so log and still 204 rather than turning a blip into a
+  // dropped ping — the client (src/main/telemetry.js) never retries.
   await Promise.all([
     bump(env.PINGS, 'total'),
     bump(env.PINGS, todayKey()),
     bump(env.PINGS, `version:${version}`),
     bump(env.PINGS, `platform:${platform}`),
-  ]);
-
-  ctx.waitUntil(forwardToGA(env, { version, platform, arch }));
+  ]).catch((err) => console.error('KV bump failed:', err.message));
 
   return new Response(null, { status: 204 });
 }

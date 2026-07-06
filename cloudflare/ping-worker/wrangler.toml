@@ -9,3 +9,9 @@ kv_namespaces = [
 
 # STATS_TOKEN is a secret, not a var — set it with:
 #   wrangler secret put STATS_TOKEN
+
+# Workers Logs — keeps a searchable history of invocations/exceptions in the
+# dashboard, so a runtime 500 can be diagnosed after the fact instead of
+# only while `wrangler tail` happens to be attached.
+[observability]
+enabled = true
