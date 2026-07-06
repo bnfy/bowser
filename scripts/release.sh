@@ -21,6 +21,16 @@ gh auth status >/dev/null 2>&1 || { echo "gh CLI not authenticated. Run: gh auth
 
 echo "==> Releasing Blanc $VERSION ($TAG)"
 
+# Keep the marketing site's release metadata in sync: the JSON-LD
+# softwareVersion in site/index.html and the sitemap's lastmod are the only
+# version-dated bits (download links point at /releases/latest, always fresh).
+echo "==> Syncing site metadata to $VERSION"
+sed -i '' -E "s/\"softwareVersion\": \"[^\"]*\"/\"softwareVersion\": \"$VERSION\"/" site/index.html
+sed -i '' -E "s|<lastmod>[^<]*</lastmod>|<lastmod>$(date +%F)</lastmod>|" site/sitemap.xml
+if ! git diff --quiet -- site/index.html site/sitemap.xml; then
+  echo "==> site/ metadata updated — commit and redeploy the site after this release."
+fi
+
 NEWER_ELECTRON=$(npm view electron version 2>/dev/null || true)
 INSTALLED_ELECTRON=$(node -p "require('./node_modules/electron/package.json').version" 2>/dev/null || true)
 if [ -n "$NEWER_ELECTRON" ] && [ -n "$INSTALLED_ELECTRON" ] && [ "$NEWER_ELECTRON" != "$INSTALLED_ELECTRON" ]; then

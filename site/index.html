@@ -3,14 +3,87 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Blanc — zero bloat | fast focus</title>
-<meta name="description" content="Blanc is a minimal browser built around the Blanc Island: one small control surface for tabs, ad blocking, private tabs, and slash commands. Everything else is the page you came for.">
+<title>Blanc Browser — The browser that gets out of your way</title>
+<meta name="description" content="Blanc is a minimal desktop browser with the Blanc Island, built-in ad blocking, private tabs, slash commands, and real pages that stay in front.">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta name="theme-color" content="#ffffff">
+<meta name="application-name" content="Blanc Browser">
+<meta name="apple-mobile-web-app-title" content="Blanc">
+<link rel="canonical" href="https://blancbrowser.com/">
+<meta property="og:site_name" content="Blanc Browser">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Blanc Browser — The browser that gets out of your way">
+<meta property="og:description" content="A minimal desktop browser with one small control surface for tabs, ad blocking, private tabs, and slash commands.">
+<meta property="og:url" content="https://blancbrowser.com/">
+<meta property="og:image" content="https://blancbrowser.com/og-image.png">
+<meta property="og:image:secure_url" content="https://blancbrowser.com/og-image.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Blanc Browser marketing page showing the Blanc Island over real websites.">
+<meta property="og:locale" content="en_US">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Blanc Browser — The browser that gets out of your way">
+<meta name="twitter:description" content="A minimal desktop browser with one small control surface for tabs, ad blocking, private tabs, and slash commands.">
+<meta name="twitter:image" content="https://blancbrowser.com/og-image.png">
+<meta name="twitter:image:alt" content="Blanc Browser marketing page showing the Blanc Island over real websites.">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="styles.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://blancbrowser.com/#organization",
+      "name": "Blanc",
+      "url": "https://blancbrowser.com/",
+      "logo": "https://blancbrowser.com/logo.png",
+      "sameAs": [
+        "https://github.com/bnfy/blanc",
+        "https://www.threads.net/@blancbrowser",
+        "https://www.instagram.com/blancbrowser/"
+      ]
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://blancbrowser.com/#website",
+      "url": "https://blancbrowser.com/",
+      "name": "Blanc Browser",
+      "alternateName": "Blanc",
+      "description": "A minimal desktop browser built around the Blanc Island.",
+      "publisher": {
+        "@id": "https://blancbrowser.com/#organization"
+      }
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://blancbrowser.com/#software",
+      "name": "Blanc Browser",
+      "alternateName": "Blanc",
+      "url": "https://blancbrowser.com/",
+      "description": "Blanc is a minimal desktop browser with the Blanc Island, built-in ad blocking, private tabs, slash commands, and real pages that stay in front.",
+      "applicationCategory": "BrowserApplication",
+      "operatingSystem": "macOS, Windows, Linux",
+      "softwareVersion": "0.9.6",
+      "downloadUrl": "https://github.com/bnfy/blanc/releases/latest",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "publisher": {
+        "@id": "https://blancbrowser.com/#organization"
+      }
+    }
+  ]
+}
+</script>
 </head>
 <body>
 
@@ -20,6 +93,7 @@
 
   <p class="eyebrow">zero bloat <span class="k">|</span> fast focus</p>
   <h1>The browser that gets out of your way.</h1>
+  <p class="hero-copy">Blanc Browser is a minimal desktop browser with the Blanc Island, built-in ad blocking, private tabs, and slash commands.</p>
 
   <div class="demo-stage" id="demoStage">
     <div class="demo-page">
@@ -54,7 +128,7 @@
 </header>
 
 <footer>
-  <span class="line">zero bloat <b>|</b> fast focus · © 2026 · <a href="https://www.threads.net/@blancbrowser" target="_blank" rel="noopener">Threads</a> · <a href="https://www.instagram.com/blancbrowser/" target="_blank" rel="noopener">Instagram</a></span>
+  <span class="line">zero bloat <b>|</b> fast focus · © 2026 · Built by <a href="https://bnfy.me" target="_blank" rel="noopener">Bananify</a> · <a href="https://www.threads.net/@blancbrowser" target="_blank" rel="noopener">Threads</a> · <a href="https://www.instagram.com/blancbrowser/" target="_blank" rel="noopener">Instagram</a></span>
 </footer>
 
 <div id="consent" class="consent" hidden>

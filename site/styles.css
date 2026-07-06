@@ -44,6 +44,7 @@ body.has-consent .hero { padding-bottom: 154px; }
 .hero .eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--text-dim); margin: 0 0 22px; }
 .hero .eyebrow .k { color: var(--accent); }
 .hero h1 { margin: 0; font-size: clamp(28px, 3.2vw, 40px); font-weight: 500; letter-spacing: -0.01em; line-height: 1.15; max-width: 20ch; text-wrap: balance; }
+.hero .hero-copy { margin: 14px auto 0; max-width: 52ch; font-size: 15px; line-height: 1.55; color: var(--text-dim); text-wrap: balance; }
 .hero .cta { margin-top: 40px; display: inline-flex; align-items: center; height: 44px; padding: 0 26px; border-radius: var(--radius); background: var(--accent); color: var(--bg); text-decoration: none; font-family: var(--font-mono); font-size: 14px; white-space: nowrap; }
 .hero .cta:hover { opacity: 0.88; }
 .hero .platforms { margin-top: 16px; font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); opacity: 0.7; white-space: nowrap; }
@@ -216,6 +217,7 @@ body.has-consent .hero { padding-bottom: 154px; }
   .hero { padding: 52px 24px 66px; }
   body.has-consent .hero { padding-bottom: 146px; }
   .hero .mark { margin-bottom: 14px; }
+  .hero .hero-copy { margin-top: 10px; font-size: 14px; line-height: 1.45; }
   .demo-caption { margin-top: 14px; }
   .hero .cta { margin-top: 30px; }
 }
