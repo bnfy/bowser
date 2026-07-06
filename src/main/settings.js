@@ -12,6 +12,10 @@ const THEMES = ['system', 'light', 'dark'];
 // Dock icon colorways — each id maps to src/renderer/pages/icon-<id>.png.
 const APP_ICONS = ['default', 'midnight', 'cream', 'forest', 'sage'];
 
+// Supporter-only colorways — same geometry, unlocked by a Polar license
+// key (see main/supporter.js). Gated at validation time, not render time.
+const SUPPORTER_ICONS = ['ember', 'plum', 'gold'];
+
 const DEFAULTS = {
   searchEngine: 'duckduckgo',
   adblockEnabled: true,
@@ -23,6 +27,10 @@ const DEFAULTS = {
   adblockExceptions: [],
   // Opt-in, anonymous "app launched" ping — see main/telemetry.js. Off by default.
   usagePing: false,
+  // Blanc Supporter license — null, or { key, activationId, activatedAt }.
+  // Written only by setSupporter() (the Polar activation flow), never by
+  // the generic setSettings() path. Once set, trusted forever — offline OK.
+  supporter: null,
 };
 
 let store = null;
@@ -47,7 +55,12 @@ function setSettings(partial) {
   if (typeof partial.usagePing === 'boolean') clean.usagePing = partial.usagePing;
   if (typeof partial.homePage === 'string') clean.homePage = partial.homePage.trim();
   if (THEMES.includes(partial.theme)) clean.theme = partial.theme;
-  if (APP_ICONS.includes(partial.appIcon)) clean.appIcon = partial.appIcon;
+  if (
+    APP_ICONS.includes(partial.appIcon) ||
+    (SUPPORTER_ICONS.includes(partial.appIcon) && isSupporterActive())
+  ) {
+    clean.appIcon = partial.appIcon;
+  }
   if (Array.isArray(partial.adblockExceptions)) {
     clean.adblockExceptions = [
       ...new Set(
@@ -66,10 +79,33 @@ function onSettingsChanged(fn) {
   listeners.add(fn);
 }
 
+function isSupporterActive() {
+  return !!ensureStore().data.supporter;
+}
+
+/** The activation flow's private write path — the generic setSettings()
+ * whitelist deliberately has no `supporter` entry. */
+function setSupporter(record) {
+  ensureStore().update((data) => {
+    data.supporter = record;
+  });
+  for (const fn of listeners) fn(getSettings());
+}
+
 function searchUrlFor(query) {
   const { searchEngine } = getSettings();
   const engine = SEARCH_ENGINES[searchEngine] ?? SEARCH_ENGINES.duckduckgo;
   return engine.url(query);
 }
 
-module.exports = { SEARCH_ENGINES, APP_ICONS, getSettings, setSettings, onSettingsChanged, searchUrlFor };
+module.exports = {
+  SEARCH_ENGINES,
+  APP_ICONS,
+  SUPPORTER_ICONS,
+  getSettings,
+  setSettings,
+  onSettingsChanged,
+  searchUrlFor,
+  isSupporterActive,
+  setSupporter,
+};

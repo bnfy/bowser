@@ -194,7 +194,12 @@ function applyTheme() {
 function applyAppIcon() {
   if (process.platform !== 'darwin' || !app.dock) return;
   const id = settings.getSettings().appIcon;
-  const file = settings.APP_ICONS.includes(id) ? id : 'default';
+  // A supporter icon in settings without an active license (hand-edited or
+  // copied settings.json) falls back to default rather than honoring it.
+  const allowed =
+    settings.APP_ICONS.includes(id) ||
+    (settings.SUPPORTER_ICONS.includes(id) && settings.isSupporterActive());
+  const file = allowed ? id : 'default';
   const icon = nativeImage.createFromPath(
     path.join(__dirname, '../renderer/pages', `icon-${file}.png`)
   );
