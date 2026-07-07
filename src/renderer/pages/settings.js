@@ -313,4 +313,57 @@
     clearBrowsingDataStatus.textContent = 'Cleared.';
     setTimeout(() => { clearBrowsingDataStatus.textContent = ''; }, 2000);
   });
+
+  // --- Sync ---
+  (function initSync() {
+    const setup = document.getElementById('syncSetup');
+    const active = document.getElementById('syncActive');
+    const handleEl = document.getElementById('syncHandle');
+    const passEl = document.getElementById('syncPassphrase');
+    const enableBtn = document.getElementById('syncEnable');
+    const setupStatus = document.getElementById('syncSetupStatus');
+    const activeStatus = document.getElementById('syncActiveStatus');
+    const nowBtn = document.getElementById('syncNow');
+    const disableBtn = document.getElementById('syncDisable');
+    const wipeEl = document.getElementById('syncWipe');
+
+    const when = (ts) => (ts ? new Date(ts).toLocaleString() : 'never');
+    function render(status) {
+      const on = !!status.enabled;
+      setup.hidden = on;
+      active.hidden = !on;
+      if (on) {
+        activeStatus.textContent = status.lastError
+          ? `Sync is on (${status.handle}). ${status.lastError}`
+          : `Sync is on (${status.handle}). Last synced ${when(status.lastSyncedAt)}.`;
+      }
+    }
+
+    window.bowserPages.settings.syncGet().then(render);
+
+    async function enable() {
+      if (enableBtn.disabled) return;
+      enableBtn.disabled = true;
+      setupStatus.textContent = 'Turning on sync…';
+      const res = await window.bowserPages.settings.syncEnable({ handle: handleEl.value, passphrase: passEl.value });
+      enableBtn.disabled = false;
+      if (res.ok) { passEl.value = ''; render(res.status); }
+      else { setupStatus.textContent = res.message; }
+    }
+    enableBtn.addEventListener('click', enable);
+    passEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') enable(); });
+
+    nowBtn.addEventListener('click', async () => {
+      nowBtn.disabled = true;
+      activeStatus.textContent = 'Syncing…';
+      render(await window.bowserPages.settings.syncNow());
+      nowBtn.disabled = false;
+    });
+
+    disableBtn.addEventListener('click', async () => {
+      const res = await window.bowserPages.settings.syncDisable({ wipeRemote: wipeEl.checked });
+      wipeEl.checked = false;
+      render(res.status);
+    });
+  })();
 })();

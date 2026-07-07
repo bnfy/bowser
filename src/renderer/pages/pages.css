@@ -104,7 +104,15 @@ h1 {
   align-items: center;
   margin-bottom: 16px;
 }
-input[type="text"], input[type="url"], select {
+/* Inline "also delete synced data" checkbox next to Turn-off-sync. */
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+input[type="text"], input[type="url"], input[type="password"], select {
   background: var(--surface-raised);
   border: 1px solid var(--border);
   border-radius: var(--radius);

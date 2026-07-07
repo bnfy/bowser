@@ -114,6 +114,29 @@
       <span id="clearBrowsingDataStatus" class="section-hint"></span>
     </div>
 
+    <h1 class="section-title">Sync</h1>
+    <p class="section-hint">
+      Sync your favorites and settings across devices. Blanc encrypts everything on this
+      device with your passphrase and stores only unreadable data — we can’t read it, and
+      can’t recover it if you forget your passphrase.
+    </p>
+    <div id="syncSetup">
+      <div class="toolbar-row">
+        <input id="syncHandle" type="text" placeholder="Sync name" autocomplete="off" spellcheck="false" maxlength="64" />
+        <input id="syncPassphrase" type="password" placeholder="Passphrase" autocomplete="off" />
+        <button id="syncEnable">Turn on sync</button>
+      </div>
+      <p class="section-hint" id="syncSetupStatus" role="status"></p>
+    </div>
+    <div id="syncActive" hidden>
+      <p class="section-hint" id="syncActiveStatus" role="status"></p>
+      <div class="toolbar-row">
+        <button id="syncNow">Sync now</button>
+        <button id="syncDisable" class="danger">Turn off sync</button>
+        <label class="inline-check"><input id="syncWipe" type="checkbox" /> also delete synced data</label>
+      </div>
+    </div>
+
     <h1 class="section-title" id="supporterTitle">Supporter</h1>
     <p class="section-hint">
       Supporting Blanc unlocks three extra icon colorways — ember, plum, and gold.
