@@ -56,9 +56,11 @@ bug.
   "done" until every platform matches the spec **or** carries an approved entry
   in the divergence register.
 - **Definition of Done includes "parity matrix updated."** No exceptions.
-- **Shared acceptance scenarios.** Platform-neutral test scripts (see the
-  "Acceptance" line on each feature) run identically on every platform. Drift
-  shows up as the same scenario failing on one platform.
+- **Shared acceptance scenarios.** Platform-neutral Gherkin scenarios in
+  [`acceptance/`](./acceptance/) (sourced from each feature's "Acceptance" line)
+  run identically on every platform via per-platform step definitions. Drift
+  shows up as the same scenario failing on one platform. The checklist grid in
+  [`acceptance/index.md`](./acceptance/index.md) is what you tick at each release.
 - **Lockstep release train.** Version and ship the platforms together, or gate a
   release on the matrix being green. This is what stops one platform silently
   pulling ahead in features.

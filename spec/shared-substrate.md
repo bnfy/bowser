@@ -102,9 +102,16 @@ id another rejects). The **sanitize-on-read == validate-on-write** rule for
 ## S6 — Acceptance scenarios
 
 **Source:** the platform-neutral **Acceptance** lines in
-[`features.md`](./features.md), maintained as a runnable checklist.
+[`features.md`](./features.md), expanded into runnable **Gherkin** `.feature`
+files in [`acceptance/`](./acceptance/) with a checklist grid in
+[`acceptance/index.md`](./acceptance/index.md).
 
-**Consumed by:** QA / automated UI tests on every platform, run identically.
+**Consumed by:** QA / automated UI tests on every platform, run identically —
+one shared set of `.feature` files, per-platform step definitions (CucumberJS on
+desktop, XCTest-Gherkin/Cucumberish on iOS, Cucumber-JVM on Android). Steps are
+written at the level of user *intent* so the same scenario binds to each
+platform's native gesture (D7); divergences live in the step definitions, not the
+scenario text.
 
 **Why shared:** these are the executable definition of "at parity." When the same
 scenario passes on all platforms, the feature is at parity by construction; when it
@@ -122,5 +129,7 @@ fails on one, that's exactly where the drift is.
    reimplementing any `blanc://` page natively.
 4. **S1 filter pipeline** — the differentiator; more involved (per-platform
    compile targets) but the most visible failure if skipped.
-5. **S6 acceptance scenarios** — grow alongside features from day one.
+5. **S6 acceptance scenarios** — first cut written (`acceptance/`); writing the
+   desktop step-definitions against the shipping app is the cheapest way to
+   validate the phrasing, then iOS/Android bindings follow.
 </content>
