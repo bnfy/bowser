@@ -6,6 +6,7 @@ const history = require('./history');
 const downloads = require('./downloads');
 const settings = require('./settings');
 const supporter = require('./supporter');
+const sync = require('./sync');
 const { listDecisions, removeDecision } = require('./permissions');
 
 // Internal chrome pages (bookmarks, history, downloads, settings, the new
@@ -73,7 +74,7 @@ function setupPages(hooks = {}) {
   // derived booleans. Internal pages are privileged, but least-privilege
   // anyway (same reasoning as the preload's protocol re-check).
   const clientSettings = () => {
-    const { supporter: record, ...rest } = settings.getSettings();
+    const { supporter: record, _syncMeta, ...rest } = settings.getSettings();
     return {
       ...rest,
       supporterActive: !!record,
@@ -93,6 +94,13 @@ function setupPages(hooks = {}) {
     settings.setSettings(partial ?? {});
   });
   handle('pages:settings:supporter-activate', (key) => supporter.activateSupporter(key));
+
+  // Sync: the passphrase arrives once on enable and never leaves main; every
+  // response is status-only (enabled/handle/lastSyncedAt/lastError) — no keys.
+  handle('pages:settings:sync-get', () => sync.status());
+  handle('pages:settings:sync-enable', (payload) => sync.enable(payload ?? {}));
+  handle('pages:settings:sync-disable', (opts) => sync.disable(opts ?? {}));
+  handle('pages:settings:sync-now', () => sync.syncNow().then(() => sync.status()));
 
   handle('pages:app-version', () => app.getVersion());
 

@@ -313,4 +313,66 @@
     clearBrowsingDataStatus.textContent = 'Cleared.';
     setTimeout(() => { clearBrowsingDataStatus.textContent = ''; }, 2000);
   });
+
+  // --- Sync ---
+  (function initSync() {
+    const setup = document.getElementById('syncSetup');
+    const active = document.getElementById('syncActive');
+    const handleEl = document.getElementById('syncHandle');
+    const passEl = document.getElementById('syncPassphrase');
+    const enableBtn = document.getElementById('syncEnable');
+    const setupStatus = document.getElementById('syncSetupStatus');
+    const activeStatus = document.getElementById('syncActiveStatus');
+    const nowBtn = document.getElementById('syncNow');
+    const disableBtn = document.getElementById('syncDisable');
+    const wipeEl = document.getElementById('syncWipe');
+
+    const when = (ts) => (ts ? new Date(ts).toLocaleString() : 'never');
+    function render(status, note) {
+      const on = !!status.enabled;
+      setup.hidden = on;
+      active.hidden = !on;
+      if (on) {
+        const base = status.lastError
+          ? `Sync is on (${status.handle}). ${status.lastError}`
+          : `Sync is on (${status.handle}). Last synced ${when(status.lastSyncedAt)}.`;
+        activeStatus.textContent = note ? `${note} ${base}` : base;
+      } else {
+        setupStatus.textContent = note || '';
+      }
+    }
+
+    window.bowserPages.settings.syncGet().then(render).catch(() => {});
+
+    async function enable() {
+      if (enableBtn.disabled) return;
+      enableBtn.disabled = true;
+      setupStatus.textContent = 'Turning on sync…';
+      const res = await window.bowserPages.settings.syncEnable({ handle: handleEl.value, passphrase: passEl.value });
+      enableBtn.disabled = false;
+      passEl.value = '';
+      // Sync can be ON even when the first sync failed (offline), so always
+      // reflect the real status. A brand-new account gets a heads-up in case
+      // the passphrase was mistyped — a wrong one silently starts a new one.
+      const note = res.created
+        ? `Started a new sync account for “${handleEl.value.trim()}”. If you have data on another device, turn sync off and check the name and passphrase match exactly.`
+        : (res.ok ? null : res.message);
+      render(res.status, note);
+    }
+    enableBtn.addEventListener('click', enable);
+    passEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') enable(); });
+
+    nowBtn.addEventListener('click', async () => {
+      nowBtn.disabled = true;
+      activeStatus.textContent = 'Syncing…';
+      render(await window.bowserPages.settings.syncNow());
+      nowBtn.disabled = false;
+    });
+
+    disableBtn.addEventListener('click', async () => {
+      const res = await window.bowserPages.settings.syncDisable({ wipeRemote: wipeEl.checked });
+      wipeEl.checked = false;
+      render(res.status);
+    });
+  })();
 })();

@@ -9,6 +9,11 @@ const SEARCH_ENGINES = {
 
 const THEMES = ['system', 'light', 'dark'];
 
+// Keys that sync across devices (see the profile-sync spec). Deliberately
+// excludes appIcon (device-local), usagePing (per-install consent), and
+// supporter (never — that would be license sharing).
+const SYNCED_KEYS = ['searchEngine', 'adblockEnabled', 'homePage', 'theme', 'adblockExceptions'];
+
 // Dock icon colorways — id maps to src/renderer/pages/icon-<id>.png; order
 // here is also the tile order Settings renders. 'default' is the original
 // green colorway — the id (and file name) is frozen for saved settings,
@@ -45,6 +50,9 @@ const DEFAULTS = {
   // Written only by setSupporter() (the Polar activation flow), never by
   // the generic setSettings() path. Once set, trusted forever — offline OK.
   supporter: null,
+  // Per-key last-write timestamps for sync's LWW merge; only SYNCED_KEYS are
+  // ever stamped or transmitted. See exportForSync/mergeFromSync.
+  _syncMeta: {},
 };
 
 let store = null;
@@ -68,8 +76,10 @@ function isAppIconAllowed(id) {
   return APP_ICONS.includes(id) || (SUPPORTER_ICONS.includes(id) && isSupporterActive());
 }
 
-function setSettings(partial) {
-  const s = ensureStore();
+/** Validate a partial settings patch against the whitelist, returning only
+ * the accepted keys. Shared by setSettings (user writes) and mergeFromSync
+ * (remote writes) so a tampered sync blob can't inject unvalidated values. */
+function sanitize(partial) {
   const clean = {};
   if (typeof partial.searchEngine === 'string' && SEARCH_ENGINES[partial.searchEngine]) {
     clean.searchEngine = partial.searchEngine;
@@ -88,7 +98,18 @@ function setSettings(partial) {
       ),
     ];
   }
-  s.update((data) => Object.assign(data, clean));
+  return clean;
+}
+
+function setSettings(partial) {
+  const s = ensureStore();
+  const clean = sanitize(partial);
+  const now = Date.now();
+  s.update((data) => {
+    Object.assign(data, clean);
+    data._syncMeta ??= {};
+    for (const k of Object.keys(clean)) if (SYNCED_KEYS.includes(k)) data._syncMeta[k] = now;
+  });
   for (const fn of listeners) fn(getSettings());
   return getSettings();
 }
@@ -110,6 +131,46 @@ function setSupporter(record) {
   for (const fn of listeners) fn(getSettings());
 }
 
+// Snapshot the synced keys plus their per-key timestamps for the sync engine
+// to encrypt. Only SYNCED_KEYS cross the wire — supporter, appIcon, usagePing
+// and _syncMeta's non-synced entries never leave.
+function exportForSync() {
+  const d = ensureStore().data;
+  const values = {}, meta = {};
+  for (const k of SYNCED_KEYS) {
+    if (d[k] !== undefined) values[k] = d[k];
+    if (d._syncMeta?.[k]) meta[k] = d._syncMeta[k];
+  }
+  return { values, meta };
+}
+
+// Adopt any remote key whose last-write timestamp beats ours (per-key LWW).
+// Values route through sanitize() — a tampered blob can't inject unvalidated
+// settings — and meta is stamped to the REMOTE time so ordering is preserved
+// across devices rather than reset to now.
+function mergeFromSync(remote) {
+  const s = ensureStore();
+  const winners = {};
+  for (const k of SYNCED_KEYS) {
+    const rt = remote.meta?.[k] ?? 0;
+    const lt = s.data._syncMeta?.[k] ?? 0;
+    if (rt > lt && remote.values?.[k] !== undefined) winners[k] = rt;
+  }
+  const keys = Object.keys(winners);
+  if (!keys.length) return;
+  const clean = sanitize(Object.fromEntries(keys.map((k) => [k, remote.values[k]])));
+  s.update((data) => {
+    Object.assign(data, clean);
+    data._syncMeta ??= {};
+    // Advance the clock for EVERY conceded key — including ones sanitize
+    // rejected (e.g. an enum value a newer app version introduced) — so a
+    // value we can't apply can't re-win every sync and loop forever.
+    for (const k of keys) data._syncMeta[k] = winners[k];
+  });
+  // Notify (→ app re-applies theme/adblock) only when something was adopted.
+  if (Object.keys(clean).length) for (const fn of listeners) fn(getSettings());
+}
+
 function searchUrlFor(query) {
   const { searchEngine } = getSettings();
   const engine = SEARCH_ENGINES[searchEngine] ?? SEARCH_ENGINES.duckduckgo;
@@ -129,4 +190,6 @@ module.exports = {
   isSupporterActive,
   isAppIconAllowed,
   setSupporter,
+  exportForSync,
+  mergeFromSync,
 };

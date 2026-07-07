@@ -36,6 +36,10 @@ if (window.location.protocol === 'blanc:') {
       get: () => ipcRenderer.invoke('pages:settings:get'),
       set: (partial) => ipcRenderer.invoke('pages:settings:set', partial),
       activateSupporter: (key) => ipcRenderer.invoke('pages:settings:supporter-activate', key),
+      syncGet: () => ipcRenderer.invoke('pages:settings:sync-get'),
+      syncEnable: (payload) => ipcRenderer.invoke('pages:settings:sync-enable', payload),
+      syncDisable: (opts) => ipcRenderer.invoke('pages:settings:sync-disable', opts),
+      syncNow: () => ipcRenderer.invoke('pages:settings:sync-now'),
     },
     permissions: {
       list: () => ipcRenderer.invoke('pages:permissions:list'),
