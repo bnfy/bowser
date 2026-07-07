@@ -217,6 +217,23 @@ body.has-consent .hero { padding-bottom: 154px; }
   .demo-island .trow .dom { display: none; }
 }
 
+/* Phones: the full resting pill (~434px) is wider than the stage below
+   ~530px, so it clips at both ends and stops reading as a floating pill.
+   Shed the flanking chrome — back/forward nav, the reload/favorite action
+   cluster, the group name — and keep the core identity (dots, favicon,
+   domain, shield) centered, the way a narrow island sheds chrome. */
+@media (max-width: 560px) {
+  .demo-island .pnav,
+  .demo-island .pacts,
+  .demo-island .psep,
+  .demo-island .group-name { display: none; }
+  .demo-island .pill { gap: 9px; padding: 8px 14px; }
+  .demo-island .domain { font-size: 13.5px; }
+  /* The panel footer hint is a single nowrap line that overruns the narrow
+     panel — let it wrap and center instead of overflowing off the edge. */
+  .demo-island .foot { white-space: normal; text-align: center; }
+}
+
 /* Short viewports: shrink the demo so mark + line + demo + caption + CTA
    still fit one screen, keeping the CTA clear of the fixed consent banner. */
 @media (max-height: 860px) {
