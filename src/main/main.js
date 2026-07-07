@@ -1815,7 +1815,17 @@ app.whenReady().then(async () => {
     shortcuts: { list: listShortcuts },
   });
 
-  await setupAdBlocker(ses, { enabled: settings.getSettings().adblockEnabled });
+  // BLANC_TEST launches offline for the acceptance harness: skip the network
+  // ad-engine build (getBlocker() stays null, and the listener below is
+  // null-safe) and install the test-only main-process surface instead.
+  if (process.env.BLANC_TEST) {
+    require('./test-hook').install({
+      tabs, getTabOrder: () => tabOrder, getGroups: () => groups, getActiveTabId: () => activeTabId,
+      createTab, setActiveTab, closeTab, duplicateTab, toggleTabPinned, groupTabByName, reopenClosedTab, newTabUrl,
+    });
+  } else {
+    await setupAdBlocker(ses, { enabled: settings.getSettings().adblockEnabled });
+  }
 
   // Per-tab blocked-request counter. `request.tabId` is the webContents id
   // of the frame the request came from.

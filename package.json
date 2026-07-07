@@ -9,14 +9,18 @@
     "start": "electron .",
     "dist": "electron-builder",
     "dist:dir": "electron-builder --dir",
-    "release": "scripts/release.sh"
+    "release": "scripts/release.sh",
+    "test:acceptance:dry": "cucumber-js -c test/desktop/cucumber.mjs -p dry",
+    "test:acceptance:desktop": "cucumber-js -c test/desktop/cucumber.mjs -p runnable"
   },
   "author": "",
   "license": "UNLICENSED",
   "private": true,
   "devDependencies": {
+    "@cucumber/cucumber": "^11.0.0",
     "electron": "^43.0.0",
-    "electron-builder": "^26.0.12"
+    "electron-builder": "^26.0.12",
+    "playwright": "^1.49.0"
   },
   "dependencies": {
     "@ghostery/adblocker-electron": "^2.18.1",
