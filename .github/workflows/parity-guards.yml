@@ -1,0 +1,45 @@
+name: Parity guards
+
+# Enforces the cross-platform parity substrate (see spec/shared-substrate.md):
+# the design tokens, settings schema, and copy catalog each have a single source
+# of truth (tokens/, settings-schema/, copy/) that the desktop code must not drift
+# from, and the shared acceptance scenarios (spec/acceptance/) must stay wired to
+# their desktop step definitions. These are read-only checks — no build, no publish.
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  substrate:
+    # Pure-Node drift guards — the build.mjs checkers use only node builtins, so
+    # no dependency install is needed. Fast and hard to break.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: tokens / settings / copy match their sources
+        run: |
+          node tokens/build.mjs --check
+          node settings-schema/build.mjs --check
+          node copy/build.mjs --check
+
+  acceptance-wiring:
+    # The shared Gherkin scenarios must resolve to the desktop step definitions.
+    # Dry-run only — no app is launched, so the Electron binary isn't downloaded.
+    runs-on: ubuntu-latest
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Acceptance step definitions resolve (dry-run)
+        run: npm run test:acceptance:dry
