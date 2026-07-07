@@ -91,7 +91,10 @@ function parseSettingsJs() {
   // won't work; strip // line comments instead (label values never contain //).
   const pairs = (block) => [...String(block ?? '').replace(/\/\/.*$/gm, '').matchAll(/(\w+):\s*'([^']+)'/g)].map((m) => ({ id: m[1], label: m[2] }));
   const engines = [...js.matchAll(/^\s*(\w+):\s*\{\s*label:\s*'([^']+)'/gm)].map((m) => ({ id: m[1], label: m[2] }));
-  const themes = [...(js.match(/const THEMES = \[([^\]]*)\]/)?.[1] ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  // THEMES may be multiline; strip // comments from its block (theme ids never
+  // contain //) so a commented-out entry like `// 'dark'` isn't read as live.
+  const themesBlock = (js.match(/const THEMES = \[([^\]]*)\]/)?.[1] ?? '').replace(/\/\/.*$/gm, '');
+  const themes = [...themesBlock.matchAll(/'([^']+)'/g)].map((m) => m[1]);
   const appIcons = pairs(js.match(/const APP_ICON_LABELS = \{([\s\S]*?)\}/)?.[1]);
   const supporterIcons = pairs(js.match(/const SUPPORTER_ICON_LABELS = \{([\s\S]*?)\}/)?.[1]);
   const D = js.match(/const DEFAULTS = \{([\s\S]*?)\n\};/)?.[1] ?? '';
