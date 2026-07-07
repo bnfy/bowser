@@ -53,6 +53,15 @@ custom properties for desktop + internal pages.
 inherit that by hand-copying palettes into two more languages — generate them.
 Theming parity (F15) depends on the palettes never forking.
 
+**Status — built (`tokens/`).** `tokens/tokens.json` is the source; `npm run
+tokens:build` emits `tokens/generated/{Tokens.swift,Tokens.kt,tokens.css}`, and
+`npm run tokens:check` guards the live desktop CSS against drift from it (and
+verifies the generated files are current). The desktop CSS is **guarded, not yet
+overwritten** — a headless build can't visually re-verify chrome CSS, and drift
+prevention is the substrate's actual purpose; flipping `styles.css`/`pages.css` to
+be emitted from the source (the reference `tokens.css` shows the output) is a
+mechanical follow-up once an app-run can confirm it. See `tokens/README.md`.
+
 ---
 
 ## S3 — Copy / string catalog

@@ -11,7 +11,9 @@
     "dist:dir": "electron-builder --dir",
     "release": "scripts/release.sh",
     "test:acceptance:dry": "cucumber-js -c test/desktop/cucumber.mjs -p dry",
-    "test:acceptance:desktop": "cucumber-js -c test/desktop/cucumber.mjs -p runnable"
+    "test:acceptance:desktop": "cucumber-js -c test/desktop/cucumber.mjs -p runnable",
+    "tokens:build": "node tokens/build.mjs",
+    "tokens:check": "node tokens/build.mjs --check"
   },
   "author": "",
   "license": "UNLICENSED",

@@ -1,0 +1,95 @@
+/* GENERATED from tokens/tokens.json — reference for a future flip to
+   codegen. The live styles.css / pages.css are hand-written and guarded
+   against drift by `npm run tokens:check`, not overwritten by this file. */
+
+/* chrome — src/renderer/styles.css */
+:root {
+  --bg: #f4f4f1;
+  --surface: #f9f8f4;
+  --surface-raised: #ffffff;
+  --border: #dce2dc;
+  --text: #0e0e0e;
+  --text-dim: #5b6b61;
+  --accent: #2f4639;
+  --accent-dim: rgba(47, 70, 57, 0.14);
+  --danger: #ff3b30;
+  --on-danger: #ffffff;
+  --font-ui: "Inter", -apple-system, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  --shadow-popover: 0 14px 30px rgba(14, 14, 14, 0.16);
+  --shadow-pill: 0 4px 12px -3px rgba(14, 14, 14, 0.22);
+  --strip-h: 56px;
+  --radius: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e0e0e;
+    --surface: #171917;
+    --surface-raised: #1e221e;
+    --border: #2a322b;
+    --text: #f4f4f1;
+    --text-dim: #86a08f;
+    --accent: #5d8b6b;
+    --accent-dim: rgba(93, 139, 107, 0.16);
+    --danger: #ff3b30;
+    --on-danger: #f4f4f1;
+  }
+}
+:root[data-theme="private"] {
+  --bg: #0c110e;
+  --surface: #121a15;
+  --surface-raised: #18231c;
+  --border: #2b3a30;
+  --text: #f4f4f1;
+  --text-dim: #8fac99;
+  --accent: #a8c8b0;
+  --accent-dim: rgba(168, 200, 176, 0.16);
+  --danger: #ff3b30;
+  --on-danger: #0c110e;
+}
+
+/* pages — src/renderer/pages/pages.css */
+:root {
+  --bg: #f4f4f1;
+  --surface: #f9f8f4;
+  --surface-raised: #ffffff;
+  --border: #dce2dc;
+  --text: #0e0e0e;
+  --text-dim: #5b6b61;
+  --accent: #2f4639;
+  --accent-dim: rgba(47, 70, 57, 0.14);
+  --danger: #ff3b30;
+  --on-danger: #ffffff;
+  --font-ui: "Inter", -apple-system, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  --radius: 6px;
+  --select-caret: url("select-caret.svg");
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e0e0e;
+    --surface: #171917;
+    --surface-raised: #1e221e;
+    --border: #2a322b;
+    --text: #f4f4f1;
+    --text-dim: #86a08f;
+    --accent: #5d8b6b;
+    --accent-dim: rgba(93, 139, 107, 0.16);
+    --danger: #ff3b30;
+    --on-danger: #f4f4f1;
+    --select-caret: url("select-caret-dark.svg");
+  }
+}
+:root[data-theme="private"] {
+  --bg: #0c110e;
+  --surface: #121a15;
+  --surface-raised: #18231c;
+  --border: #2b3a30;
+  --text: #f4f4f1;
+  --text-dim: #8fac99;
+  --accent: #a8c8b0;
+  --accent-dim: rgba(168, 200, 176, 0.16);
+  --danger: #ff3b30;
+  --on-danger: #0c110e;
+  --select-caret: url("select-caret-dark.svg");
+}
