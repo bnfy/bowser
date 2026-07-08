@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var manager = TabsManager()
-    @State private var showTabList = false
+    @State private var showPalette = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -17,31 +17,24 @@ struct ContentView: View {
 
             addressPill
         }
-        .sheet(isPresented: $showTabList) {
-            TabListSheet(manager: manager)
+        .sheet(isPresented: $showPalette) {
+            PaletteSheet(manager: manager)
         }
     }
 
     private var addressPill: some View {
         HStack(spacing: 10) {
-            Button { manager.activeTab?.goBack() } label: {
-                Image(systemName: "chevron.left")
+            HStack(spacing: 8) {
+                tabDots
+
+                Text(displayDomain)
+                    .lineLimit(1)
+                    .foregroundStyle(.primary)
             }
-            .disabled(!(manager.activeTab?.canGoBack ?? false))
+            .contentShape(Rectangle())
+            .onTapGesture { showPalette = true }
 
-            Button { manager.activeTab?.goForward() } label: {
-                Image(systemName: "chevron.right")
-            }
-            .disabled(!(manager.activeTab?.canGoForward ?? false))
-
-            tabDots
-
-            TextField("Search or enter address", text: addressBinding)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .keyboardType(.webSearch)
-                .submitLabel(.go)
-                .onSubmit { manager.submitActiveTabAddress() }
+            Spacer(minLength: 0)
 
             Button {
                 if manager.activeTab?.isLoading == true {
@@ -60,18 +53,13 @@ struct ContentView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(Color(blancHex: BlancTokens.surfaceRaised(.light)) ?? .white)
-        .clipShape(Capsule())
-        .overlay(Capsule().stroke(Color(blancHex: BlancTokens.border(.light)) ?? .gray))
+        .modifier(PillStyle())
         .padding(.horizontal, 12)
         .padding(.bottom, 8)
     }
 
-    private var addressBinding: Binding<String> {
-        Binding(
-            get: { manager.activeTab?.addressText ?? "" },
-            set: { manager.activeTab?.addressText = $0 }
-        )
+    private var displayDomain: String {
+        manager.activeTab?.currentURL.host ?? "New Tab"
     }
 
     private var tabDots: some View {
@@ -94,8 +82,20 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .contentShape(Rectangle())
-        .onTapGesture { showTabList = true }
+    }
+}
+
+private struct PillStyle: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content.glassEffect(.regular.interactive(), in: .capsule)
+        } else {
+            content
+                .background(Color(blancHex: BlancTokens.surfaceRaised(.light)) ?? .white)
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(Color(blancHex: BlancTokens.border(.light)) ?? .gray))
+        }
     }
 }
 

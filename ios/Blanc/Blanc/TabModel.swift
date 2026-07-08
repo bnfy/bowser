@@ -19,6 +19,7 @@ final class TabModel: Identifiable {
         self.currentURL = url
         self.addressText = url.absoluteString
         self.webView = WKWebView()
+        webView.allowsBackForwardNavigationGestures = true
         self.navigationDelegate = TabNavigationDelegate()
         navigationDelegate.tab = self
         webView.navigationDelegate = navigationDelegate
