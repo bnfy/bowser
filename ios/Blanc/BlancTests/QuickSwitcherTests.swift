@@ -47,14 +47,14 @@ final class QuickSwitcherTests: XCTestCase {
         let strong = makeTab(title: "gmail inbox", url: "https://gmail.com")
         let weak = makeTab(title: "game library", url: "https://games.example.com")
         // "gmail" is a substring of "gmail inbox" → score 2.2
-        // "gmail" in-order matches "game library" (g...a...m...l...) → score 1.2
+        // "gmail" does not in-order match "game library games.example.com" (missing 'i' after 'a') → excluded (score 0)
         let results = QuickSwitcher.search(query: "gmail", tabs: [weak, strong])
         XCTAssertEqual(results[0].tab.id, strong.id)
     }
 
     func testEqualScorePreservesTabOrder() {
         let first = makeTab(title: "game library", url: "https://games.example.com")
-        let second = makeTab(title: "good morning list", url: "https://gml.example.com")
+        let second = makeTab(title: "good morning list", url: "https://list.example.com")
         // Both in-order match "gml" → score 1.2 each; first wins by tab position
         let results = QuickSwitcher.search(query: "gml", tabs: [first, second])
         XCTAssertEqual(results[0].tab.id, first.id)
