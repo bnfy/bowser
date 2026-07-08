@@ -33,6 +33,8 @@
     "usagePing": false,
     "supporter": null
   },
+  "$internalDefaults": "Keys present in settings.js DEFAULTS that are intentionally desktop-only (not mobile-parity settings); settings:check allowlists these instead of requiring them in the schema.",
+  "internalDefaults": ["_syncMeta"],
   "settings": [
     { "key": "searchEngine", "type": "enum", "enum": "searchEngines", "default": "duckduckgo" },
     { "key": "adblockEnabled", "type": "boolean", "default": true },

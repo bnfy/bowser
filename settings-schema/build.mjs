@@ -109,7 +109,10 @@ function parseSettingsJs() {
     adblockExceptionsEmpty: /^\s*adblockExceptions:\s*\[\]/m.test(D),
     supporterNull: /^\s*supporter:\s*null/m.test(D),
   };
-  return { engines, themes, appIcons, supporterIcons, defaults };
+  // Every key literally declared in DEFAULTS (line-anchored, so // comments are
+  // excluded) — used to catch keys the schema doesn't know about.
+  const defaultKeys = [...D.matchAll(/^\s*(\w+):/gm)].map((m) => m[1]);
+  return { engines, themes, appIcons, supporterIcons, defaults, defaultKeys };
 }
 
 function check() {
@@ -122,6 +125,18 @@ function check() {
   cmp('themes', js.themes, spec.themes);
   cmp('appIcons', js.appIcons, spec.appIcons);
   cmp('supporterIcons', js.supporterIcons, spec.supporterIcons);
+
+  // Every DEFAULTS key must be a known schema setting or an explicitly
+  // allowlisted internal (desktop-only, not a mobile-parity setting — e.g. the
+  // sync LWW clock). Without this, a new user-facing setting could be added to
+  // settings.js and silently escape the guard.
+  const internal = new Set(spec.internalDefaults ?? []);
+  const known = new Set(Object.keys(spec.defaults));
+  for (const k of js.defaultKeys) {
+    if (!known.has(k) && !internal.has(k)) {
+      problems.push(`defaults.${k}: in settings.js but not schema.json — add it as a setting, or list it in schema.json "internalDefaults" if it is desktop-only`);
+    }
+  }
 
   const d = spec.defaults, jd = js.defaults;
   const eq = (k, got, want) => { if (got !== want) problems.push(`defaults.${k}: settings.js=${JSON.stringify(got)} schema.json=${JSON.stringify(want)}`); };
