@@ -1769,6 +1769,26 @@ function createMainWindow() {
 app.whenReady().then(async () => {
   const ses = session.defaultSession;
 
+  // Patch Sec-CH-UA client hints to include the Chrome brand. Electron
+  // sends "Chromium" without "Google Chrome", and Google's OAuth endpoints
+  // reject that with "This browser or app may not be secure". The UA string
+  // is already Chrome-shaped (see userAgentFallback above); this closes the
+  // same gap on the client-hints side.
+  const chromeMajor = process.versions.chrome?.split('.')[0];
+  if (chromeMajor) {
+    const chromeFull = process.versions.chrome;
+    ses.webRequest.onBeforeSendHeaders((details, callback) => {
+      const h = details.requestHeaders;
+      if (h['Sec-CH-UA'] && !h['Sec-CH-UA'].includes('Google Chrome')) {
+        h['Sec-CH-UA'] += `, "Google Chrome";v="${chromeMajor}"`;
+      }
+      if (h['Sec-CH-UA-Full-Version-List'] && !h['Sec-CH-UA-Full-Version-List'].includes('Google Chrome')) {
+        h['Sec-CH-UA-Full-Version-List'] += `, "Google Chrome";v="${chromeFull}"`;
+      }
+      callback({ requestHeaders: h });
+    });
+  }
+
   applyTheme();
   applyAppIcon();
   if (settings.getSettings().usagePing) sendLaunchPing();
