@@ -179,7 +179,8 @@ app.userAgentFallback = app.userAgentFallback
 
 // Hide the FedCM API. Must happen before app 'ready', and silently no-ops
 // if Chromium ever retires the "FedCm" feature name (an Electron bump that
-// brings back Google-login 400s should recheck here first). Chromium ships
+// brings back Google-login 400s should recheck here first — also see the
+// Sec-CH-UA client-hints patch in app.whenReady below). Chromium ships
 // the JS surface (IdentityCredential) but Electron has no account-chooser
 // UI behind it, so FedCM calls can only ever fail with "Error retrieving
 // a token". Google Identity Services feature-detects the API, commits to
@@ -1768,6 +1769,32 @@ function createMainWindow() {
 
 app.whenReady().then(async () => {
   const ses = session.defaultSession;
+
+  // Patch Sec-CH-UA client hints to include the Chrome brand — the
+  // client-hints companion to the userAgentFallback stripping above (and
+  // the FedCm disable). Electron's Chromium sends "Chromium" without
+  // "Google Chrome", and Google's OAuth endpoints reject that with "This
+  // browser or app may not be secure". Chromium populates these header
+  // names in lowercase (services/network/public/cpp/client_hints.cc), and
+  // Electron's net_converter passes them through without case-normalizing.
+  // Electron only allows ONE listener per webRequest event per session
+  // (same constraint adblock.js documents for onBeforeRequest) — if a
+  // future feature also needs onBeforeSendHeaders, compose inside this
+  // handler rather than registering a second one.
+  const chromeMajor = process.versions.chrome?.split('.')[0];
+  if (chromeMajor) {
+    const chromeFull = process.versions.chrome;
+    ses.webRequest.onBeforeSendHeaders({ urls: ['<all_urls>'] }, (details, callback) => {
+      const h = details.requestHeaders;
+      if (h['sec-ch-ua'] && !h['sec-ch-ua'].includes('Google Chrome')) {
+        h['sec-ch-ua'] += `, "Google Chrome";v="${chromeMajor}"`;
+      }
+      if (h['sec-ch-ua-full-version-list'] && !h['sec-ch-ua-full-version-list'].includes('Google Chrome')) {
+        h['sec-ch-ua-full-version-list'] += `, "Google Chrome";v="${chromeFull}"`;
+      }
+      callback({ requestHeaders: h });
+    });
+  }
 
   applyTheme();
   applyAppIcon();
