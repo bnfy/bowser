@@ -30,9 +30,10 @@ toolbar (Bowser Design System "Island Chrome").
   tokens (→ substrate). The *layout, contents, and states* are the contract; the
   windowing is D11, the input affordances are D7.
 - **Acceptance:** With 3 tabs in a group named `work` and 2 trackers blocked on the
-  active page, the pill shows back/forward, 3 dots, `work`, the domain, a shield
-  count of 2, and the action cluster. Summoning the palette floats the command bar
-  with the tab switcher listed.
+  active page, the pill shows the platform back/forward affordance (buttons on
+  desktop, edge-swipe gesture on mobile per D7), 3 dots, `work`, the domain, a
+  shield count of 2, and the action cluster. Summoning the palette floats the
+  command bar with the tab switcher listed.
 
 ## F2 — Tabs
 
