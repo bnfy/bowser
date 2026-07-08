@@ -15,10 +15,11 @@ identically everywhere.
 The single custom command surface that replaces a traditional tab strip +
 toolbar (Bowser Design System "Island Chrome").
 
-- **Resting pill** shows, left→right: back/forward, the *active group's* tab dots
-  (capped at 8, with a quiet `+N` that opens the panel), favicon, the active
-  group's name, domain, shield count (F12), a private chip when private (F4), and
-  a trailing action cluster (reload / favorite / downloads).
+- **Resting pill** shows, left→right: back/forward (desktop; mobile uses edge-swipe
+  gestures per D7), the *active group's* tab dots (capped at 8, with a quiet `+N`
+  that opens the panel), favicon, the active group's name, domain, shield count
+  (F12), a private chip when private (F4), and a trailing action cluster
+  (reload / favorite / downloads).
 - **Expanded states** (one at a time): `panel` (command bar expanded in place),
   `palette` (same panel summoned by the ⌘L-equivalent, floated over a scrim),
   `find` (F8). Only the active state shows; Escape/back dismisses.

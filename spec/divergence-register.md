@@ -152,6 +152,7 @@ Desktop bindings and their mobile intent:
 
 | Desktop | Action | Mobile equivalent |
 |---------|--------|-------------------|
+| ⌘[ / ⌘] (pill buttons) | Back / Forward | edge-swipe gesture (`allowsBackForwardNavigationGestures`) — no pill buttons |
 | ⌘L | Search & Commands (palette) | tap the pill / pull-down |
 | ⌘T | New Tab | new-tab button |
 | ⌘⇧N | New Private Tab | new-private-tab action |

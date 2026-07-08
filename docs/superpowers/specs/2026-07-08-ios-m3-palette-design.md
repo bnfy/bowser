@@ -59,8 +59,8 @@ tab-list sheet from M2 is deleted.
 A `TextField` at the top of the sheet, auto-focused when the sheet appears.
 It serves triple duty:
 
-1. **Address/search input** — typing a URL or search query and tapping Go
-   navigates the active tab (see **Submit behavior** below) and dismisses.
+1. **Address/search input** — tapping Go resolves per **Submit behavior**
+   below (may navigate, switch tabs, execute a command, or no-op).
 2. **Slash-command prefix** — when the input starts with `/`, the list below
    switches to filtered slash commands.
 3. **Quick Switcher query** — any other text triggers the Quick Switcher,
@@ -207,7 +207,7 @@ Tap pill middle zone
       tap tab row       → manager.setActive(id), dismiss
       tap command row   → command.execute(manager:), dismiss
       tap switcher row  → manager.setActive(id), dismiss
-      submit input      → manager.submitActiveTabAddress(), dismiss
+      submit input      → resolve per Submit behavior matrix
       swipe-delete row  → manager.closeTab(id)
       swipe down        → dismiss (no action)
 ```
