@@ -35,7 +35,11 @@ engine, or one platform accepting an icon id another rejects).
 
 `settings:check` parses the stable structures out of `settings.js`
 (`SEARCH_ENGINES`, `THEMES`, `APP_ICON_LABELS`, `SUPPORTER_ICON_LABELS`,
-`DEFAULTS`) and compares ids, labels, and default values to `schema.json`. It does
+`DEFAULTS`) and compares ids, labels, and default values to `schema.json`. It also
+flags any `DEFAULTS` key that is neither a schema setting nor in `schema.json`'s
+`internalDefaults` allowlist (desktop-only keys not synced to mobile, e.g. the
+sync clock `_syncMeta`) — so a new user-facing setting can't be added on desktop
+and silently skip the mobile schema. It does
 **not** attempt to parse the imperative validation logic in `setSettings` — the
 contract for that (e.g. `sanitize-on-read == validate-on-write` for `appIcon`,
 hostname normalization for `adblockExceptions`) lives as prose in the schema's
