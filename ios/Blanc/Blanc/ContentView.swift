@@ -36,6 +36,13 @@ struct ContentView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Open palette")
 
+            if manager.isAdBlockReady {
+                Image(systemName: "shield.checkmark")
+                    .foregroundStyle(.primary)
+                    .font(.footnote)
+                    .accessibilityLabel("Ad blocking active")
+            }
+
             Spacer(minLength: 0)
 
             Button {

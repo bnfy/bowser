@@ -19,6 +19,10 @@ final class TabsManager {
         return tabs.first { $0.id == activeTabId }
     }
 
+    var isAdBlockReady: Bool {
+        contentBlocker.isReady
+    }
+
     init() {
         if let loaded = ContentBlocker.loadBundledBlocklist() {
             contentBlocker.prepare(version: loaded.version, jsonString: loaded.json)
