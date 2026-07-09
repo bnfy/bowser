@@ -29,6 +29,7 @@
 
 **Files:**
 - Create: `adblock/sources/SOURCES.md`
+- Create: `adblock/sources/pinned.json`
 - Create: `adblock/sources/easylist.txt` (fetched snapshot)
 - Create: `adblock/sources/easyprivacy.txt` (fetched snapshot)
 - Create: `adblock/build.mjs`
@@ -44,8 +45,8 @@
 
 ```bash
 mkdir -p adblock/sources adblock/generated
-curl -o adblock/sources/easylist.txt https://easylist.to/easylist/easylist.txt
-curl -o adblock/sources/easyprivacy.txt https://easylist.to/easylist/easyprivacy.txt
+curl -L -o adblock/sources/easylist.txt https://easylist.to/easylist/easylist.txt
+curl -L -o adblock/sources/easyprivacy.txt https://easylist.to/easylist/easyprivacy.txt
 ```
 
 Create `adblock/sources/SOURCES.md`:
@@ -59,6 +60,13 @@ Pinned snapshots, committed verbatim. Run `npm run adblock:build` after updating
 |------|-------------|--------|
 | EasyList | https://easylist.to/easylist/easylist.txt | 2026-07-09 |
 | EasyPrivacy | https://easylist.to/easylist/easyprivacy.txt | 2026-07-09 |
+```
+
+Create `adblock/sources/pinned.json` (machine-readable date the converter reads
+instead of `new Date()`, so `sourceDate` tracks the pin, not the build):
+
+```json
+{"date": "2026-07-09"}
 ```
 
 - [ ] **Step 2: Write the converter script**
@@ -216,11 +224,13 @@ fs.mkdirSync(OUT, { recursive: true });
 const json = JSON.stringify(rules, null, 2);
 fs.writeFileSync(path.join(OUT, 'blocklist.json'), json);
 
+const pinned = JSON.parse(fs.readFileSync(path.join(SOURCES, 'pinned.json'), 'utf8'));
+
 const hash = createHash('sha256').update(json).digest('hex').slice(0, 8);
 const meta = {
   version: hash,
   ruleCount: rules.length,
-  sourceDate: new Date().toISOString().slice(0, 10),
+  sourceDate: pinned.date,
 };
 fs.writeFileSync(path.join(OUT, 'blocklist.meta.json'), JSON.stringify(meta, null, 2));
 
@@ -269,9 +279,40 @@ git commit -m "feat(ios): M5 ad-block converter — EasyList/EasyPrivacy → WKC
 
 **Interfaces:**
 - Consumes: `adblock/generated/blocklist.json` and `blocklist.meta.json` from the app bundle (subdirectory `"generated"`). `TabsManager.createTab` (existing) — calls `contentBlocker.attach(to: tab.webView)` after `TabModel` construction. `WebViewConfiguration.make` (existing, unchanged).
-- Produces: `ContentBlocker` class with `prepare()`, `attach(to:)`, `isReady: Bool`. `RuleListStoring` protocol, `RuleListAttaching` protocol (both in `ContentBlocker.swift`). Task 3 reads `contentBlocker.isReady` from `TabsManager`.
+- Produces: `ContentBlocker` class with `prepare(version:jsonString:)`, `attach(to:)`, `isReady: Bool`. `RuleListStoring` protocol, `RuleListAttaching` protocol (both in `ContentBlocker.swift`). Task 3 reads `contentBlocker.isReady` from `TabsManager`.
 
-- [ ] **Step 1: Write unit tests**
+- [ ] **Step 1: Add `generated` folder reference to pbxproj**
+
+This must happen before unit tests, because the integration compile test
+reads `blocklist.json` from `Bundle.main`. Four edits to
+`ios/Blanc/Blanc.xcodeproj/project.pbxproj`, following the exact pattern of
+the existing `pages` folder reference:
+
+**Edit 1** — add a PBXBuildFile entry in the `PBXBuildFile` section, after the `pages in Resources` line:
+
+```
+		502D58422FFED0A000B5B1DE /* generated in Resources */ = {isa = PBXBuildFile; fileRef = 502D58432FFED0A000B5B1DE /* generated */; };
+```
+
+**Edit 2** — add a PBXFileReference entry in the `PBXFileReference` section, after the `pages` line:
+
+```
+		502D58432FFED0A000B5B1DE /* generated */ = {isa = PBXFileReference; lastKnownFileType = folder; name = generated; path = ../../adblock/generated; sourceTree = "<group>"; };
+```
+
+**Edit 3** — add the file reference to the root PBXGroup's children array (after the `pages` entry):
+
+```
+				502D58432FFED0A000B5B1DE /* generated */,
+```
+
+**Edit 4** — add the build file to the Blanc target's Resources build phase files array (after `pages in Resources`):
+
+```
+				502D58422FFED0A000B5B1DE /* generated in Resources */,
+```
+
+- [ ] **Step 2: Write unit tests**
 
 Create `ios/Blanc/BlancTests/ContentBlockerTests.swift`:
 
@@ -325,7 +366,9 @@ final class ContentBlockerTests: XCTestCase {
 
     final class FakeAttachTarget: RuleListAttaching {
         var attachCount = 0
-        func attachContentBlockingRules() { attachCount += 1 }
+        func attachContentBlockingRules(from blocker: ContentBlocker) {
+            attachCount += 1
+        }
     }
 
     // MARK: - Tests
@@ -334,7 +377,7 @@ final class ContentBlockerTests: XCTestCase {
         let store = FakeRuleListStore()
         store.lookupResult = true
         let blocker = ContentBlocker(store: store)
-        blocker.prepare()
+        blocker.prepare(version: "abc", jsonString: "[]")
 
         XCTAssertTrue(blocker.isReady)
     }
@@ -344,7 +387,7 @@ final class ContentBlockerTests: XCTestCase {
         store.lookupResult = false
         store.compileResult = false
         let blocker = ContentBlocker(store: store)
-        blocker.prepare()
+        blocker.prepare(version: "abc", jsonString: "[]")
 
         XCTAssertFalse(blocker.isReady)
 
@@ -359,7 +402,7 @@ final class ContentBlockerTests: XCTestCase {
         let store = FakeRuleListStore()
         store.lookupResult = true
         let blocker = ContentBlocker(store: store)
-        blocker.prepare()
+        blocker.prepare(version: "abc", jsonString: "[]")
 
         let target = FakeAttachTarget()
         blocker.attach(to: target)
@@ -372,7 +415,7 @@ final class ContentBlockerTests: XCTestCase {
         store.lookupResult = false
         store.compileResult = false
         let blocker = ContentBlocker(store: store)
-        blocker.prepare()
+        blocker.prepare(version: "abc", jsonString: "[]")
 
         let target1 = FakeAttachTarget()
         let target2 = FakeAttachTarget()
@@ -393,7 +436,7 @@ final class ContentBlockerTests: XCTestCase {
         let store = FakeRuleListStore()
         store.lookupResult = true
         let blocker = ContentBlocker(store: store)
-        blocker.prepare()
+        blocker.prepare(version: "abc", jsonString: "[]")
 
         let target = FakeAttachTarget()
         blocker.attach(to: target)
@@ -404,19 +447,19 @@ final class ContentBlockerTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: Verify tests fail to compile**
+- [ ] **Step 3: Verify tests fail to compile**
 
 ```bash
 cd ios/Blanc && xcodebuild test \
   -scheme Blanc \
-  -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
   -only-testing BlancTests/ContentBlockerTests \
   2>&1 | tail -20
 ```
 
 Expected: compile error — `RuleListStoring`, `RuleListAttaching`, `ContentBlocker` not found.
 
-- [ ] **Step 3: Write ContentBlocker implementation**
+- [ ] **Step 4: Write ContentBlocker implementation**
 
 Create `ios/Blanc/Blanc/ContentBlocker.swift`:
 
@@ -437,27 +480,28 @@ protocol RuleListStoring {
     )
 }
 
-protocol RuleListAttaching {
-    func attachContentBlockingRules()
+protocol RuleListAttaching: AnyObject {
+    func attachContentBlockingRules(from blocker: ContentBlocker)
 }
 
 extension WKWebView: RuleListAttaching {
-    func attachContentBlockingRules() {
-        guard let ruleList = ContentBlocker.shared?.compiledRuleList else { return }
+    func attachContentBlockingRules(from blocker: ContentBlocker) {
+        guard let ruleList = blocker.compiledRuleList else { return }
         configuration.userContentController.add(ruleList)
     }
 }
 
 final class WKRuleListStoreAdapter: RuleListStoring {
     private let store = WKContentRuleListStore.default()
+    weak var blocker: ContentBlocker?
 
     func lookupRuleList(
         forIdentifier identifier: String,
         found: @escaping (Bool) -> Void
     ) {
-        store?.lookUpContentRuleList(forIdentifier: identifier) { ruleList, _ in
+        store?.lookUpContentRuleList(forIdentifier: identifier) { [weak self] ruleList, _ in
             if let ruleList {
-                ContentBlocker.shared?.compiledRuleList = ruleList
+                self?.blocker?.compiledRuleList = ruleList
                 found(true)
             } else {
                 found(false)
@@ -473,9 +517,9 @@ final class WKRuleListStoreAdapter: RuleListStoring {
         store?.compileContentRuleList(
             forIdentifier: identifier,
             encodedContentRuleList: encodedContentRuleList
-        ) { ruleList, error in
+        ) { [weak self] ruleList, error in
             if let ruleList {
-                ContentBlocker.shared?.compiledRuleList = ruleList
+                self?.blocker?.compiledRuleList = ruleList
                 completed(true)
             } else {
                 if let error { print("ContentBlocker compile error: \(error)") }
@@ -487,8 +531,6 @@ final class WKRuleListStoreAdapter: RuleListStoring {
 
 @Observable
 final class ContentBlocker {
-    static var shared: ContentBlocker?
-
     var isReady = false
 
     @ObservationIgnored var compiledRuleList: WKContentRuleList?
@@ -497,48 +539,54 @@ final class ContentBlocker {
 
     init(store: RuleListStoring = WKRuleListStoreAdapter()) {
         self.store = store
-        ContentBlocker.shared = self
+        if let adapter = store as? WKRuleListStoreAdapter {
+            adapter.blocker = self
+        }
     }
 
-    func prepare() {
+    static func loadBundledBlocklist() -> (version: String, json: String)? {
         guard let metaURL = Bundle.main.url(
             forResource: "blocklist.meta",
             withExtension: "json",
             subdirectory: "generated"
-        ) else { return }
+        ) else { return nil }
 
         guard let metaData = try? Data(contentsOf: metaURL),
               let meta = try? JSONSerialization.jsonObject(with: metaData) as? [String: Any],
-              let version = meta["version"] as? String else { return }
+              let version = meta["version"] as? String else { return nil }
 
+        guard let jsonURL = Bundle.main.url(
+            forResource: "blocklist",
+            withExtension: "json",
+            subdirectory: "generated"
+        ) else { return nil }
+
+        guard let json = try? String(contentsOf: jsonURL, encoding: .utf8) else { return nil }
+
+        return (version, json)
+    }
+
+    func prepare(version: String, jsonString: String) {
         store.lookupRuleList(forIdentifier: version) { [weak self] found in
             guard let self else { return }
             if found {
                 self.isReady = true
                 self.drainPending()
             } else {
-                self.compile(version: version)
+                self.compile(version: version, jsonString: jsonString)
             }
         }
     }
 
     func attach(to target: RuleListAttaching) {
         if isReady {
-            target.attachContentBlockingRules()
+            target.attachContentBlockingRules(from: self)
         } else {
             pendingTargets.append(target)
         }
     }
 
-    private func compile(version: String) {
-        guard let jsonURL = Bundle.main.url(
-            forResource: "blocklist",
-            withExtension: "json",
-            subdirectory: "generated"
-        ) else { return }
-
-        guard let jsonString = try? String(contentsOf: jsonURL, encoding: .utf8) else { return }
-
+    private func compile(version: String, jsonString: String) {
         store.compileRuleList(
             forIdentifier: version,
             encodedContentRuleList: jsonString
@@ -553,25 +601,27 @@ final class ContentBlocker {
         let targets = pendingTargets
         pendingTargets.removeAll()
         for target in targets {
-            target.attachContentBlockingRules()
+            target.attachContentBlockingRules(from: self)
         }
     }
 }
 ```
 
-- [ ] **Step 4: Run unit tests and verify they pass**
+- [ ] **Step 5: Run unit tests and verify they pass**
 
 ```bash
 cd ios/Blanc && xcodebuild test \
   -scheme Blanc \
-  -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
   -only-testing BlancTests/ContentBlockerTests \
   2>&1 | tail -30
 ```
 
-Expected: all 5 tests pass.
+Expected: all 5 tests pass. Unit tests use `FakeRuleListStore` and
+`FakeAttachTarget` — no bundle resources needed, no opaque
+`WKContentRuleList` needed.
 
-- [ ] **Step 5: Write the integration compile test**
+- [ ] **Step 6: Write the integration compile test**
 
 Add to `ios/Blanc/BlancTests/ContentBlockerTests.swift`:
 
@@ -579,23 +629,14 @@ Add to `ios/Blanc/BlancTests/ContentBlockerTests.swift`:
 func testBundledBlocklistCompilesInWebKit() {
     let expectation = expectation(description: "WKContentRuleList compiles")
 
-    guard let jsonURL = Bundle.main.url(
-        forResource: "blocklist",
-        withExtension: "json",
-        subdirectory: "generated"
-    ) else {
-        XCTFail("blocklist.json not found in bundle")
-        return
-    }
-
-    guard let jsonString = try? String(contentsOf: jsonURL, encoding: .utf8) else {
-        XCTFail("Could not read blocklist.json")
+    guard let loaded = ContentBlocker.loadBundledBlocklist() else {
+        XCTFail("blocklist.json or blocklist.meta.json not found in bundle")
         return
     }
 
     WKContentRuleListStore.default()?.compileContentRuleList(
-        forIdentifier: "integration-test",
-        encodedContentRuleList: jsonString
+        forIdentifier: "integration-test-\(loaded.version)",
+        encodedContentRuleList: loaded.json
     ) { ruleList, error in
         XCTAssertNotNil(ruleList, "Compile failed: \(error?.localizedDescription ?? "unknown")")
         expectation.fulfill()
@@ -605,37 +646,12 @@ func testBundledBlocklistCompilesInWebKit() {
 }
 ```
 
-- [ ] **Step 6: Add `generated` folder reference to pbxproj**
-
-Four edits to `ios/Blanc/Blanc.xcodeproj/project.pbxproj`, following the exact pattern of the existing `pages` folder reference:
-
-**Edit 1** — add a PBXBuildFile entry in the `PBXBuildFile` section, after the `pages in Resources` line:
-
-```
-		502D58422FFED0A000B5B1DE /* generated in Resources */ = {isa = PBXBuildFile; fileRef = 502D58432FFED0A000B5B1DE /* generated */; };
-```
-
-**Edit 2** — add a PBXFileReference entry in the `PBXFileReference` section, after the `pages` line:
-
-```
-		502D58432FFED0A000B5B1DE /* generated */ = {isa = PBXFileReference; lastKnownFileType = folder; name = generated; path = ../../adblock/generated; sourceTree = "<group>"; };
-```
-
-**Edit 3** — add the file reference to the root PBXGroup's children array (after the `pages` entry):
-
-```
-				502D58432FFED0A000B5B1DE /* generated */,
-```
-
-**Edit 4** — add the build file to the Blanc target's Resources build phase files array (after `pages in Resources`):
-
-```
-				502D58422FFED0A000B5B1DE /* generated in Resources */,
-```
-
 - [ ] **Step 7: Wire ContentBlocker into TabsManager**
 
-Modify `ios/Blanc/Blanc/TabsManager.swift`. Add the `contentBlocker` property alongside the existing `schemeHandler` and `bridge`, call `prepare()` in `init()`, and call `attach(to:)` after tab construction:
+Modify `ios/Blanc/Blanc/TabsManager.swift`. Add the `contentBlocker`
+property alongside the existing `schemeHandler` and `bridge`, load the
+bundled blocklist and call `prepare(version:jsonString:)` in `init()`, and
+call `attach(to:)` after tab construction:
 
 ```swift
 import Observation
@@ -660,7 +676,9 @@ final class TabsManager {
     }
 
     init() {
-        contentBlocker.prepare()
+        if let loaded = ContentBlocker.loadBundledBlocklist() {
+            contentBlocker.prepare(version: loaded.version, jsonString: loaded.json)
+        }
         createTab()
     }
 
@@ -706,11 +724,13 @@ final class TabsManager {
 ```bash
 cd ios/Blanc && xcodebuild test \
   -scheme Blanc \
-  -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
   2>&1 | grep -E '(Test Suite|Test Case|Executed|error:)'
 ```
 
-Expected: all existing M0–M4 tests + new ContentBlocker tests pass. The integration test (`testBundledBlocklistCompilesInWebKit`) compiles the real bundled JSON and confirms WebKit accepts it.
+Expected: all existing M0–M4 tests + new ContentBlocker tests pass. The
+integration test (`testBundledBlocklistCompilesInWebKit`) compiles the real
+bundled JSON and confirms WebKit accepts it.
 
 - [ ] **Step 9: Commit**
 
@@ -808,7 +828,7 @@ In `spec/parity-matrix.md`, change the F12 row's iOS column from `PLANNED` to `P
 ```bash
 cd ios/Blanc && xcodebuild build \
   -scheme Blanc \
-  -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
   2>&1 | tail -5
 ```
 
@@ -822,7 +842,7 @@ Expected: `BUILD SUCCEEDED`. Launch in the simulator and verify:
 ```bash
 cd ios/Blanc && xcodebuild test \
   -scheme Blanc \
-  -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
   2>&1 | grep -E '(Test Suite|Test Case|Executed|error:)'
 ```
 
