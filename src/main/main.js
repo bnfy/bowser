@@ -1,7 +1,6 @@
 const { app, BrowserWindow, WebContentsView, session, ipcMain, Menu, nativeTheme, nativeImage, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const os = require('os');
 const crypto = require('crypto');
 const { pathToFileURL } = require('url');
 const { setupAdBlocker, setAdBlockEnabled, getBlocker } = require('./adblock');
@@ -204,8 +203,16 @@ function chromeClientHintBitness() {
 }
 
 function chromeClientHintPlatformVersion() {
-  if (process.platform === 'darwin') return os.release();
-  return '';
+  // Chrome's client hint carries the macOS *product* version (e.g. "26.0.0"),
+  // not the Darwin kernel version os.release() returns. Electron's
+  // process.getSystemVersion() is the product-version accessor (documented as
+  // returning the OS version rather than the kernel version, unlike
+  // os.release()); pad to Chrome's X.Y.Z shape. Windows/Linux desktop Chrome
+  // send an empty value here.
+  if (process.platform !== 'darwin') return '';
+  const parts = process.getSystemVersion().split('.');
+  while (parts.length < 3) parts.push('0');
+  return parts.slice(0, 3).join('.');
 }
 
 // Strip Electron/app tokens and use Chrome's reduced UA form so sites see
@@ -1867,7 +1874,10 @@ app.whenReady().then(async () => {
     ses.webRequest.onBeforeSendHeaders({ urls: ['<all_urls>'] }, (details, callback) => {
       const h = details.requestHeaders;
       setHeader(h, 'sec-ch-ua', chUa, { add: true });
-      setHeader(h, 'sec-ch-ua-full-version-list', chUaFull, { add: true });
+      // High-entropy hint: only rewrite it when Chromium already decided to
+      // send it (i.e. the server negotiated it via Accept-CH), matching real
+      // Chrome — don't force it onto every request like the low-entropy hints.
+      setHeader(h, 'sec-ch-ua-full-version-list', chUaFull);
       setHeader(h, 'sec-ch-ua-platform', `"${chromeClientHintPlatform()}"`);
       setHeader(h, 'sec-ch-ua-platform-version', `"${chromeClientHintPlatformVersion()}"`);
       setHeader(h, 'sec-ch-ua-arch', `"${chromeClientHintArchitecture()}"`);
