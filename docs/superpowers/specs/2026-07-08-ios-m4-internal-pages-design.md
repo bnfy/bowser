@@ -52,11 +52,14 @@ the bundled pages folder, mirroring the desktop's `pages.js` security model:
    excluded — the basic-auth dialog is native on iOS (M12), not a web page.
 2. **Root serves the page.** A root path (`/` or empty) serves
    `<host>.html`.
-3. **Basename-only for assets.** Any deeper path is reduced to its last
-   component and validated against a strict `^[\w.-]+$` allowlist —
-   rejecting `..`, path separators, and anything else — before being
-   resolved against the one flat pages directory. No subdirectories, no
-   traversal.
+3. **Basename into the flat dir.** Any deeper path is reduced to its final
+   path component (the `path.basename` equivalent), validated against a
+   strict `^[\w.-]+$` charset allowlist, then resolved against the one flat
+   pages directory — exactly as desktop does. Traversal is defeated the
+   same way it is on desktop: basename strips any `../` prefix, so the
+   lookup is always confined to the flat directory and a stripped path
+   resolves to a filename that either isn't a bundled asset (→ 404) or is a
+   directory (→ read-as-file fails). No subdirectories.
 4. **MIME by extension.** `.html`→`text/html`, `.css`→`text/css`,
    `.js`→`text/javascript`, `.svg`→`image/svg+xml`, `.png`→`image/png`.
    A missing file yields a 404-style failure.
@@ -100,35 +103,59 @@ implemented yet fails fast.
 
 ## M4 bridge surface
 
-Per the "full bridge, empty data" decision, every method the **newtab**
-page calls is wired now; the ones whose backing features don't exist yet
-return empty values. Later milestones replace the stub bodies with real
-data — they never have to add new bridge plumbing.
+The "full bridge, empty data" decision has to account for the shared
+bundle's **own link graph**, not just newtab in isolation. The unchanged
+newtab page has a visible `favorites` link to `blanc://bookmarks/`, and the
+favorites page cross-links Settings, History, and Downloads — so a user
+can reach those pages at M4 by tapping through. The reachable set is
+therefore **newtab, bookmarks, history, downloads, settings**. The bridge
+implements **every method those pages call**, so no reachable page becomes
+an inert shell with uncaught promise rejections. Read methods return
+empty/defaults; write methods are no-ops that resolve cleanly. Later
+milestones replace the stub bodies with real data — they never add new
+bridge plumbing.
 
-| Method | M4 return | Real data lands |
-|--------|-----------|-----------------|
-| `appVersion()` | the app's real version string | — |
-| `bookmarks.list()` | `[]` | M7 (Favorites) |
-| `bookmarks.clearFavicon(url)` | no-op | M7 |
-| `start.data()` | `{ groups: [], blockedThisWeek: 0 }` | groups M8, blocked count M5 |
-| `start.focusGroup(id)` | no-op | M8 (Tab groups) |
-| unknown group/method | rejects with an error | — |
+| Group / method | M4 behavior |
+|----------------|-------------|
+| `appVersion()` | the app's real version string |
+| `clearBrowsingData()` | no-op, resolves |
+| `bookmarks.list()` | `[]` |
+| `bookmarks.remove(id)` / `clearFavicon(url)` | no-op, resolves |
+| `history.list({query, limit})` | `[]` |
+| `history.remove(url, visitedAt)` / `clear()` | no-op, resolves |
+| `downloads.list()` | `[]` |
+| `downloads.cancel/open/show(id)` / `clearFinished()` | no-op, resolves |
+| `settings.get()` | the generated `BlancSettings` defaults |
+| `settings.set(patch)` | no-op, resolves |
+| `settings.syncGet()` | a disabled/empty sync status |
+| `settings.syncEnable/syncDisable/syncNow(...)` | no-op, resolves |
+| `settings.activateSupporter(key)` | no-op, resolves to a neutral result |
+| `permissions.list()` | `[]` |
+| `permissions.remove(key)` | no-op, resolves |
+| `defaultBrowser.get()` | `false` |
+| `defaultBrowser.set()` | no-op, resolves |
+| `start.data()` | `{ groups: [], blockedThisWeek: 0 }` |
+| `start.focusGroup(id)` | no-op, resolves |
+| unknown group/method | **rejects** with an error |
+
+Where a stub has a known milestone, that is where it becomes real:
+favorites/history at **M7**, settings-lite at **M6**, downloads at
+**M11**, permissions/basic-auth at **M12**, supporter at **M13**, tab
+groups at **M8**, and the blocked count at **M5**.
 
 Because favorites and groups come back empty, the newtab page renders its
-full layout with the empty-state affordances the page already has: the
-favorites row shows its "♥ a page to pin it here" hint, the groups section
-stays hidden (`!groups.length`), and the footer reads "0 ads blocked this
-week." It looks structurally complete but sparse, and fills in as M5/M7/M8
-land — with no further bridge work.
+full layout with the empty-state affordances it already has: the favorites
+row shows its "♥ a page to pin it here" hint, the groups section stays
+hidden (`!groups.length`), and the footer reads "0 ads blocked this week."
+Tapping through to bookmarks/history/downloads/settings shows each page
+rendering cleanly in an **empty/default** state — non-functional until its
+milestone, but never an erroring shell.
 
-Other internal pages (`history`, `downloads`, `settings`, …) are present
-in the bundle and **served** by the scheme handler, but their bridge
-methods are **not** implemented at M4 and there is no in-app path to reach
-them yet (the M3 slash-command subset is only `/new` and `/close`). They
-render their static shell if navigated to directly, but their data calls
-reject until each page's milestone (settings M6, favorites/history M7,
-downloads M11). This is intended: M4 delivers the newtab ledger and the
-reusable serving+bridge infrastructure, not every page's data.
+Two pages are intentionally **outside** the reachable set: `shortcuts`
+(nothing in the bundle links to it) and `error`/`auth` (they make no bridge
+calls at all). The scheme handler still serves `shortcuts` and `error` if
+navigated to directly, but `shortcuts.list()` is left to reject as an
+unknown method — harmless, because nothing reaches it at M4.
 
 ## New-tab behavior
 
@@ -203,8 +230,9 @@ New tab → TabsManager.createTab() → blanc://newtab/
 
 ## What is NOT in M4
 
-- Favorites/history/downloads/settings **data** (their pages render shells
-  only) — M6/M7/M11.
+- Favorites/history/downloads/settings **functionality** — those pages are
+  reachable and render in an empty/default state, but their controls are
+  inert (reads empty, writes no-op) until M6/M7/M11/M12.
 - The weekly blocked count as a real number — M5 (ad blocking).
 - Tab groups on the ledger — M8.
 - Private-tab newtab variant (`?private=1`) — M9.
@@ -218,16 +246,23 @@ Unit tests in `BlancTests/` for the **scheme handler's path resolution**
 (the security-critical, web-view-free logic):
 
 - Known host + root path → serves `<host>.html`.
-- Unknown host → refused.
-- Asset basename (`pages.css`) → resolves within the flat dir.
-- Traversal attempt (`../../etc/passwd`, `foo/bar.css`) → rejected.
+- Unknown host → fails cleanly (no file lookup).
+- Flat asset (`pages.css`) → resolves within the flat dir.
+- Path with directory components → resolves to its **basename** in the flat
+  dir (`sub/pages.css` → serves `pages.css`), matching desktop's
+  `path.basename`.
+- Traversal attempt (`../../etc/passwd`) → basename `passwd`, not a bundled
+  asset → 404 (the flat-dir confinement, not a separator check, defeats it).
+- Basename failing the `^[\w.-]+$` charset check → rejected.
 - Each mapped extension → correct MIME type.
-- Unmapped/missing file → failure response.
+- Missing file → failure response.
 
 No unit tests for the bridge round-trip (it needs a live `WKWebView`);
 it is verified on the simulator: a new tab renders the newtab ledger with
 today's date, the empty-favorites hint, the "0 ads blocked this week"
 footer, and the real version string — proving the scheme handler serves
 the bundle and the bridge answers `appVersion()`/`bookmarks.list()`/
-`start.data()`. Consistent with M0–M3 and the desktop project (no UI
-tests).
+`start.data()`. As a second check, tapping through favorites →
+bookmarks → settings/history/downloads shows each reachable page rendering
+without uncaught console errors (empty/default states), confirming the
+stub surface. Consistent with M0–M3 and the desktop project (no UI tests).
