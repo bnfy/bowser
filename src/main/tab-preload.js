@@ -1,77 +1,10 @@
-// Preload attached to every tab WebContentsView and OAuth-style popup.
-// Web content gets only a small Chrome-compatibility surface (window.chrome
-// app/csi/loadTimes). The privileged IPC bridge is exposed only when the
-// document is one of our own blanc:// internal pages (the check re-runs on
-// every navigation, so a tab that leaves an internal page loses the API).
-// The main process additionally verifies the sender URL on every pages:* IPC
-// call.
-const { contextBridge, ipcRenderer, webFrame } = require('electron');
-
-webFrame.executeJavaScript(`
-(() => {
-  const define = (target, key, value) => {
-    if (target && !Object.prototype.hasOwnProperty.call(target, key)) {
-      Object.defineProperty(target, key, {
-        value,
-        enumerable: true,
-        configurable: true,
-        writable: true,
-      });
-    }
-  };
-  window.chrome = window.chrome || {};
-  define(window.chrome, 'app', {
-    isInstalled: false,
-    InstallState: {
-      DISABLED: 'disabled',
-      INSTALLED: 'installed',
-      NOT_INSTALLED: 'not_installed',
-    },
-    RunningState: {
-      CANNOT_RUN: 'cannot_run',
-      READY_TO_RUN: 'ready_to_run',
-      RUNNING: 'running',
-    },
-    getDetails: () => null,
-    getIsInstalled: () => false,
-    installState: (callback) => {
-      if (typeof callback === 'function') setTimeout(() => callback('not_installed'), 0);
-    },
-    runningState: () => 'cannot_run',
-  });
-  define(window.chrome, 'csi', () => {
-    const timing = performance.timing || {};
-    const navigationStart = timing.navigationStart || performance.timeOrigin || Date.now();
-    return {
-      onloadT: timing.loadEventStart || 0,
-      startE: navigationStart,
-      pageT: Math.max(0, Date.now() - navigationStart),
-      tran: 15,
-    };
-  });
-  define(window.chrome, 'loadTimes', () => {
-    const timing = performance.timing || {};
-    const nav = performance.getEntriesByType?.('navigation')?.[0];
-    const navigationStart = timing.navigationStart || performance.timeOrigin || Date.now();
-    const seconds = (value) => (value || navigationStart) / 1000;
-    return {
-      requestTime: seconds(navigationStart),
-      startLoadTime: seconds(navigationStart),
-      commitLoadTime: seconds(timing.responseStart),
-      finishDocumentLoadTime: seconds(timing.domContentLoadedEventEnd),
-      finishLoadTime: seconds(timing.loadEventEnd || timing.loadEventStart),
-      firstPaintTime: 0,
-      firstPaintAfterLoadTime: 0,
-      navigationType: nav?.type || 'Other',
-      wasFetchedViaSpdy: false,
-      wasNpnNegotiated: false,
-      npnNegotiatedProtocol: 'unknown',
-      wasAlternateProtocolAvailable: false,
-      connectionInfo: 'unknown',
-    };
-  });
-})();
-`, true).catch(() => {});
+// Preload attached to every ordinary tab WebContentsView. The privileged IPC
+// bridge is exposed only when the document is one of our own blanc:// internal
+// pages (the check re-runs on every navigation, so a tab that leaves an
+// internal page loses the API). The main process additionally verifies the
+// sender URL on every pages:* IPC call. Chrome compatibility lives in the
+// session-wide chrome-compat-preload.js so adopted OAuth children receive it.
+const { contextBridge, ipcRenderer } = require('electron');
 
 if (window.location.protocol === 'blanc:') {
   contextBridge.exposeInMainWorld('bowserPages', {

@@ -51,6 +51,10 @@ xvfb-run -a npm run test:acceptance:desktop   # ...on a headless Linux/CI box
 The desktop script is plain `cucumber-js` so it works on a dev machine with a
 display (macOS); prefix `xvfb-run -a` on headless Linux.
 
+Google OAuth browser-compatibility coverage is intentionally separate from the
+cross-platform product scenarios here. See [`test/oauth/`](../oauth/README.md)
+for the deterministic Electron contract and opt-in live-site canary.
+
 ## What's implemented vs. backlog
 
 The **`runnable`** profile is the subset wired to real assertions today — the

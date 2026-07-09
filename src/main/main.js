@@ -4,6 +4,12 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { pathToFileURL } = require('url');
 const { setupAdBlocker, setAdBlockEnabled, getBlocker } = require('./adblock');
+const {
+  chromeClientHintPlatform,
+  chromeClientHintArchitecture,
+  chromeClientHintBitness,
+  chromeClientHintPlatformVersion,
+} = require('./chrome-client-hints');
 const { registerPagesScheme, setupPages } = require('./pages');
 const { setupPermissionPolicy, setPermissionPrompter } = require('./permissions');
 const { setupAutoUpdater, checkForUpdatesManually } = require('./updater');
@@ -183,36 +189,6 @@ function chromeLikeUserAgent(ua) {
     next = next.replace(/Chrome\/[\d.]+/, `Chrome/${chromeReducedVersion}`);
   }
   return next;
-}
-
-function chromeClientHintPlatform() {
-  if (process.platform === 'darwin') return 'macOS';
-  if (process.platform === 'win32') return 'Windows';
-  if (process.platform === 'linux') return 'Linux';
-  return process.platform;
-}
-
-function chromeClientHintArchitecture() {
-  if (process.arch === 'arm64') return 'arm';
-  if (process.arch === 'x64' || process.arch === 'ia32') return 'x86';
-  return process.arch;
-}
-
-function chromeClientHintBitness() {
-  return process.arch.includes('64') ? '64' : '32';
-}
-
-function chromeClientHintPlatformVersion() {
-  // Chrome's client hint carries the macOS *product* version (e.g. "26.0.0"),
-  // not the Darwin kernel version os.release() returns. Electron's
-  // process.getSystemVersion() is the product-version accessor (documented as
-  // returning the OS version rather than the kernel version, unlike
-  // os.release()); pad to Chrome's X.Y.Z shape. Windows/Linux desktop Chrome
-  // send an empty value here.
-  if (process.platform !== 'darwin') return '';
-  const parts = process.getSystemVersion().split('.');
-  while (parts.length < 3) parts.push('0');
-  return parts.slice(0, 3).join('.');
 }
 
 // Strip Electron/app tokens and use Chrome's reduced UA form so sites see
@@ -832,8 +808,9 @@ const TAB_WEB_PREFERENCES = {
   // Chromium's built-in PDF viewer is a plugin; without this flag
   // PDFs download instead of rendering inline.
   plugins: true,
-  // Exposes a data API to our own blanc:// pages ONLY — see the
-  // guards in tab-preload.js and pages.js. Web content gets nothing.
+  // Exposes a data API to our own blanc:// pages ONLY — see the guards in
+  // tab-preload.js and pages.js. Ordinary web content gets only the
+  // unprivileged, session-wide Chrome compatibility surface.
   preload: path.join(__dirname, 'tab-preload.js'),
 };
 
@@ -1060,7 +1037,6 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
           overrideBrowserWindowOptions: {
             autoHideMenuBar: true,
             webPreferences: {
-              preload: path.join(__dirname, 'tab-preload.js'),
               contextIsolation: true,
               nodeIntegration: false,
               sandbox: true,
@@ -1853,6 +1829,16 @@ function createMainWindow() {
 
 app.whenReady().then(async () => {
   const ses = session.defaultSession;
+
+  // Unlike a webPreferences preload, a session preload also reaches adopted
+  // target=_blank children without replacing the Chromium-created opener
+  // context. Google Identity Services can use either a popup or tab-style
+  // child depending on the relying site, so the Chrome compatibility surface
+  // must cover both paths.
+  ses.registerPreloadScript({
+    type: 'frame',
+    filePath: path.join(__dirname, 'chrome-compat-preload.js'),
+  });
 
   // Fallback: patch Sec-CH-UA HTTP headers for webContents where the CDP
   // debugger couldn't attach (e.g. already in use). The CDP override above

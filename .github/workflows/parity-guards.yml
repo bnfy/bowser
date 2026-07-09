@@ -27,6 +27,8 @@ jobs:
           node tokens/build.mjs --check
           node settings-schema/build.mjs --check
           node copy/build.mjs --check
+      - name: Unit regression tests
+        run: npm run test:unit
 
   acceptance-wiring:
     # The shared Gherkin scenarios must resolve to the desktop step definitions.
@@ -44,3 +46,20 @@ jobs:
       - run: npm ci
       - name: Acceptance step definitions resolve (dry-run)
         run: npm run test:acceptance:dry
+
+  oauth-compatibility:
+    # A deterministic, two-origin OAuth fixture exercises the real Electron
+    # popup/tab policies, trusted user activation, opener callback, Chrome
+    # identity signals, and FedCM fallback. Cross-platform mapping branches run
+    # in the unit job above; live third-party canaries stay opt-in because their
+    # UI changes independently of Blanc and would make pull requests flaky.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Google OAuth compatibility contract
+        run: xvfb-run -a npm run test:oauth:desktop

@@ -3,6 +3,7 @@ const { ElectronBlocker } = require('@ghostery/adblocker-electron');
 const fs = require('fs');
 const path = require('path');
 const settings = require('./settings');
+const { installScriptletIsolation } = require('./adblock-scriptlets');
 
 // Cache the compiled filter engine on disk so we don't re-fetch and
 // re-parse EasyList/EasyPrivacy on every launch. The engine validates the
@@ -97,6 +98,12 @@ async function setupAdBlocker(session, { enabled = true } = {}) {
     read: fs.promises.readFile,
     write: fs.promises.writeFile,
   });
+
+  // Cosmetic filters can contain multiple uBO scriptlets for one page.
+  // Ghostery executes each in the page's global scope; isolating their
+  // declarations prevents one scriptlet from corrupting another's live
+  // Proxy closures while preserving network blocking and cosmetic CSS.
+  installScriptletIsolation(blocker);
 
   attachedSession = session;
   if (enabled) applyBlockingWithExceptions(session);
