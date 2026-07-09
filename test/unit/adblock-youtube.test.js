@@ -22,7 +22,7 @@ function match(engine, url, type = 'xmlhttprequest') {
   return engine.match(req);
 }
 
-test('YouTube ad endpoints are blocked by the filter engine', async (t) => {
+test('pinned filter lists match YouTube ad endpoints', async (t) => {
   const engine = loadEngine();
 
   const adUrls = [
@@ -41,7 +41,7 @@ test('YouTube ad endpoints are blocked by the filter engine', async (t) => {
   }
 });
 
-test('normal YouTube playback URLs are not blocked', async (t) => {
+test('pinned filter lists do not match normal YouTube playback URLs', async (t) => {
   const engine = loadEngine();
 
   const normalUrls = [
