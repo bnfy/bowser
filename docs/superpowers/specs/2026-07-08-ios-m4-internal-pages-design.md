@@ -138,6 +138,7 @@ bridge plumbing.
 | `defaultBrowser.set()` | `{ isDefault: false, canSet: false }` |
 | `start.data()` | `{ groups: [], blockedThisWeek: 0 }` |
 | `start.focusGroup(id)` | no-op, resolves |
+| `shortcuts.list()` | `[]` (typeable via the address bar) |
 | unknown group/method | **rejects** with an error |
 
 These shapes are exactly what `settings.js` reads back: it toggles the
@@ -162,11 +163,13 @@ Tapping through to bookmarks/history/downloads/settings shows each page
 rendering cleanly in an **empty/default** state — non-functional until its
 milestone, but never an erroring shell.
 
-Two pages are intentionally **outside** the reachable set: `shortcuts`
-(nothing in the bundle links to it) and `error`/`auth` (they make no bridge
-calls at all). The scheme handler still serves `shortcuts` and `error` if
-navigated to directly, but `shortcuts.list()` is left to reject as an
-unknown method — harmless, because nothing reaches it at M4.
+No page *links* to `shortcuts`, but `blanc://shortcuts/` is still typeable
+in the address bar (the address normalizer accepts any scheme), so its one
+call — `shortcuts.list()` → `[]` — is stubbed too, letting the page render
+its static slash-command section. `error`/`auth` make no bridge calls at
+all; the scheme handler serves `error` if navigated to directly, and `auth`
+is out of scope (native basic-auth, M12). A genuinely unknown group/method
+still rejects.
 
 ## New-tab behavior
 

@@ -15,7 +15,7 @@
 - **The injected global keeps the name `window.bowserPages`** — an internal identifier the shared bundle depends on; not renamed in the rebrand.
 - **Scheme handler follows desktop `path.basename` model:** known-host allowlist `{newtab, bookmarks, history, downloads, settings, error, shortcuts}`; deeper paths reduced to basename and validated against `^[\w.-]+$`; served from one flat directory. `auth` is excluded.
 - **Bridge response shapes are exact** (they are what `settings.js` and `newtab.js` read back): `permissions.list()` → `{}` (a record, not `[]`); `settings.syncGet()`/`syncNow()` → `{ enabled: false }`; `syncEnable(...)` → `{ ok: false, created: false, message, status: { enabled: false } }`; `syncDisable(...)` → `{ status: { enabled: false } }`; `activateSupporter(...)` → `{ ok: false, message }`; `defaultBrowser.get()`/`set()` → `{ isDefault: false, canSet: false }`; `start.data()` → `{ groups: [], blockedThisWeek: 0 }`; list reads → `[]`; no-op writes → `null`; unknown group/method → **rejects**.
-- **`settings.get()` reads defaults from `BlancSettingsDefaults`** (never hardcode the values), so the known-stale `usagePing` generated default is corrected at its source, not here.
+- **`settings.get()` reads defaults from `BlancSettingsDefaults`** (never hardcode the values), so the stub always reflects the real generated defaults (including `usagePing`, which intentionally defaults `true` — telemetry now defaults opted-in).
 - **No iOS 26+ APIs in M4** — `WKURLSchemeHandler`/`WKScriptMessageHandler`/`evaluateJavaScript` are all long-available; no `#available` gates are needed.
 - **Xcode 26 filesystem-synchronized groups:** new `.swift` files dropped in `ios/Blanc/Blanc/` or `ios/Blanc/BlancTests/` are auto-included in their target. Only the out-of-tree pages folder needs an explicit `project.pbxproj` edit.
 - **Build/test destination:** this environment has an **iPhone 17** simulator, not iPhone 16 (Tasks in M3 used iPhone 17).
@@ -322,15 +322,20 @@ final class PagesBridgeTests: XCTestCase {
         } else { XCTFail("settings must be an object") }
     }
 
-    // Unknown group/method rejects rather than resolving.
+    // shortcuts.list is stubbed (typeable via the address bar), not rejected.
+    func testShortcutsListStubbed() {
+        XCTAssertEqual(value("shortcuts", "list"), .array([]))
+    }
+
+    // A genuinely unknown group/method rejects rather than resolving.
     func testUnknownRejects() {
         switch PagesBridge.response(group: "bogus", method: "nope", appVersion: "9.9") {
         case .reject: break
         case .value: XCTFail("unknown method should reject")
         }
-        switch PagesBridge.response(group: "shortcuts", method: "list", appVersion: "9.9") {
-        case .reject: break  // shortcuts is unreachable at M4 and deliberately unstubbed
-        case .value: XCTFail("shortcuts.list should reject at M4")
+        switch PagesBridge.response(group: "settings", method: "teleport", appVersion: "9.9") {
+        case .reject: break  // unknown method on a known group still rejects
+        case .value: XCTFail("settings.teleport should reject")
         }
     }
 }
@@ -368,7 +373,9 @@ indirect enum JSONValue: Equatable {
         case (.null, .null): return true
         case (.array(let a), .array(let b)): return a == b
         case (.object(let a), .object(let b)):
-            return a.count == b.count && zip(a, b).allSatisfy { $0.0 == $1.0 && $0.1 == $1.1 }
+            return a.count == b.count && zip(a, b).allSatisfy { pair in
+                pair.0.0 == pair.1.0 && pair.0.1 == pair.1.1
+            }
         default: return false
         }
     }
@@ -474,6 +481,11 @@ final class PagesBridge: NSObject, WKScriptMessageHandler {
             return .value(.object([("groups", .array([])), ("blockedThisWeek", .number(0))]))
         case ("start", "focusGroup"): return .value(.null)
 
+        // `shortcuts` is not linked from any page, but `blanc://shortcuts/` is
+        // typeable in the address bar (AddressNormalizer accepts any scheme),
+        // so its one read is stubbed rather than left to reject.
+        case ("shortcuts", "list"): return .value(.array([]))
+
         default:
             return .reject("Unknown method: \(group ?? "root").\(method)")
         }
@@ -573,6 +585,9 @@ final class PagesBridge: NSObject, WKScriptMessageHandler {
           data: function () { return call('start', 'data'); },
           focusGroup: function (id) { return call('start', 'focusGroup', { id: id }); },
         },
+        shortcuts: {
+          list: function () { return call('shortcuts', 'list'); },
+        },
       };
     })();
     """#
@@ -634,7 +649,7 @@ git commit -m "ios: bowserPages bridge — response shapes, JS shim, message han
 
 - [ ] **Step 1: Add the pages folder reference to the Xcode project**
 
-The pages folder lives outside the `ios/` tree, so the filesystem-synchronized group cannot auto-include it — it needs an explicit folder reference (a blue folder that copies verbatim into the app bundle as `pages/`). Make three exact edits to `ios/Blanc/Blanc.xcodeproj/project.pbxproj`.
+The pages folder lives outside the `ios/` tree, so the filesystem-synchronized group cannot auto-include it — it needs an explicit folder reference (a blue folder that copies verbatim into the app bundle as `pages/`). Make four exact edits to `ios/Blanc/Blanc.xcodeproj/project.pbxproj`.
 
 Edit 1 — add a `PBXBuildFile` (in the `PBXBuildFile` section):
 
@@ -684,6 +699,28 @@ Replace with:
 			);
 		};
 		502D58022FFEBF0D00B5B1DE /* Resources */ = {
+```
+
+Edit 4 — attach the folder reference to the root `PBXGroup`'s children, so its `sourceTree = "<group>"` resolves relative to `SOURCE_ROOT` (`ios/Blanc/`) and it appears in the navigator:
+
+Find:
+```
+		502D57EE2FFEBF0C00B5B1DE = {
+			isa = PBXGroup;
+			children = (
+				502D58312FFEC0EE00B5B1DE /* BlancSettings.swift */,
+				502D582F2FFEC0C300B5B1DE /* Tokens.swift */,
+				502D57F92FFEBF0C00B5B1DE /* Blanc */,
+```
+Replace with:
+```
+		502D57EE2FFEBF0C00B5B1DE = {
+			isa = PBXGroup;
+			children = (
+				502D58402FFED0A000B5B1DE /* pages */,
+				502D58312FFEC0EE00B5B1DE /* BlancSettings.swift */,
+				502D582F2FFEC0C300B5B1DE /* Tokens.swift */,
+				502D57F92FFEBF0C00B5B1DE /* Blanc */,
 ```
 
 - [ ] **Step 2: Create the configuration factory**
@@ -743,8 +780,8 @@ final class TabsManager {
 
     let normalizer = AddressNormalizer(searchEngine: BlancSettingsDefaults.searchEngine)
 
-    private let schemeHandler = BlancSchemeHandler()
-    private lazy var bridge = PagesBridge(manager: self)
+    @ObservationIgnored private let schemeHandler = BlancSchemeHandler()
+    @ObservationIgnored private lazy var bridge = PagesBridge(manager: self)
 
     static let newTabURL = URL(string: "blanc://newtab/")!
 
@@ -833,7 +870,6 @@ git commit -m "ios: serve blanc:// bundle + bowserPages bridge; new tabs open ne
 ## Notes for the implementer
 
 - **Never edit `src/renderer/pages/*`.** If a page appears broken, the fix is in the Swift bridge or scheme handler, not the shared bundle.
-- **The `pages` folder reference copies verbatim.** After a build, confirm the bundle contains `pages/newtab.html` if the scheme handler 404s: `find /tmp/blanc-m4-dd/Build/Products -path '*Blanc.app/pages/newtab.html'`. If the folder isn't bundled, re-check the three `project.pbxproj` edits in Step 1 (a folder reference must be `lastKnownFileType = folder` and wired into the app target's Resources phase).
+- **The `pages` folder reference copies verbatim.** After a build, confirm the bundle contains `pages/newtab.html` if the scheme handler 404s: `find /tmp/blanc-m4-dd/Build/Products -path '*Blanc.app/pages/newtab.html'`. If the folder isn't bundled, re-check the four `project.pbxproj` edits in Step 1 (a folder reference must be `lastKnownFileType = folder` and wired into the app target's Resources phase).
 - **`me.bnfy.blanc`** is the iOS bundle id (from `project.pbxproj`), distinct from the desktop `me.bnfy.bowser` appId — do not "reconcile" them.
-- **Known substrate discrepancy (out of scope):** `BlancSettingsDefaults.usagePing` is `true` in the generated file but F14/desktop `settings.js` say `false`. The `settings.get()` stub reads `BlancSettingsDefaults` deliberately, so fixing the generated default corrects this automatically — do not hardcode `false` here.
-```
+- **`settings.get()` reads `BlancSettingsDefaults` for every value** — including `usagePing`, which is intentionally `true` (telemetry now defaults opted-in). Never hardcode settings values in the stub; read them from the generated substrate so the page always reflects the real defaults.
