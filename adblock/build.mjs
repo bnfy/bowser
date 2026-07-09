@@ -54,6 +54,13 @@ function parseFilter(raw) {
     const opts = optStr.split(',');
     for (const opt of opts) {
       const o = opt.trim().toLowerCase();
+      if (o.startsWith('domain=')) {
+        const domain = parseDomainOption(o.slice('domain='.length));
+        if (!domain) { skipped.unsupported++; return null; }
+        if (domain.ifDomain) options.ifDomain = domain.ifDomain;
+        else options.unlessDomain = domain.unlessDomain;
+        continue;
+      }
       if (!SUPPORTED_OPTIONS.has(o)) {
         skipped.unsupported++;
         return null;
@@ -83,11 +90,42 @@ function parseFilter(raw) {
   if (options.thirdParty) trigger['load-type'] = ['third-party'];
   else if (options.firstParty) trigger['load-type'] = ['first-party'];
   if (options.resourceTypes?.length) trigger['resource-type'] = options.resourceTypes;
+  if (options.ifDomain?.length) trigger['if-domain'] = options.ifDomain;
+  else if (options.unlessDomain?.length) trigger['unless-domain'] = options.unlessDomain;
 
   return {
     rule: { trigger, action: { type: isException ? 'ignore-previous-rules' : 'block' } },
     isException,
   };
+}
+
+// ABP's $domain=a.com|~b.com scopes a rule to (or away from) page domains. It
+// maps to WKContentRuleList's if-domain / unless-domain: a leading `*` makes an
+// entry match the domain and its subdomains, mirroring ABP's subdomain-inclusive
+// semantics. WebKit can't mix inclusion and exclusion in one trigger, so a rule
+// that lists both is left unsupported rather than silently narrowed.
+function parseDomainOption(value) {
+  const include = [];
+  const exclude = [];
+  for (const entry of value.split('|')) {
+    let d = entry.trim();
+    if (!d) continue;
+    const negated = d.startsWith('~');
+    if (negated) d = d.slice(1);
+    // WebKit rejects the whole compiled list if any if/unless-domain entry
+    // isn't a plain hostname, so skip rules carrying e.g. IPv6 literals
+    // ([::1]) or IDNs that aren't already punycode.
+    if (!isHostname(d)) return null;
+    (negated ? exclude : include).push('*' + d);
+  }
+  if (include.length && exclude.length) return null;
+  if (include.length) return { ifDomain: include };
+  if (exclude.length) return { unlessDomain: exclude };
+  return null;
+}
+
+function isHostname(d) {
+  return /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/.test(d);
 }
 
 function patternToRegex(pattern) {

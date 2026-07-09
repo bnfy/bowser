@@ -93,3 +93,27 @@ test('WebKit blocklist contains YouTube ad-blocking rules', () => {
     'blocklist should contain an ads stats rule for youtube.com'
   );
 });
+
+test('WebKit blocklist carries the domain-scoped get_midroll rule', () => {
+  // get_midroll_ is a $domain=youtube.com rule in EasyList. The desktop engine
+  // blocks it (asserted above), so the WebKit backend must too — via an
+  // if-domain trigger, since build.mjs can't express $domain= any other way.
+  const rules = JSON.parse(
+    fs.readFileSync(path.join(GENERATED, 'blocklist.json'), 'utf8')
+  );
+
+  const midroll = rules.filter(
+    (r) =>
+      r.action.type === 'block' &&
+      /youtube\\\.com\/get_midroll_/.test(r.trigger['url-filter'])
+  );
+
+  assert.ok(
+    midroll.length > 0,
+    'blocklist should contain a get_midroll rule for youtube.com'
+  );
+  assert.ok(
+    midroll.every((r) => r.trigger['if-domain']?.includes('*youtube.com')),
+    'get_midroll rules should be scoped to youtube.com via if-domain'
+  );
+});

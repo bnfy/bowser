@@ -59,7 +59,10 @@ WebKit-version-dependent). EasyList + EasyPrivacy exceed that. But **multiple
 compiled lists can be attached to one web view**, so the pipeline:
 
 1. Converts network filters to `{ "trigger": { "url-filter", "resource-type",
-   "load-type": ["third-party"] }, "action": { "type": "block" } }`.
+   "load-type": ["third-party"], "if-domain"/"unless-domain" }, "action":
+   { "type": "block" } }` — `$domain=a.com|~b.com` maps to `if-domain`/
+   `unless-domain`, each entry `*`-prefixed so it matches subdomains too, the
+   way ABP's `$domain=` does.
 2. **Partitions** into several lists each under the cap, ordered by value:
    network-blocking (ads, then tracking) first, cosmetic (`css-display-none`)
    last.
