@@ -1,3 +1,53 @@
+/* ---- rotating hero messages ---- */
+(function () {
+  const messageEl = document.getElementById('heroMessage');
+  const messages = Array.from(document.querySelectorAll('[data-hero-message]'));
+  if (!messageEl || messages.length < 2) return;
+
+  const motionMq = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const ROTATION_MS = 6000;
+  const FADE_MS = 180;
+  let index = 0;
+  let rotationTimer = null;
+  let fadeTimer = null;
+
+  function scheduleRotation() {
+    clearTimeout(rotationTimer);
+    if (document.hidden) return;
+    rotationTimer = setTimeout(() => showMessage((index + 1) % messages.length), ROTATION_MS);
+  }
+
+  function renderMessage(nextIndex) {
+    index = nextIndex;
+    messages.forEach((message, messageIndex) => {
+      const active = messageIndex === index;
+      message.classList.toggle('is-active', active);
+      message.setAttribute('aria-hidden', String(!active));
+    });
+    messageEl.classList.remove('is-changing');
+    scheduleRotation();
+  }
+
+  function showMessage(nextIndex) {
+    clearTimeout(fadeTimer);
+    if (nextIndex === index) {
+      messageEl.classList.remove('is-changing');
+      scheduleRotation();
+      return;
+    }
+    if (motionMq.matches) {
+      renderMessage(nextIndex);
+      return;
+    }
+    messageEl.classList.add('is-changing');
+    fadeTimer = setTimeout(() => renderMessage(nextIndex), FADE_MS);
+  }
+
+  document.addEventListener('visibilitychange', scheduleRotation);
+
+  scheduleRotation();
+})();
+
 /* ---- large live demo: data-driven, self-playing on a fixed loop ----
    Each scene declares the full workspace state (which sites are pinned,
    grouped, or loose) plus the caption, so pinning and grouping read as
