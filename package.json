@@ -29,6 +29,7 @@
   "private": true,
   "devDependencies": {
     "@cucumber/cucumber": "^11.0.0",
+    "@ghostery/adblocker": "^2.18.1",
     "electron": "^43.1.0",
     "electron-builder": "^26.0.12",
     "playwright": "^1.49.0"
