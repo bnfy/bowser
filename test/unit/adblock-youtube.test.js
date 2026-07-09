@@ -7,10 +7,15 @@ const { FiltersEngine, Request } = require('@ghostery/adblocker');
 const SOURCES = path.resolve(__dirname, '../../adblock/sources');
 const GENERATED = path.resolve(__dirname, '../../adblock/generated');
 
+// Parsing the combined EasyList + EasyPrivacy sources costs ~500-800ms, so
+// build the engine once and share it across every test in this file.
+let cachedEngine;
 function loadEngine() {
+  if (cachedEngine) return cachedEngine;
   const easylist = fs.readFileSync(path.join(SOURCES, 'easylist.txt'), 'utf8');
   const easyprivacy = fs.readFileSync(path.join(SOURCES, 'easyprivacy.txt'), 'utf8');
-  return FiltersEngine.parse(easylist + '\n' + easyprivacy);
+  cachedEngine = FiltersEngine.parse(easylist + '\n' + easyprivacy);
+  return cachedEngine;
 }
 
 function match(engine, url, type = 'xmlhttprequest') {
@@ -65,10 +70,12 @@ test('WebKit blocklist contains YouTube ad-blocking rules', () => {
     fs.readFileSync(path.join(GENERATED, 'blocklist.json'), 'utf8')
   );
 
+  // build.mjs escapes the domain dot, so url-filters carry the literal
+  // substring `youtube\.com` (backslash + dot).
   const youtubeBlocks = rules.filter(
     (r) =>
       r.action.type === 'block' &&
-      /youtube\\?\.com/.test(r.trigger['url-filter'])
+      /youtube\\\.com/.test(r.trigger['url-filter'])
   );
 
   const patterns = youtubeBlocks.map((r) => r.trigger['url-filter']);
