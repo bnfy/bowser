@@ -29,12 +29,16 @@ Node script. `npm run adblock:build` runs it.
 **Processing:** for each line:
 - Skip comments (`!`), cosmetic rules (`##`, `#@#`, `#?#`), empty lines.
 - Skip rules with unsupported `$`-options. **M5 supported options
-  allowlist:** `third-party`, `~third-party`, `image`, `script`,
-  `stylesheet`, `font`, `media`, `popup`, `xmlhttprequest`,
-  `websocket`, `other`. Everything else — including `$domain` (has a
-  WK equivalent `if-domain`/`unless-domain` but adds complexity deferred
-  to M15), `$csp`, `$redirect`, `$removeparam`, `$replace`,
-  `$badfilter` — is skipped.
+  allowlist:**
+  - **Party:** `third-party`, `~third-party`.
+  - **Resource types:** `image` → `image`, `script` → `script`,
+    `stylesheet` → `style-sheet`, `font` → `font`, `media` → `media`,
+    `popup` → `popup`.
+  - **Skipped at M5** (deferred to M15): `xmlhttprequest` (WK has no
+    direct equivalent; closest is `raw`, which is too broad),
+    `websocket`, `other`, `$domain`/`$~domain` (WK equivalent
+    `if-domain`/`unless-domain` exists but adds complexity), `$csp`,
+    `$redirect`, `$removeparam`, `$replace`, `$badfilter`.
 - Convert supported network filters to a WKContentRuleList entry:
   ```json
   {
@@ -124,8 +128,8 @@ yet, and enqueuing requires a live `WKWebView` reference (not just a config).
 
 `TabsManager` owns the single `ContentBlocker` instance (same pattern as
 `schemeHandler` and `bridge`). `ContentBlocker.prepare()` is called in
-`TabsManager.init()`. The blocker is passed through `WebViewConfiguration.make`
-on every `createTab`.
+`TabsManager.init()`. After each `TabModel` is constructed in `createTab`,
+`TabsManager` calls `contentBlocker.attach(to: tab.webView)`.
 
 ## 3. Shield UI
 
@@ -180,13 +184,17 @@ behaviour — the footer is deferred until a counting mechanism is designed
 - **Converter** (`adblock/build.mjs`): run it; verify `blocklist.json` is
   valid JSON, rule count < 150k, meta version is a hex string, skipped-rule
   log is non-empty (proves cosmetic rules were dropped, not silently included).
-- **ContentBlocker** (`BlancTests/ContentBlockerTests.swift`): testable via a
-  `RuleListStoring` protocol (wrapping `WKContentRuleListStore`'s
-  lookup/compile APIs) and a fake that returns a pre-built
-  `WKContentRuleList` synchronously or after a delay. Tests: cache-hit path
-  sets `isReady` immediately, cache-miss path sets `isReady` after compile
-  completes, `attach(to:)` adds the rule list when ready, `attach(to:)`
-  enqueues and drains when compile completes later.
+- **ContentBlocker** (`BlancTests/ContentBlockerTests.swift`): two layers.
+  **Unit tests** cover state transitions (`isReady`, queue drain count) via
+  a `RuleListStoring` protocol whose fake controls timing (instant
+  callback vs. delayed callback) without needing a real
+  `WKContentRuleList` — the attach operation is behind a
+  `RuleListAttaching` protocol so the fake records calls without touching
+  `WKUserContentController`. Tests: cache-hit sets `isReady` promptly,
+  cache-miss sets `isReady` after compile callback, `attach` records
+  immediately when ready, `attach` enqueues and drains after compile.
+  **One integration test** compiles the real bundled `blocklist.json` via
+  `WKContentRuleListStore` to verify the JSON is valid WebKit input.
 - **Integration**: load a page with known ad resources in the simulator;
   verify they're blocked (network inspector shows no requests to ad domains).
   Manual, not automated at M5.
