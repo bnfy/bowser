@@ -12,6 +12,7 @@
     "release": "scripts/release.sh",
     "test:acceptance:dry": "cucumber-js -c test/desktop/cucumber.mjs -p dry",
     "test:acceptance:desktop": "cucumber-js -c test/desktop/cucumber.mjs -p runnable",
+    "adblock:build": "node adblock/build.mjs",
     "tokens:build": "node tokens/build.mjs",
     "tokens:check": "node tokens/build.mjs --check",
     "settings:build": "node settings-schema/build.mjs",

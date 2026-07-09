@@ -81,6 +81,10 @@ feature's row in [`../parity-matrix.md`](../parity-matrix.md) shouldn't reach
 | F23-1 | Page scales + resets | D10 | ✅ | ⬜ | ⬜ |
 | F24-1 | AutoFill + passkeys in a tab | D12 | ➖ | ⬜ | ⬜ |
 
+> **M0–M1 note (2026-07-08):** F5 (address/search + OS hand-off) and F1 (minimal
+> address surface) are implemented and unit-tested on iOS, but the iOS acceptance
+> cells remain ⬜ — automated iOS step-def binding (S6) is a separate track.
+
 ## Coverage check
 
 - Every feature `F1–F24` has ≥1 scenario. ✅

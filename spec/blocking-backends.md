@@ -168,13 +168,21 @@ Because interception is programmatic, **increment a per-tab counter on each bloc
   rule lists (iOS) / bypasses the interceptor (Android) / disables the session
   blocker (desktop).
 
-## Open decisions to close before build
+## Decisions (closed 2026-07-07 — see roadmap §5)
 
-1. **D13 iOS shield UX** — binary "protected" state (recommended) vs. approximate
-   count. Pick one; update the F12-1 acceptance and the pill spec (F1) for iOS.
-2. **iOS list partition scheme** — by category vs. by size, and the total-budget
-   number for the target minimum iOS version.
-3. **Cosmetic scope on mobile (D14)** — how much of the cosmetic corpus to ship
-   (static-only on iOS; how many procedural rules to port to Android injection).
-4. **Update cadence** — remote-config pull interval and whether iOS recompiles
-   eagerly on update or lazily on next launch.
+Resolved in [the iOS port roadmap](../docs/superpowers/specs/2026-07-07-ios-port-roadmap-design.md) §5:
+
+1. **D13 iOS shield UX** — **binary "protected / paused" state** (not an approximate
+   count); F12-1 relaxed on iOS.
+2. **iOS list partition scheme** — **by category, value-ordered** (network-block ads
+   → tracking → cosmetic last), each list under the ~150k-rule ceiling; the pipeline
+   logs the dropped set. Total budget pinned to the iOS 17 floor's WebKit ceiling,
+   confirmed at M15.
+3. **Cosmetic scope on mobile (D14)** — iOS **static `css-display-none` only**;
+   procedural dropped. Android procedural-via-injection finalized when Android is built.
+4. **Update cadence** — beta (M5) bundles the list in-app; the full pipeline (M15)
+   pulls remote-config **daily + on launch** and **recompiles lazily on next launch**
+   on version change (reuse the `WKContentRuleListStore` hash cache).
+
+Beta (M5) ships a single bundled list; the full partition / exception / cosmetic /
+remote-config machinery lands at M15.

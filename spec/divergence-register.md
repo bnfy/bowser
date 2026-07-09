@@ -112,11 +112,17 @@ policy).
 **trusted-forever, offline-OK, cosmetic-only** (no revalidation/DRM) on every
 platform. Renderers only ever see the derived boolean, never a key.
 
-**Open question to resolve before F17 on mobile:** whether a Polar purchase and a
-store purchase cross-honor each other, or each platform's unlock is independent.
-Decide and record here.
+**Cross-honor (decided 2026-07-07):** a purchase on **either** platform unlocks the
+other (not independent). The activation *mechanism* is non-trivial and deferred to
+the iOS **M13** supporter spec: desktop→iOS is a one-time Polar-verification check;
+iOS→desktop needs an activation/linking flow (App Store Server API signed
+transactions + `appAccountToken`) plus a small Blanc-run entitlement registry, since
+Blanc has no cross-platform account. Favour activation-time-only checks to preserve
+the trusted-forever/offline-OK posture after unlock. See
+[the iOS port roadmap](../docs/superpowers/specs/2026-07-07-ios-port-roadmap-design.md) §5.5.
 
-**Status:** Accepted; cross-honor policy TBD.
+**Status:** Accepted; **cross-honor both ways** — direction decided 2026-07-07,
+activation mechanism TBD @ iOS M13.
 
 ---
 
@@ -146,6 +152,7 @@ Desktop bindings and their mobile intent:
 
 | Desktop | Action | Mobile equivalent |
 |---------|--------|-------------------|
+| ⌘[ / ⌘] (pill buttons) | Back / Forward | edge-swipe gesture (`allowsBackForwardNavigationGestures`) — no pill buttons |
 | ⌘L | Search & Commands (palette) | tap the pill / pull-down |
 | ⌘T | New Tab | new-tab button |
 | ⌘⇧N | New Private Tab | new-private-tab action |
@@ -279,7 +286,7 @@ F12-1 acceptance step is relaxed on iOS accordingly.
 
 **Detailed design:** [`blocking-backends.md`](./blocking-backends.md).
 
-**Status:** Accepted; iOS shield UX is an open decision (binary state recommended).
+**Status:** Accepted; **iOS shield UX decided 2026-07-07: binary "protected / paused" state** (no live count — `WKContentRuleList` blocks silently). F12-1 relaxed on iOS.
 
 ---
 
@@ -299,4 +306,25 @@ iOS). Not a bug — a documented ceiling.
 
 **Detailed design:** [`blocking-backends.md`](./blocking-backends.md).
 
-**Status:** Accepted; the mobile cosmetic scope is an open decision.
+**Status:** Accepted; **iOS cosmetic scope decided 2026-07-07: static `css-display-none` only** (procedural dropped). Android cosmetic depth (procedural via injection) finalized when Android is built.
+
+---
+
+## D15 — Chrome surface material
+**Features:** F1
+**Why:** iOS 26 introduces Liquid Glass, a platform-native translucent material
+with no desktop/Android equivalent.
+
+- **Desktop:** opaque token-defined surface (`--surface-raised` + `--border`
+  custom properties in `styles.css`).
+- **iOS (26+):** `.glassEffect(.regular.interactive, in: .capsule)` — the
+  platform-native translucent material. Falls back to the token surface on
+  iOS 17–25 via `#available(iOS 26, *)`.
+- **Android:** token-defined surface (same as desktop).
+
+**Parity contract:** the island pill is present and functional on every
+platform; the *material treatment* differs — opaque tokens on desktop/Android,
+Liquid Glass on iOS 26+. The pill's layout, content, and interaction model
+are identical.
+
+**Status:** Accepted; **iOS material decided 2026-07-08: Liquid Glass with token fallback.**
