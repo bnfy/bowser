@@ -4,7 +4,7 @@ name: Release Windows & Linux
 # here rather than locally, since `scripts/release.sh` runs on a macOS dev
 # machine. This is dispatched by that script right after it publishes the
 # macOS build, targeting the same tag/version, so all three platforms land
-# on one GitHub release. Safe to re-run: uploads use --clobber.
+# on one GitHub release. Release assets are immutable; duplicate uploads fail.
 on:
   workflow_dispatch:
     inputs:
@@ -77,7 +77,7 @@ jobs:
             "dist/$PRODUCT_NAME Setup $VERSION.exe" \
             "dist/$PRODUCT_NAME Setup $VERSION.exe.blockmap" \
             "dist/latest.yml" \
-            --repo "${{ github.repository }}" --clobber
+            --repo "${{ github.repository }}"
 
   linux:
     runs-on: ubuntu-latest
@@ -114,4 +114,4 @@ jobs:
           gh release upload "${{ inputs.tag }}" \
             "dist/$PRODUCT_NAME-$VERSION.AppImage" \
             "dist/latest-linux.yml" \
-            --repo "${{ github.repository }}" --clobber
+            --repo "${{ github.repository }}"

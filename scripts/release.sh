@@ -6,9 +6,9 @@
 # the release), which can 422 and leave the release missing latest-mac.yml or a
 # blockmap. To avoid that, this script builds locally with `--publish never`
 # and then hands the finished artifacts to `gh release create/upload` — a
-# single sequential process, so there's nothing to race. It's also safe to
-# re-run: if the release already exists (e.g. a previous run partially
-# uploaded), it fills in/overwrites assets instead of failing.
+# single sequential process, so there's nothing to race. Release versions are
+# immutable: if the tag or GitHub release already exists, this script refuses
+# to build or upload anything. Bump package.json and start a new version.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -20,6 +20,25 @@ command -v gh >/dev/null || { echo "gh CLI not found — required to publish rel
 gh auth status >/dev/null 2>&1 || { echo "gh CLI not authenticated. Run: gh auth login" >&2; exit 1; }
 
 echo "==> Releasing Blanc $VERSION ($TAG)"
+
+# Published versions are immutable. Check both local/remote tags and releases
+# before touching metadata or dist/ so a stale package version can never
+# overwrite assets that users may already have downloaded.
+if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null ||
+   git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1 ||
+   gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+  echo "Release $TAG already exists. Refusing to overwrite it; bump package.json to a new version." >&2
+  exit 1
+fi
+
+# Artifacts must correspond to committed release sources. Other platform work
+# outside Electron's build inputs may remain in progress without contaminating
+# this desktop release.
+if ! git diff --quiet -- src package.json package-lock.json scripts/release.sh .github/workflows/release-windows-linux.yml ||
+   [ -n "$(git ls-files --others --exclude-standard -- src)" ]; then
+  echo "Release sources are dirty. Commit src/, package metadata, and release workflow changes before publishing." >&2
+  exit 1
+fi
 
 # Keep the marketing site's release metadata in sync: the JSON-LD
 # softwareVersion in site/index.html and the sitemap's lastmod are the only
@@ -64,13 +83,8 @@ for f in "${ASSETS[@]}"; do
   [ -f "$f" ] || { echo "Expected build artifact missing: $f" >&2; exit 1; }
 done
 
-if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
-  echo "==> Release $TAG already exists — filling in/overwriting assets"
-  gh release upload "$TAG" "${ASSETS[@]}" --repo "$REPO" --clobber
-else
-  echo "==> Creating GitHub release $TAG"
-  gh release create "$TAG" "${ASSETS[@]}" --repo "$REPO" --title "$VERSION" --generate-notes
-fi
+echo "==> Creating GitHub release $TAG"
+gh release create "$TAG" "${ASSETS[@]}" --repo "$REPO" --title "$VERSION" --generate-notes
 
 echo "==> Done: https://github.com/$REPO/releases/tag/$TAG"
 
