@@ -127,16 +127,27 @@ bridge plumbing.
 | `downloads.cancel/open/show(id)` / `clearFinished()` | no-op, resolves |
 | `settings.get()` | the generated `BlancSettings` defaults |
 | `settings.set(patch)` | no-op, resolves |
-| `settings.syncGet()` | a disabled/empty sync status |
-| `settings.syncEnable/syncDisable/syncNow(...)` | no-op, resolves |
-| `settings.activateSupporter(key)` | no-op, resolves to a neutral result |
-| `permissions.list()` | `[]` |
+| `settings.syncGet()` | `{ enabled: false }` |
+| `settings.syncEnable(...)` | `{ ok: false, created: false, message, status: { enabled: false } }` |
+| `settings.syncDisable(...)` | `{ status: { enabled: false } }` |
+| `settings.syncNow()` | `{ enabled: false }` |
+| `settings.activateSupporter(key)` | `{ ok: false, message }` |
+| `permissions.list()` | `{}` (a record, **not** `[]`) |
 | `permissions.remove(key)` | no-op, resolves |
-| `defaultBrowser.get()` | `false` |
-| `defaultBrowser.set()` | no-op, resolves |
+| `defaultBrowser.get()` | `{ isDefault: false, canSet: false }` |
+| `defaultBrowser.set()` | `{ isDefault: false, canSet: false }` |
 | `start.data()` | `{ groups: [], blockedThisWeek: 0 }` |
 | `start.focusGroup(id)` | no-op, resolves |
 | unknown group/method | **rejects** with an error |
+
+These shapes are exactly what `settings.js` reads back: it toggles the
+sync panel on `status.enabled`, branches supporter/sync-enable on
+`res.ok`/`res.created` and shows `res.message`, gates the default-browser
+button on `{ isDefault, canSet }` (with both `false` it shows "Available in
+the installed app"), and iterates `permissions.list()` via
+`Object.entries()` — so a record, not an array. The `message` strings are a
+neutral "not available in this build yet" placeholder; exact copy is a plan
+detail.
 
 Where a stub has a known milestone, that is where it becomes real:
 favorites/history at **M7**, settings-lite at **M6**, downloads at
@@ -225,8 +236,9 @@ New tab → TabsManager.createTab() → blanc://newtab/
   input-model leak in the shared bundle, fixed when the bundle gains
   platform-awareness (a future substrate refinement), not by forking it at
   M4.
-- **Only newtab is data-wired.** The other pages are served but their
-  bridge methods land in their own milestones (above).
+- **Reachable non-newtab pages get empty/default stubs only.** The bridge
+  answers their methods with empty reads and no-op writes so they render
+  cleanly, but real functionality lands in their own milestones (above).
 
 ## What is NOT in M4
 
