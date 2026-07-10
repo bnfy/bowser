@@ -53,6 +53,12 @@
     b.innerHTML = PILL_ICONS[iconKey];
     b.title = title;
     b.setAttribute('aria-label', title);
+    // Don't let a mouse click focus the button. Reload (and friends) retain
+    // focus after a click since they don't navigate away; a later keypress
+    // then flips :focus-visible on and paints a stray circular ring
+    // (border-radius:50%) in the resting pill. preventDefault on mousedown
+    // keeps the focus ring for keyboard (Tab) users only, where it belongs.
+    b.addEventListener('mousedown', (e) => e.preventDefault());
     b.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
     return b;
   }
