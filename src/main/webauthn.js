@@ -64,22 +64,25 @@ function setupWebAuthn({ app, session, dialog, getParentWindow, platform = proce
     return false;
   }
 
-  session.on('select-webauthn-account', (_event, details, callback) => {
-    let resolved = false;
-    const finish = (credentialId) => {
-      if (resolved) return;
-      resolved = true;
-      if (typeof credentialId === 'string' && credentialId) callback(credentialId);
-      else callback(); // No argument cancels the request with NotAllowedError.
-    };
+  const sessions = Array.isArray(session) ? session : [session];
+  for (const targetSession of sessions) {
+    targetSession.on('select-webauthn-account', (_event, details, callback) => {
+      let resolved = false;
+      const finish = (credentialId) => {
+        if (resolved) return;
+        resolved = true;
+        if (typeof credentialId === 'string' && credentialId) callback(credentialId);
+        else callback(); // No argument cancels the request with NotAllowedError.
+      };
 
-    chooseWebAuthnAccount({ dialog, getParentWindow, details })
-      .then(finish)
-      .catch((error) => {
-        console.warn('Unable to choose a WebAuthn account:', error.message);
-        finish();
-      });
-  });
+      chooseWebAuthnAccount({ dialog, getParentWindow, details })
+        .then(finish)
+        .catch((error) => {
+          console.warn('Unable to choose a WebAuthn account:', error.message);
+          finish();
+        });
+    });
+  }
 
   return true;
 }

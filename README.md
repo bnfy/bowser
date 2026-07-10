@@ -72,9 +72,11 @@ through to a normal navigate/search.
 
 **Private tabs** (`/private` or `Cmd/Ctrl+Shift+N`): nothing is saved to
 history, they're excluded from session restore and reopen-closed-tab, and
-popups they open stay private. The whole chrome shifts to a dedicated
+popups they open stay private. Cookies, storage, cache, service workers, HTTP
+auth, and permission decisions live in a separate in-memory session that is
+discarded when Blanc quits. The whole chrome shifts to a dedicated
 green-night theme while one is active, and the pill grows a `private ✕`
-chip — click it to close the tab and end the trail.
+chip for a quick exit.
 
 ## Auto-updates
 

@@ -76,14 +76,15 @@ toolbar (Bowser Design System "Island Chrome").
   page. Marked `private` on the tab model.
 - **Never** recorded to history (F10), **excluded** from session persistence (F18)
   and reopen-closed (F2). Children (`window.open`, context menu) inherit privacy.
-- The Chromium/web session (cookies, storage) is deliberately **shared** — private
-  means "not recorded locally," not a separate container.
+- Private tabs share a dedicated **non-persistent web session** with one another,
+  isolated from normal tabs. Cookies, storage, cache, service workers, HTTP auth,
+  and permission decisions remain memory-only and disappear when Blanc quits.
 - While the active tab is private, chrome uses the **private theme** (F15): dashed
   pill border, hollow dots, and a "private" chip that closes the tab (quick exit).
 - Shield counts, downloads, favorites behave normally.
-- **Acceptance:** Open a private tab, visit a site → it does not appear in history;
-  closing and reopen-closed does not bring it back; the pill shows the private
-  chip and dashed styling.
+- **Acceptance:** Open a private tab, visit a site → it does not appear in history
+  or share normal-session site data; closing and reopen-closed does not bring it
+  back; the pill shows the private chip and dashed styling.
 
 ## F5 — Address input & search
 

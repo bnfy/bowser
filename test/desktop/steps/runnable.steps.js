@@ -43,6 +43,10 @@ Given('history has at least one entry', async function () { await this.call('see
 
 Given('there is no active supporter license', async function () { await this.call('clearSupporter'); });
 
+Given('the active tab is private', async function () {
+  ctx.privateTabId = await this.call('openTab', 'blanc://newtab/?private=1', { private: true });
+});
+
 // "ad/tracker blocking is enabled" is BOTH a Background precondition and a final
 // assertion (F12-3). A step is matched by text regardless of keyword, so it is
 // defined once, as an assertion. reset() leaves blocking enabled, so it holds
@@ -93,6 +97,10 @@ When('I attempt to set the search engine to {string}', async function (x) { awai
 When('settings contain the app icon {string}', async function (x) { await this.call('setAppIcon', x); });
 When('I add {string} to the ad-block exceptions', async function (h) { await this.call('addException', h); });
 
+When('browser chrome attempts to navigate to {string}', async function (url) {
+  await this.call('attemptChromeNavigation', url);
+});
+
 // ---------- Then (assertions) ----------
 
 Then('a tab open on {string} is present', async function (name) {
@@ -137,6 +145,16 @@ Then('the new tab is on the new-tab page', async function () {
     const t = s.tabs.find((x) => x.id === ctx.lastNewTabId);
     return t && t.url.startsWith('blanc://newtab');
   });
+});
+
+Then('the private tab uses a different web session from ordinary tabs', async function () {
+  const s = await this.state();
+  const privateTab = s.tabs.find((t) => t.id === ctx.privateTabId);
+  assert.equal(privateTab?.sessionKind, 'private');
+  assert.ok(
+    s.tabs.some((t) => !t.private && t.sessionKind === 'default'),
+    'an ordinary tab should remain on the persistent default session'
+  );
 });
 
 Then('a group named {string} exists', async function (name) {
@@ -200,4 +218,8 @@ Then('the ad-block exceptions contain {string}', async function (h) {
 Then('the ad-block exceptions do not contain {string}', async function (h) {
   const ex = await this.call('exceptions');
   assert.ok(!ex.includes(h.toLowerCase()), `exceptions ${JSON.stringify(ex)} should not contain ${h.toLowerCase()}`);
+});
+
+Then('browser chrome remains on its trusted local document', async function () {
+  assert.match(await this.call('chromeUrl'), /^file:\/\/.*\/src\/renderer\/index\.html$/);
 });

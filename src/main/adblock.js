@@ -15,8 +15,8 @@ const cachePath = () =>
 
 /** @type {ElectronBlocker | null} */
 let blocker = null;
-/** @type {Electron.Session | null} */
-let attachedSession = null;
+/** Every browsing session protected by the shared blocker engine. */
+const attachedSessions = new Set();
 
 /**
  * Resolves the hostname of the tab a request came from, for per-site
@@ -105,21 +105,29 @@ async function setupAdBlocker(session, { enabled = true } = {}) {
   // Proxy closures while preserving network blocking and cosmetic CSS.
   installScriptletIsolation(blocker);
 
-  attachedSession = session;
-  if (enabled) applyBlockingWithExceptions(session);
+  attachAdBlockerToSession(session, { enabled });
   return blocker;
+}
+
+/** Attach the already-built blocker to another session (private browsing). */
+function attachAdBlockerToSession(session, { enabled = true } = {}) {
+  if (!blocker || !session) return;
+  attachedSessions.add(session);
+  if (enabled && !blocker.isBlockingEnabled(session)) applyBlockingWithExceptions(session);
 }
 
 /** Toggle blocking at runtime (used by the settings page). */
 function setAdBlockEnabled(enabled) {
-  if (!blocker || !attachedSession) return;
-  const isEnabled = blocker.isBlockingEnabled(attachedSession);
-  if (enabled && !isEnabled) applyBlockingWithExceptions(attachedSession);
-  if (!enabled && isEnabled) blocker.disableBlockingInSession(attachedSession);
+  if (!blocker) return;
+  for (const session of attachedSessions) {
+    const isEnabled = blocker.isBlockingEnabled(session);
+    if (enabled && !isEnabled) applyBlockingWithExceptions(session);
+    if (!enabled && isEnabled) blocker.disableBlockingInSession(session);
+  }
 }
 
 function getBlocker() {
   return blocker;
 }
 
-module.exports = { setupAdBlocker, setAdBlockEnabled, getBlocker };
+module.exports = { setupAdBlocker, attachAdBlockerToSession, setAdBlockEnabled, getBlocker };

@@ -16,7 +16,7 @@ See [`README.md`](./README.md#status-legend) for meanings.
 | F1 | Island chrome (pill + command bar) | SHIPPED | PARTIAL | PLANNED | Resting pill shows back/forward (desktop; mobile uses edge-swipe per D7), active group's dots (cap 8 + `+N`), favicon, domain, shield count, private chip, action cluster. Expanded states: panel / palette / find. | D7, D11, D15 |
 | F2 | Tabs (create/close/switch/reopen/duplicate/pin/mute) | SHIPPED | PARTIAL | PLANNED | Same lifecycle + same reopen-closed and pin/mute semantics. Pins remain in their current group and lead it; ungrouped pins use a standalone shelf. Plain new tab is always ungrouped. | D8 |
 | F3 | Tab groups | SHIPPED | PLANNED | PLANNED | Names not colors (lowercase mono). Group exists only while non-empty. Pill renders only the active group, including its pins. Same create/move/ungroup/close-group actions. | — |
-| F4 | Private tabs | SHIPPED | PLANNED | PLANNED | Never in history/session/reopen; inherited by child tabs; shared Chromium session; private theme + quick-exit chip. | — |
+| F4 | Private tabs | SHIPPED | PLANNED | PLANNED | Never in history/session/reopen; inherited by child tabs; isolated non-persistent web session; private theme + quick-exit chip. | — |
 | F5 | Address input & search | SHIPPED | PARTIAL | PLANNED | Same normalization heuristic + engine choice (DuckDuckGo/Google/Bing/Brave). OS hand-off for `mailto:`/`tel:`/etc. | D4 |
 | F6 | Command palette & Quick Switcher | SHIPPED | PARTIAL | PLANNED | ⌘L-equivalent summons it; loose/in-order match across tabs, favorites, history, group names; groups ranked above tabs. | D7 |
 | F7 | Slash commands | SHIPPED | PARTIAL | PLANNED | The full command set (see F7 in features.md) with identical names + hints. | D7 |

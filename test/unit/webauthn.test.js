@@ -83,6 +83,24 @@ test('enables Touch ID WebAuthn only on macOS and returns the selected credentia
   assert.deepEqual(callbackArgs, [['first']]);
 });
 
+test('installs the WebAuthn account chooser on normal and private sessions', () => {
+  const events = [[], []];
+  const sessions = events.map((seen) => ({
+    on: (event) => seen.push(event),
+  }));
+
+  assert.equal(setupWebAuthn({
+    app: { configureWebAuthn: () => {} },
+    session: sessions,
+    dialog: {},
+    platform: 'darwin',
+  }), true);
+  assert.deepEqual(events, [
+    ['select-webauthn-account'],
+    ['select-webauthn-account'],
+  ]);
+});
+
 test('cancels safely when Touch ID setup or account selection fails', async () => {
   const failedApp = { configureWebAuthn: () => { throw new Error('missing entitlement'); } };
   const failedSession = { on: () => assert.fail('listener must not be installed') };

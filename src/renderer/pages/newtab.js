@@ -15,7 +15,7 @@ document.getElementById('goAnywhere').textContent = `${isMac ? '⌘' : 'Ctrl+'}L
 
 if (isPrivate) {
   document.getElementById('footerLeft').textContent =
-    'not saved to history · close the tab and the trail is gone';
+    'not saved to history · site data stays in a private in-memory session';
 }
 
 window.bowserPages?.appVersion().then((version) => {

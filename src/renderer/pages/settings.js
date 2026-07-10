@@ -229,7 +229,7 @@
       }
 
       for (const [key, decision] of entries.sort(([a], [b]) => a.localeCompare(b))) {
-        const [origin, permission] = key.split('|');
+        const [origin, permission, mediaType] = key.split('|');
         const row = document.createElement('div');
         row.className = 'row';
 
@@ -242,7 +242,10 @@
 
         const meta = document.createElement('div');
         meta.className = 'meta';
-        meta.textContent = `${PERMISSION_LABELS[permission] ?? permission} — ${decision === 'allow' ? 'Allowed' : 'Blocked'}`;
+        const permissionLabel = permission === 'media' && mediaType
+          ? ({ audio: 'Microphone', video: 'Camera' }[mediaType] ?? PERMISSION_LABELS.media)
+          : (PERMISSION_LABELS[permission] ?? permission);
+        meta.textContent = `${permissionLabel} — ${decision === 'allow' ? 'Allowed' : 'Blocked'}`;
 
         const actions = document.createElement('div');
         actions.className = 'actions';

@@ -18,3 +18,8 @@ Feature: Internal blanc:// pages
     Given the new-tab page is open
     When I follow its "History" navigation link
     Then the history page opens under the blanc scheme
+
+  @F16-3 @F16 @desktop
+  Scenario: Privileged browser chrome cannot navigate to web content
+    When browser chrome attempts to navigate to "https://example.com"
+    Then browser chrome remains on its trusted local document

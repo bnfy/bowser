@@ -1,7 +1,7 @@
 @private
 Feature: Private tabs
-  Private tabs are never recorded locally, inherit privacy to children, and
-  share the web session. "Private" means not-recorded, not a separate container.
+  Private tabs are never recorded locally, inherit privacy to children, and use
+  a non-persistent web session isolated from ordinary tabs.
 
   @F4-1 @F4 @all
   Scenario: Private browsing is not recorded and cannot be reopened
@@ -25,3 +25,8 @@ Feature: Private tabs
     Given the active tab is private
     When a link in the page opens a new tab
     Then the new tab is private
+
+  @F4-4 @F4 @all
+  Scenario: Private tabs use an isolated in-memory web session
+    Given the active tab is private
+    Then the private tab uses a different web session from ordinary tabs

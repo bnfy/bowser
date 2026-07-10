@@ -36,6 +36,9 @@ function install(refs) {
     openFindBar,
     getOverlayMode,
     showOverlay,
+    getPrivateBrowsingSession,
+    attemptChromeNavigation,
+    getChromeUrl,
   } = refs;
 
   // The tab model's committed .url is the app's own source of truth (see
@@ -59,6 +62,7 @@ function install(refs) {
           pinned: !!t.pinned,
           muted: !!t.muted,
           private: !!t.private,
+          sessionKind: t.view.webContents.session === getPrivateBrowsingSession() ? 'private' : 'default',
         });
       }
       return {
@@ -147,6 +151,8 @@ function install(refs) {
     openFind() { openFindBar(); },
     openPalette() { showOverlay('palette'); },
     overlayMode() { return getOverlayMode(); },
+    attemptChromeNavigation(url) { return attemptChromeNavigation(String(url)); },
+    chromeUrl() { return getChromeUrl(); },
 
     // ---- isolation between scenarios ----
     reset() {

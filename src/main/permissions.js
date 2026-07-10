@@ -1,4 +1,9 @@
 const { JsonStore } = require('./store');
+const {
+  normalizedMediaTypes,
+  storedDecision,
+  rememberDecision,
+} = require('./permission-decisions');
 
 /**
  * Permission policy for web content. Electron's default is ALLOW
@@ -18,8 +23,6 @@ const ensureStore = () => (store ??= new JsonStore('site-permissions', { decisio
 let prompter = null;
 function setPermissionPrompter(fn) { prompter = fn; }
 
-const keyFor = (origin, permission) => `${origin}|${permission}`;
-
 function normalizedOrigin(rawUrl) {
   try {
     const origin = new URL(rawUrl).origin;
@@ -36,14 +39,6 @@ function normalizedOrigin(rawUrl) {
   }
 }
 
-function decisionFor(origin, permission) {
-  return ensureStore().data.decisions[keyFor(origin, permission)] ?? null;
-}
-
-function rememberDecision(origin, permission, allow) {
-  ensureStore().update((d) => { d.decisions[keyFor(origin, permission)] = allow ? 'allow' : 'deny'; });
-}
-
 function listDecisions() {
   return { ...ensureStore().data.decisions };
 }
@@ -52,7 +47,19 @@ function removeDecision(key) {
   ensureStore().update((d) => { delete d.decisions[key]; });
 }
 
-function setupPermissionPolicy(session) {
+function setupPermissionPolicy(session, { persistDecisions = true } = {}) {
+  // Incognito/private sessions use this in-memory map. Normal browsing keeps
+  // using site-permissions.json and remains manageable from Settings.
+  const ephemeralDecisions = {};
+  const readDecisions = () => persistDecisions ? ensureStore().data.decisions : ephemeralDecisions;
+  const saveDecision = (origin, permission, mediaTypes, allow) => {
+    if (persistDecisions) {
+      ensureStore().update((d) => rememberDecision(d.decisions, origin, permission, mediaTypes, allow));
+    } else {
+      rememberDecision(ephemeralDecisions, origin, permission, mediaTypes, allow);
+    }
+  };
+
   session.setPermissionRequestHandler(async (_wc, permission, callback, details) => {
     if (AUTO_ALLOWED.has(permission)) return callback(true);
     if (!PROMPTED.has(permission)) return callback(false);
@@ -60,26 +67,34 @@ function setupPermissionPolicy(session) {
     const origin = normalizedOrigin(details.requestingUrl);
     if (!origin) return callback(false);
 
-    const saved = decisionFor(origin, permission);
-    if (saved) return callback(saved === 'allow');
+    const mediaTypes = normalizedMediaTypes(details.mediaTypes);
+    const scopes = permission === 'media' && mediaTypes.length ? mediaTypes : [null];
+    const saved = scopes.map((mediaType) =>
+      storedDecision(readDecisions(), origin, permission, mediaType));
+    if (saved.some((decision) => decision === 'deny')) return callback(false);
+    if (saved.every((decision) => decision === 'allow')) return callback(true);
     if (!prompter) return callback(false);
 
     // null = the prompt couldn't be shown (no window). Deny for now but
     // DON'T persist it, or a transient no-window moment would silently
     // block the site forever. Only a real Allow/Block answer is remembered.
-    const allow = await prompter({ origin, permission, mediaTypes: details.mediaTypes ?? [] });
+    const allow = await prompter({ origin, permission, mediaTypes });
     if (allow === null) return callback(false);
-    rememberDecision(origin, permission, allow);
+    saveDecision(origin, permission, mediaTypes, allow);
     callback(allow);
   });
 
   // Synchronous checks (navigator.permissions.query, Notification.permission)
   // must agree with the request handler or sites see inconsistent state.
-  session.setPermissionCheckHandler((_wc, permission, requestingOrigin) => {
+  session.setPermissionCheckHandler((_wc, permission, requestingOrigin, details) => {
     if (AUTO_ALLOWED.has(permission)) return true;
     if (!PROMPTED.has(permission)) return false;
     const origin = normalizedOrigin(requestingOrigin);
-    return !!origin && decisionFor(origin, permission) === 'allow';
+    if (!origin) return false;
+    const mediaType = permission === 'media' && ['audio', 'video'].includes(details?.mediaType)
+      ? details.mediaType
+      : null;
+    return storedDecision(readDecisions(), origin, permission, mediaType) === 'allow';
   });
 
   // Screen capture: still deny by never providing a stream (no picker UI yet).

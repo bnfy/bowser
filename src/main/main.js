@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { pathToFileURL } = require('url');
-const { setupAdBlocker, setAdBlockEnabled, getBlocker } = require('./adblock');
+const { setupAdBlocker, attachAdBlockerToSession, setAdBlockEnabled, getBlocker } = require('./adblock');
 const {
   chromeClientHintPlatform,
   chromeClientHintArchitecture,
@@ -144,7 +144,8 @@ function openExternalUrl(url) {
 // navigation (will-navigate), window.open children (setWindowOpenHandler),
 // the context menu's "Open Link" actions, and typed address-bar input.
 const HANDOFF_PROTOCOLS = new Set(['mailto:', 'tel:', 'facetime:', 'sms:']);
-function handOffToOs(url) {
+let externalProtocolPromptOpen = false;
+function handOffToOs(url, { trusted = false } = {}) {
   let protocol;
   try {
     protocol = new URL(url).protocol;
@@ -152,7 +153,30 @@ function handOffToOs(url) {
     return false;
   }
   if (!HANDOFF_PROTOCOLS.has(protocol)) return false;
-  shell.openExternal(url).catch(() => {});
+
+  // Address-bar input is an explicit user instruction. Page-initiated
+  // navigations/window.open and context-menu targets are untrusted URL data,
+  // so require confirmation before launching another application. One prompt
+  // at a time prevents a hostile page from flooding the desktop with dialogs.
+  if (trusted) {
+    shell.openExternal(url).catch(() => {});
+  } else if (!externalProtocolPromptOpen && hasLiveWindow()) {
+    externalProtocolPromptOpen = true;
+    const label = protocol.slice(0, -1);
+    dialog.showMessageBox(win, {
+      type: 'question',
+      title: 'Open external application?',
+      message: `Open this ${label} link in another application?`,
+      buttons: ['Open Link', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1,
+      noLink: true,
+    }).then(({ response }) => {
+      if (response === 0) shell.openExternal(url).catch(() => {});
+    }).finally(() => {
+      externalProtocolPromptOpen = false;
+    });
+  }
   return true;
 }
 
@@ -260,6 +284,24 @@ if (chromeMajor) {
 
 /** @type {BrowserWindow | null} */
 let win = null;
+/** Non-persistent session shared by all private tabs for this app run. */
+let privateBrowsingSession = null;
+const PRIVATE_PARTITION = 'private-browsing'; // no `persist:` prefix = memory only
+const getPrivateBrowsingSession = () =>
+  (privateBrowsingSession ??= session.fromPartition(PRIVATE_PARTITION));
+
+const CHROME_INDEX_FILE = path.join(__dirname, '../renderer/index.html');
+const CHROME_OVERLAY_FILE = path.join(__dirname, '../renderer/overlay.html');
+const CHROME_INDEX_URL = pathToFileURL(CHROME_INDEX_FILE).href;
+const CHROME_OVERLAY_URL = pathToFileURL(CHROME_OVERLAY_FILE).href;
+
+/** Privileged chrome must never become a general-purpose browser surface. */
+function lockPrivilegedNavigation(wc, trustedUrl) {
+  wc.on('will-navigate', (event, targetUrl) => {
+    if (targetUrl !== trustedUrl) event.preventDefault();
+  });
+  wc.setWindowOpenHandler(() => ({ action: 'deny' }));
+}
 
 // Window background behind everything, matching the CSS --bg tokens so
 // resizes and load flashes stay in-theme.
@@ -356,7 +398,8 @@ function createOverlay() {
     },
   });
   overlayView.setBackgroundColor('#00000000'); // page shows through around the panel
-  overlayView.webContents.loadFile(path.join(__dirname, '../renderer/overlay.html'));
+  lockPrivilegedNavigation(overlayView.webContents, CHROME_OVERLAY_URL);
+  overlayView.webContents.loadFile(CHROME_OVERLAY_FILE);
 
   // A show requested before the overlay document finished its first load
   // would be lost — leaving an invisible view blocking clicks. Replay it.
@@ -823,7 +866,11 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
   // already constructed by Chromium with the opener relationship wired up;
   // everything else gets a fresh one.
   const adopted = !!view;
-  view ??= new WebContentsView({ webPreferences: TAB_WEB_PREFERENCES });
+  view ??= new WebContentsView({
+    webPreferences: isPrivate
+      ? { ...TAB_WEB_PREFERENCES, session: getPrivateBrowsingSession() }
+      : TAB_WEB_PREFERENCES,
+  });
 
   const tab = {
     id,
@@ -1379,8 +1426,37 @@ function refocusAddressBarIfWanted() {
   }
 }
 
+function isTrustedChromeSender(event) {
+  const frame = event.senderFrame;
+  if (!frame || frame !== event.sender.mainFrame) return false;
+  if (hasLiveWindow() && event.sender === win.webContents) {
+    return frame.url === CHROME_INDEX_URL && event.sender.getURL() === CHROME_INDEX_URL;
+  }
+  if (overlayView && !overlayView.webContents.isDestroyed() && event.sender === overlayView.webContents) {
+    return frame.url === CHROME_OVERLAY_URL && event.sender.getURL() === CHROME_OVERLAY_URL;
+  }
+  return false;
+}
+
+function chromeHandle(channel, handler) {
+  ipcMain.handle(channel, (event, ...args) => {
+    if (!isTrustedChromeSender(event)) throw new Error(`${channel}: denied for untrusted sender`);
+    return handler(event, ...args);
+  });
+}
+
+function chromeOn(channel, handler) {
+  ipcMain.on(channel, (event, ...args) => {
+    if (!isTrustedChromeSender(event)) {
+      console.warn(`[ipc] ${channel}: denied for untrusted sender`);
+      return;
+    }
+    handler(event, ...args);
+  });
+}
+
 function registerIpcHandlers() {
-  ipcMain.handle('tabs:create', (_e, url, opts) => {
+  chromeHandle('tabs:create', (_e, url, opts) => {
     const isPrivate = !!opts?.private;
     // A plain new tab is deliberately ungrouped — createTab defaults groupId
     // to null and we intentionally don't pass one. Only window.open/context-
@@ -1400,68 +1476,68 @@ function registerIpcHandlers() {
     setActiveTab(id, { focusContent: !focusAddress, focusAddress });
     return id;
   });
-  ipcMain.handle('tabs:close', (_e, id) => closeTab(id));
-  ipcMain.handle('tabs:switch', (_e, id) => setActiveTab(id));
-  ipcMain.handle('tabs:navigate', (_e, id, url) => {
+  chromeHandle('tabs:close', (_e, id) => closeTab(id));
+  chromeHandle('tabs:switch', (_e, id) => setActiveTab(id));
+  chromeHandle('tabs:navigate', (_e, id, url) => {
     const tab = tabs.get(id);
     if (!tab) return;
     // Checked against the raw address-bar text, before normalizeAddressInput
     // — a bare mailto:/tel: URI has no "://" and would otherwise fall
     // through its domain-guessing heuristic into an unreachable https:// URL.
-    if (handOffToOs(url)) return;
+    if (handOffToOs(url, { trusted: true })) return;
     tabsWantingAddressBarFocus.delete(id);
     tab.view.webContents.loadURL(normalizeAddressInput(url));
   });
-  ipcMain.handle('tabs:back', (_e, id) => tabs.get(id)?.view.webContents.navigationHistory.goBack());
-  ipcMain.handle('tabs:forward', (_e, id) => tabs.get(id)?.view.webContents.navigationHistory.goForward());
-  ipcMain.handle('tabs:reload', (_e, id) => tabs.get(id)?.view.webContents.reload());
-  ipcMain.handle('tabs:stop', (_e, id) => tabs.get(id)?.view.webContents.stop());
-  ipcMain.handle('tabs:reorder', (_e, id, toIndex) => reorderTab(id, toIndex));
-  ipcMain.handle('tabs:set-group', (_e, id, groupId) => setTabGroup(id, groupId ?? null));
-  ipcMain.handle('tabs:group-by-name', (_e, id, name) => groupTabByName(id, name));
-  ipcMain.handle('tabs:toggle-group-collapsed', (_e, groupId) => toggleGroupCollapsed(groupId));
-  ipcMain.handle('tabs:focus-group', (_e, groupId) => focusGroup(groupId));
-  ipcMain.handle('tabs:close-group', (_e, groupId) => closeGroup(groupId));
-  ipcMain.handle('tabs:toggle-bookmark', () => toggleBookmarkForActiveTab());
-  ipcMain.handle('tabs:toggle-pinned', (_e, id) => toggleTabPinned(id));
-  ipcMain.handle('tabs:toggle-muted', (_e, id) => toggleTabMuted(id));
-  ipcMain.handle('tabs:duplicate', (_e, id) => duplicateTab(id));
-  ipcMain.handle('tabs:open-page', (_e, name) => {
+  chromeHandle('tabs:back', (_e, id) => tabs.get(id)?.view.webContents.navigationHistory.goBack());
+  chromeHandle('tabs:forward', (_e, id) => tabs.get(id)?.view.webContents.navigationHistory.goForward());
+  chromeHandle('tabs:reload', (_e, id) => tabs.get(id)?.view.webContents.reload());
+  chromeHandle('tabs:stop', (_e, id) => tabs.get(id)?.view.webContents.stop());
+  chromeHandle('tabs:reorder', (_e, id, toIndex) => reorderTab(id, toIndex));
+  chromeHandle('tabs:set-group', (_e, id, groupId) => setTabGroup(id, groupId ?? null));
+  chromeHandle('tabs:group-by-name', (_e, id, name) => groupTabByName(id, name));
+  chromeHandle('tabs:toggle-group-collapsed', (_e, groupId) => toggleGroupCollapsed(groupId));
+  chromeHandle('tabs:focus-group', (_e, groupId) => focusGroup(groupId));
+  chromeHandle('tabs:close-group', (_e, groupId) => closeGroup(groupId));
+  chromeHandle('tabs:toggle-bookmark', () => toggleBookmarkForActiveTab());
+  chromeHandle('tabs:toggle-pinned', (_e, id) => toggleTabPinned(id));
+  chromeHandle('tabs:toggle-muted', (_e, id) => toggleTabMuted(id));
+  chromeHandle('tabs:duplicate', (_e, id) => duplicateTab(id));
+  chromeHandle('tabs:open-page', (_e, name) => {
     if (['bookmarks', 'history', 'downloads', 'settings'].includes(name)) {
       openInternalPage(`blanc://${name}/`);
     }
   });
-  ipcMain.handle('tabs:get-all', () => ({ tabs: serializeTabs(), activeTabId, groups }));
-  ipcMain.handle('tabs:find', (_e, id, query, options) => tabs.get(id)?.view.webContents.findInPage(query, options));
-  ipcMain.handle('tabs:find-stop', (_e, id) => tabs.get(id)?.view.webContents.stopFindInPage('clearSelection'));
+  chromeHandle('tabs:get-all', () => ({ tabs: serializeTabs(), activeTabId, groups }));
+  chromeHandle('tabs:find', (_e, id, query, options) => tabs.get(id)?.view.webContents.findInPage(query, options));
+  chromeHandle('tabs:find-stop', (_e, id) => tabs.get(id)?.view.webContents.stopFindInPage('clearSelection'));
 
-  ipcMain.on('chrome:layout', (_e, { height }) => {
+  chromeOn('chrome:layout', (_e, { height }) => {
     if (typeof height === 'number' && height > 0) {
       chromeHeight = height;
       resizeActiveView();
     }
   });
 
-  ipcMain.on('chrome:open-island', () => showOverlay('panel'));
-  ipcMain.on('chrome:open-find', () => showOverlay('find'));
-  ipcMain.on('overlay:close', () => hideOverlay());
-  ipcMain.on('chrome:downloads-ack', () => {
+  chromeOn('chrome:open-island', () => showOverlay('panel'));
+  chromeOn('chrome:open-find', () => showOverlay('find'));
+  chromeOn('overlay:close', () => hideOverlay());
+  chromeOn('chrome:downloads-ack', () => {
     acknowledgeDownloads();
     broadcastDownloadsActivity();
   });
 
   // Data + actions behind the island's slash commands and Quick Switcher.
-  ipcMain.handle('chrome:history-list', (_e, opts) => history.listHistory(opts ?? {}));
-  ipcMain.handle('chrome:favorites-list', () => bookmarks.listBookmarks());
-  ipcMain.handle('chrome:history-clear', () => history.clearHistory());
-  ipcMain.handle('chrome:adblock-toggle', () => {
+  chromeHandle('chrome:history-list', (_e, opts) => history.listHistory(opts ?? {}));
+  chromeHandle('chrome:favorites-list', () => bookmarks.listBookmarks());
+  chromeHandle('chrome:history-clear', () => history.clearHistory());
+  chromeHandle('chrome:adblock-toggle', () => {
     const next = !settings.getSettings().adblockEnabled;
     settings.setSettings({ adblockEnabled: next });
     return next;
   });
   // "/allow-ads" — allow ads on the active tab's site, then reload it so
   // the exception actually takes effect on what's shown.
-  ipcMain.handle('chrome:adblock-exempt-active', () => {
+  chromeHandle('chrome:adblock-exempt-active', () => {
     const tab = activeTabId ? tabs.get(activeTabId) : null;
     if (!tab) return null;
     try {
@@ -1475,7 +1551,7 @@ function registerIpcHandlers() {
       return null;
     }
   });
-  ipcMain.handle('chrome:cycle-theme', () => {
+  chromeHandle('chrome:cycle-theme', () => {
     const order = ['system', 'light', 'dark'];
     const current = settings.getSettings().theme;
     const next = order[(order.indexOf(current) + 1) % order.length];
@@ -1483,9 +1559,9 @@ function registerIpcHandlers() {
     return next;
   });
 
-  ipcMain.on('window:minimize', () => win?.minimize());
-  ipcMain.on('window:maximize', () => (win?.isMaximized() ? win.unmaximize() : win?.maximize()));
-  ipcMain.on('window:close', () => win?.close());
+  chromeOn('window:minimize', () => win?.minimize());
+  chromeOn('window:maximize', () => (win?.isMaximized() ? win.unmaximize() : win?.maximize()));
+  chromeOn('window:close', () => win?.close());
 }
 
 // The native menu's dynamic content (tab list, favorites list, Pin/Mute/
@@ -1809,7 +1885,8 @@ function createMainWindow() {
     },
   });
 
-  win.loadFile(path.join(__dirname, '../renderer/index.html'));
+  lockPrivilegedNavigation(win.webContents, CHROME_INDEX_URL);
+  win.loadFile(CHROME_INDEX_FILE);
   createOverlay();
   win.on('resize', resizeActiveView);
   win.on('focus', refocusAddressBarIfWanted);
@@ -1838,12 +1915,14 @@ function createMainWindow() {
 
 app.whenReady().then(async () => {
   const ses = session.defaultSession;
+  const privateSes = getPrivateBrowsingSession();
+  const browsingSessions = [ses, privateSes];
 
   // Enables device-bound Touch ID passkeys in signed macOS builds. Existing
   // iCloud Passwords passkeys remain gated on Apple's browser entitlement.
   setupWebAuthn({
     app,
-    session: ses,
+    session: browsingSessions,
     dialog,
     getParentWindow: () => (hasLiveWindow() ? win : null),
   });
@@ -1853,10 +1932,12 @@ app.whenReady().then(async () => {
   // context. Google Identity Services can use either a popup or tab-style
   // child depending on the relying site, so the Chrome compatibility surface
   // must cover both paths.
-  ses.registerPreloadScript({
-    type: 'frame',
-    filePath: path.join(__dirname, 'chrome-compat-preload.js'),
-  });
+  for (const browsingSession of browsingSessions) {
+    browsingSession.registerPreloadScript({
+      type: 'frame',
+      filePath: path.join(__dirname, 'chrome-compat-preload.js'),
+    });
+  }
 
   // Fallback: patch Sec-CH-UA HTTP headers for webContents where the CDP
   // debugger couldn't attach (e.g. already in use). The CDP override above
@@ -1875,22 +1956,24 @@ app.whenReady().then(async () => {
       const existing = Object.keys(headers).find((key) => key.toLowerCase() === name);
       if (existing || add) headers[existing || name] = value;
     };
-    ses.webRequest.onBeforeSendHeaders({ urls: ['<all_urls>'] }, (details, callback) => {
-      const h = details.requestHeaders;
-      setHeader(h, 'sec-ch-ua', chUa, { add: true });
-      // High-entropy hint: only rewrite it when Chromium already decided to
-      // send it (i.e. the server negotiated it via Accept-CH), matching real
-      // Chrome — don't force it onto every request like the low-entropy hints.
-      setHeader(h, 'sec-ch-ua-full-version-list', chUaFull);
-      setHeader(h, 'sec-ch-ua-platform', `"${chromeClientHintPlatform()}"`);
-      setHeader(h, 'sec-ch-ua-platform-version', `"${chromeClientHintPlatformVersion()}"`);
-      setHeader(h, 'sec-ch-ua-arch', `"${chromeClientHintArchitecture()}"`);
-      setHeader(h, 'sec-ch-ua-bitness', `"${chromeClientHintBitness()}"`);
-      setHeader(h, 'sec-ch-ua-model', '""');
-      setHeader(h, 'sec-ch-ua-mobile', '?0');
-      setHeader(h, 'sec-ch-ua-wow64', '?0');
-      callback({ requestHeaders: h });
-    });
+    for (const browsingSession of browsingSessions) {
+      browsingSession.webRequest.onBeforeSendHeaders({ urls: ['<all_urls>'] }, (details, callback) => {
+        const h = details.requestHeaders;
+        setHeader(h, 'sec-ch-ua', chUa, { add: true });
+        // High-entropy hint: only rewrite it when Chromium already decided to
+        // send it (i.e. the server negotiated it via Accept-CH), matching real
+        // Chrome — don't force it onto every request like the low-entropy hints.
+        setHeader(h, 'sec-ch-ua-full-version-list', chUaFull);
+        setHeader(h, 'sec-ch-ua-platform', `"${chromeClientHintPlatform()}"`);
+        setHeader(h, 'sec-ch-ua-platform-version', `"${chromeClientHintPlatformVersion()}"`);
+        setHeader(h, 'sec-ch-ua-arch', `"${chromeClientHintArchitecture()}"`);
+        setHeader(h, 'sec-ch-ua-bitness', `"${chromeClientHintBitness()}"`);
+        setHeader(h, 'sec-ch-ua-model', '""');
+        setHeader(h, 'sec-ch-ua-mobile', '?0');
+        setHeader(h, 'sec-ch-ua-wow64', '?0');
+        callback({ requestHeaders: h });
+      });
+    }
   }
 
   applyTheme();
@@ -1901,6 +1984,7 @@ app.whenReady().then(async () => {
   });
 
   setupPermissionPolicy(ses);
+  setupPermissionPolicy(privateSes, { persistDecisions: false });
   let permissionPromptCounter = 0;
   // Resolve null when there's no window to ask through — the policy treats
   // null as "not answered" and denies for now WITHOUT persisting, so a
@@ -1913,13 +1997,15 @@ app.whenReady().then(async () => {
       win.webContents.send('permissions:prompt', { id: promptId, origin, permission, mediaTypes });
     })
   );
-  ipcMain.on('permissions:respond', (_e, { id, allow }) => {
+  chromeOn('permissions:respond', (_e, { id, allow }) => {
     pendingPermissionPrompts.get(id)?.(!!allow);
     pendingPermissionPrompts.delete(id);
   });
 
   setupDownloads(ses, broadcastDownloadsActivity);
+  setupDownloads(privateSes, broadcastDownloadsActivity);
   setupPages({
+    sessions: browsingSessions,
     onDataChanged: refreshBookmarkFlags,
     // The start page's ledger sections read live tab-group state and the
     // rolling blocked counter, both owned here.
@@ -1951,10 +2037,15 @@ app.whenReady().then(async () => {
       tabs, getTabOrder: () => tabOrder, getGroups: () => groups, getActiveTabId: () => activeTabId, clusterSlots,
       createTab, setActiveTab, closeTab, duplicateTab, toggleTabPinned, groupTabByName, reopenClosedTab, newTabUrl,
       normalizeAddressInput, handoffProtocols: HANDOFF_PROTOCOLS, openInternalPage, openFindBar,
-      getOverlayMode: () => overlayMode, showOverlay,
+      getOverlayMode: () => overlayMode, showOverlay, getPrivateBrowsingSession,
+      attemptChromeNavigation: (url) => win?.webContents.executeJavaScript(
+        `location.href = ${JSON.stringify(String(url))}`
+      ),
+      getChromeUrl: () => win?.webContents.getURL() ?? '',
     });
   } else {
     await setupAdBlocker(ses, { enabled: settings.getSettings().adblockEnabled });
+    attachAdBlockerToSession(privateSes, { enabled: settings.getSettings().adblockEnabled });
   }
 
   // Per-tab blocked-request counter. `request.tabId` is the webContents id

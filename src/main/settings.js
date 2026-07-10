@@ -35,6 +35,19 @@ const APP_ICONS = Object.keys(APP_ICON_LABELS);
 const SUPPORTER_ICON_LABELS = { ember: 'Ember', plum: 'Plum', gold: 'Gold' };
 const SUPPORTER_ICONS = Object.keys(SUPPORTER_ICON_LABELS);
 
+function normalizeAdblockHostname(value) {
+  if (typeof value !== 'string') return null;
+  const input = value.trim();
+  if (!input) return null;
+  try {
+    return new URL(input.includes('://') ? input : `https://${input}`).hostname
+      .toLowerCase()
+      .replace(/^www\./, '') || null;
+  } catch {
+    return null;
+  }
+}
+
 const DEFAULTS = {
   searchEngine: 'duckduckgo',
   adblockEnabled: true,
@@ -95,8 +108,8 @@ function sanitize(partial) {
     clean.adblockExceptions = [
       ...new Set(
         partial.adblockExceptions
-          .filter((h) => typeof h === 'string')
-          .map((h) => h.trim().toLowerCase().replace(/^www\./, ''))
+          .map(normalizeAdblockHostname)
+          .filter(Boolean)
       ),
     ];
   }

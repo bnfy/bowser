@@ -9,7 +9,7 @@ feature's row in [`../parity-matrix.md`](../parity-matrix.md) shouldn't reach
 
 > Desktop is the shipped reference, so its `@all` cells are ✅ (behaviour verified
 > in the shipping app; automated step-defs are a separate track). iOS/Android are
-> greenfield → ⬜. Scenario count: **48** across 12 `.feature` files.
+> greenfield → ⬜. Scenario count: **50** across 12 `.feature` files.
 
 ## Files
 
@@ -46,6 +46,7 @@ feature's row in [`../parity-matrix.md`](../parity-matrix.md) shouldn't reach
 | F4-1 | Private not recorded / not reopenable | — | ✅ | ⬜ | ⬜ |
 | F4-2 | Private styling + quick exit | — | ✅ | ⬜ | ⬜ |
 | F4-3 | Child tabs inherit privacy | — | ✅ | ⬜ | ⬜ |
+| F4-4 | Private session isolated from ordinary tabs | — | ✅ | ⬜ | ⬜ |
 | F5-1 | Domain navigates | — | ✅ | ⬜ | ⬜ |
 | F5-2 | Query searches (4 engines) | — | ✅ | ⬜ | ⬜ |
 | F5-3 | `mailto:` hands off to OS | D4 | ✅ | ⬜ | ⬜ |
@@ -71,6 +72,7 @@ feature's row in [`../parity-matrix.md`](../parity-matrix.md) shouldn't reach
 | F15-2 | Private theme scope | — | ✅ | ⬜ | ⬜ |
 | F16-1 | Newtab ledger contents | — | ✅ | ⬜ | ⬜ |
 | F16-2 | Internal nav stays in scheme | — | ✅ | ⬜ | ⬜ |
+| F16-3 | Privileged chrome rejects web navigation | D11 | ✅ | ➖ | ➖ |
 | F17-1 | Supporter unlock enables colorways | D6 | ✅ | ⬜ | ⬜ |
 | F17-2 | Non-supporter locked + fallback | — | ✅ | ⬜ | ⬜ |
 | F18-1 | Relaunch restores groups, not private | D8 | ✅ | ⬜ | ⬜ |

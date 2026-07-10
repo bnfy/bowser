@@ -44,8 +44,12 @@ function setupPages(hooks = {}) {
   // trust that alone.
   const handle = (channel, fn) => {
     ipcMain.handle(channel, (event, ...args) => {
-      if (!event.sender.getURL().startsWith('blanc://')) {
-        throw new Error(`${channel}: denied for ${event.sender.getURL()}`);
+      let senderUrl = null;
+      try { senderUrl = new URL(event.senderFrame?.url ?? ''); } catch { /* denied below */ }
+      const trusted = event.senderFrame === event.sender.mainFrame &&
+        senderUrl?.protocol === 'blanc:' && KNOWN_PAGES.has(senderUrl.host);
+      if (!trusted) {
+        throw new Error(`${channel}: denied for ${event.senderFrame?.url ?? event.sender.getURL()}`);
       }
       return fn(...args);
     });
@@ -136,8 +140,13 @@ function setupPages(hooks = {}) {
   handle('pages:permissions:remove', (key) => removeDecision(String(key)));
 
   // The settings page promises "cookies, cache & site data" — clear both.
-  handle('pages:clear-browsing-data', () =>
-    Promise.all([session.defaultSession.clearStorageData(), session.defaultSession.clearCache()]));
+  handle('pages:clear-browsing-data', () => {
+    const browsingSessions = hooks.sessions ?? [session.defaultSession];
+    return Promise.all(browsingSessions.flatMap((browsingSession) => [
+      browsingSession.clearStorageData(),
+      browsingSession.clearCache(),
+    ]));
+  });
 }
 
 module.exports = { registerPagesScheme, setupPages };
