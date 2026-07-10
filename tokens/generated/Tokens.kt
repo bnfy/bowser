@@ -8,54 +8,54 @@ enum class BlancTheme { LIGHT, DARK, PRIVATE }
 
 object BlancTokens {
     fun bg(theme: BlancTheme): String = when (theme) {
-        BlancTheme.LIGHT -> "#f4f4f1"
+        BlancTheme.LIGHT -> "#ffffff"
         BlancTheme.DARK -> "#0e0e0e"
-        BlancTheme.PRIVATE -> "#0c110e"
+        BlancTheme.PRIVATE -> "#0a0a0a"
     }
     fun surface(theme: BlancTheme): String = when (theme) {
-        BlancTheme.LIGHT -> "#f9f8f4"
-        BlancTheme.DARK -> "#171917"
-        BlancTheme.PRIVATE -> "#121a15"
+        BlancTheme.LIGHT -> "#f7f7f7"
+        BlancTheme.DARK -> "#171717"
+        BlancTheme.PRIVATE -> "#131313"
     }
     fun surfaceRaised(theme: BlancTheme): String = when (theme) {
         BlancTheme.LIGHT -> "#ffffff"
-        BlancTheme.DARK -> "#1e221e"
-        BlancTheme.PRIVATE -> "#18231c"
+        BlancTheme.DARK -> "#1f1f1f"
+        BlancTheme.PRIVATE -> "#191919"
     }
     fun border(theme: BlancTheme): String = when (theme) {
-        BlancTheme.LIGHT -> "#dce2dc"
-        BlancTheme.DARK -> "#2a322b"
-        BlancTheme.PRIVATE -> "#2b3a30"
+        BlancTheme.LIGHT -> "#dedede"
+        BlancTheme.DARK -> "#2e2e2e"
+        BlancTheme.PRIVATE -> "#333333"
     }
     fun text(theme: BlancTheme): String = when (theme) {
         BlancTheme.LIGHT -> "#0e0e0e"
-        BlancTheme.DARK -> "#f4f4f1"
-        BlancTheme.PRIVATE -> "#f4f4f1"
+        BlancTheme.DARK -> "#f5f5f5"
+        BlancTheme.PRIVATE -> "#f5f5f5"
     }
     fun textDim(theme: BlancTheme): String = when (theme) {
-        BlancTheme.LIGHT -> "#5b6b61"
-        BlancTheme.DARK -> "#86a08f"
-        BlancTheme.PRIVATE -> "#8fac99"
+        BlancTheme.LIGHT -> "#6b6b6b"
+        BlancTheme.DARK -> "#9c9c9c"
+        BlancTheme.PRIVATE -> "#9c9c9c"
     }
     fun accent(theme: BlancTheme): String = when (theme) {
-        BlancTheme.LIGHT -> "#2f4639"
-        BlancTheme.DARK -> "#5d8b6b"
-        BlancTheme.PRIVATE -> "#a8c8b0"
+        BlancTheme.LIGHT -> "#111111"
+        BlancTheme.DARK -> "#f5f5f5"
+        BlancTheme.PRIVATE -> "#f5f5f5"
     }
     fun accentDim(theme: BlancTheme): String = when (theme) {
-        BlancTheme.LIGHT -> "rgba(47, 70, 57, 0.14)"
-        BlancTheme.DARK -> "rgba(93, 139, 107, 0.16)"
-        BlancTheme.PRIVATE -> "rgba(168, 200, 176, 0.16)"
+        BlancTheme.LIGHT -> "rgba(17, 17, 17, 0.08)"
+        BlancTheme.DARK -> "rgba(245, 245, 245, 0.12)"
+        BlancTheme.PRIVATE -> "rgba(245, 245, 245, 0.12)"
     }
     fun danger(theme: BlancTheme): String = when (theme) {
         BlancTheme.LIGHT -> "#ff3b30"
-        BlancTheme.DARK -> "#ff3b30"
-        BlancTheme.PRIVATE -> "#ff3b30"
+        BlancTheme.DARK -> "#ff453a"
+        BlancTheme.PRIVATE -> "#ff453a"
     }
     fun onDanger(theme: BlancTheme): String = when (theme) {
         BlancTheme.LIGHT -> "#ffffff"
-        BlancTheme.DARK -> "#f4f4f1"
-        BlancTheme.PRIVATE -> "#0c110e"
+        BlancTheme.DARK -> "#0e0e0e"
+        BlancTheme.PRIVATE -> "#0a0a0a"
     }
     fun selectCaret(theme: BlancTheme): String = when (theme) {
         BlancTheme.LIGHT -> "url(\"select-caret.svg\")"

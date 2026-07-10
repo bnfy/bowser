@@ -1,16 +1,17 @@
-/* One green in two lights: bone by day, charcoal by night, the same hue
-   as the accent in both — pine (deep) on light, sage (bright) on dark.
-   The theme follows Electron's nativeTheme (Settings → Appearance), which
-   drives prefers-color-scheme here. */
+/* Neutral monochrome: pure paper/ink with graphite grays, no hue anywhere
+   (matches the blancbrowser.com redesign). Private mode is told apart by
+   dashed borders + a "private" chip, not by a color cast. The theme follows
+   Electron's nativeTheme (Settings → Appearance), which drives
+   prefers-color-scheme here. */
 :root {
-  --bg: #f4f4f1;
-  --surface: #f9f8f4;
+  --bg: #ffffff;
+  --surface: #f7f7f7;
   --surface-raised: #ffffff;
-  --border: #dce2dc;
+  --border: #dedede;
   --text: #0e0e0e;
-  --text-dim: #5b6b61;
-  --accent: #2f4639;
-  --accent-dim: rgba(47, 70, 57, 0.14);
+  --text-dim: #6b6b6b;
+  --accent: #111111;
+  --accent-dim: rgba(17, 17, 17, 0.08);
   --danger: #ff3b30;
   --on-danger: #ffffff;
 
@@ -31,32 +32,32 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #0e0e0e;
-    --surface: #171917;
-    --surface-raised: #1e221e;
-    --border: #2a322b;
-    --text: #f4f4f1;
-    --text-dim: #86a08f;
-    --accent: #5d8b6b;
-    --accent-dim: rgba(93, 139, 107, 0.16);
-    --danger: #ff3b30;
-    --on-danger: #f4f4f1;
+    --surface: #171717;
+    --surface-raised: #1f1f1f;
+    --border: #2e2e2e;
+    --text: #f5f5f5;
+    --text-dim: #9c9c9c;
+    --accent: #f5f5f5;
+    --accent-dim: rgba(245, 245, 245, 0.12);
+    --danger: #ff453a;
+    --on-danger: #0e0e0e;
   }
 }
 
-/* Private mode — a green-cast night: deeper than dark mode, sage-light
-   accent for clear contrast against regular dark browsing. Applied while
-   the active tab is private (keep in sync with pages.css). */
+/* Private mode — same neutral ink, deeper than dark mode; told apart by
+   dashed borders and an explicit "private" chip rather than a color cast.
+   Applied while the active tab is private (keep in sync with pages.css). */
 :root[data-theme="private"] {
-  --bg: #0c110e;
-  --surface: #121a15;
-  --surface-raised: #18231c;
-  --border: #2b3a30;
-  --text: #f4f4f1;
-  --text-dim: #8fac99;
-  --accent: #a8c8b0;
-  --accent-dim: rgba(168, 200, 176, 0.16);
-  --danger: #ff3b30;
-  --on-danger: #0c110e;
+  --bg: #0a0a0a;
+  --surface: #131313;
+  --surface-raised: #191919;
+  --border: #333333;
+  --text: #f5f5f5;
+  --text-dim: #9c9c9c;
+  --accent: #f5f5f5;
+  --accent-dim: rgba(245, 245, 245, 0.12);
+  --danger: #ff453a;
+  --on-danger: #0a0a0a;
 }
 
 * { box-sizing: border-box; }
@@ -125,10 +126,10 @@ button svg {
 }
 
 /* Keep window controls legible when the sampled page color is dark. */
-#strip.tint-dark #windowControls button { color: rgba(244, 244, 241, 0.75); }
+#strip.tint-dark #windowControls button { color: rgba(245, 245, 245, 0.75); }
 #strip.tint-dark #windowControls button:hover {
   background: rgba(255, 255, 255, 0.14);
-  color: #f4f4f1;
+  color: #f5f5f5;
 }
 
 /* ---------- Island: resting pill ---------- */
@@ -694,26 +695,27 @@ body[data-mode="palette"] #panelAnchor { top: 120px; }
   align-items: center;
   gap: 5px;
   height: 28px;
-  padding: 0 8px;
-  border-radius: var(--radius);
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
   color: var(--text-dim);
   font-family: var(--font-mono);
   font-size: 12px;
   white-space: nowrap;
   flex: 0 0 auto;
 }
-.footer-new:hover { background: var(--surface); color: var(--text); }
+.footer-new:hover { border-color: var(--text-dim); color: var(--text); }
 .footer-new svg { width: 13px; height: 13px; }
 
-/* Private launcher: hairline separator on its left, and its label wears the
-   dashed underline that marks private throughout the chrome. */
+/* Private launcher: the same pill, but a dashed border — the dashed marker
+   that denotes private throughout the chrome (so the label no longer needs
+   its own dashed underline). */
 .footer-new.private {
-  margin-left: 2px;
-  padding-left: 10px;
-  border-left: 1px solid var(--border);
-  border-radius: 0;
+  margin-left: 4px;
+  border-style: dashed;
+  border-color: var(--text-dim);
 }
-.footer-private-label { border-bottom: 1px dashed var(--text-dim); }
 
 .footer-kbd {
   font-size: 10.5px;

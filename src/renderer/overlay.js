@@ -56,7 +56,7 @@
   let visibleResults = [];
 
   const ICONS = {
-    reload: '<svg viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-5-5c1.4 0 2.74.56 3.74 1.53L13 5.78"/><path d="M13 3v2.78h-2.78"/></svg>',
+    reload: '<svg viewBox="0 0 16 16"><path d="M12.42 10.35a5 5 0 1 1-4.42-7.35c1.4 0 2.74.56 3.74 1.53L13 5.78"/><path d="M13 3v2.78h-2.78"/></svg>',
     stop: '<svg viewBox="0 0 16 16"><path d="M4.25 4.25l7.5 7.5M11.75 4.25l-7.5 7.5"/></svg>',
     close: '<svg viewBox="0 0 16 16"><path d="M4.75 4.75l6.5 6.5M11.25 4.75l-6.5 6.5"/></svg>',
     pin: '<svg viewBox="0 0 16 16"><path d="M5 3h6l-1 5 2 2v1H4v-1l2-2z"/><path d="M8 11v3"/></svg>',
@@ -390,8 +390,8 @@
     { cmd: '/downloads', hint: 'Open downloads', run: () => window.browserAPI.openPage('downloads') },
     { cmd: '/settings', hint: 'Open settings', run: () => window.browserAPI.openPage('settings') },
     { cmd: '/clear', hint: 'Clear browsing history', run: () => window.browserAPI.clearHistory() },
-    { cmd: '/new', hint: 'Open a new tab', run: () => window.browserAPI.createTab() },
-    { cmd: '/private', hint: 'Open a private tab (history stays untouched)', run: () => window.browserAPI.createTab(null, { private: true }) },
+    { cmd: '/new', hint: 'Open a new tab', run: () => window.browserAPI.createTab(null, { focusAddress: false }) },
+    { cmd: '/private', hint: 'Open a private tab (history stays untouched)', run: () => window.browserAPI.createTab(null, { private: true, focusAddress: false }) },
     { cmd: '/close', hint: 'Close this tab', run: () => state.activeTabId && window.browserAPI.closeTab(state.activeTabId) },
     { cmd: '/pin', hint: 'Pin or unpin this tab', run: () => state.activeTabId && window.browserAPI.toggleTabPinned(state.activeTabId) },
     { cmd: '/mute', hint: 'Mute or unmute this tab', run: () => state.activeTabId && window.browserAPI.toggleTabMuted(state.activeTabId) },
@@ -721,13 +721,15 @@
   footerNewTab.title = `New tab (${modKey}T)`;
   footerNewPrivate.title = `New private tab (${modShiftKey}N)`;
 
+  // focusAddress:false keeps the panel closed and lands the user on the fresh
+  // tab, rather than main re-summoning the launchpad (its default for ⌘T).
   footerNewTab.addEventListener('click', () => {
     window.browserAPI.closeOverlay();
-    window.browserAPI.createTab(); // main reopens the panel focused on the blank tab
+    window.browserAPI.createTab(null, { focusAddress: false });
   });
   footerNewPrivate.addEventListener('click', () => {
     window.browserAPI.closeOverlay();
-    window.browserAPI.createTab(null, { private: true });
+    window.browserAPI.createTab(null, { private: true, focusAddress: false });
   });
   // Each shortcut opens its internal page; close first so main can re-show
   // the overlay cleanly where needed (mirrors runCommand for /favorites etc).

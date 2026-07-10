@@ -13,72 +13,72 @@ public enum BlancTheme: String, CaseIterable {
 public enum BlancTokens {
     public static func bg(_ theme: BlancTheme) -> String {
         switch theme {
-        case .light: return "#f4f4f1"
+        case .light: return "#ffffff"
         case .dark: return "#0e0e0e"
-        case .privateBrowsing: return "#0c110e"
+        case .privateBrowsing: return "#0a0a0a"
         }
     }
     public static func surface(_ theme: BlancTheme) -> String {
         switch theme {
-        case .light: return "#f9f8f4"
-        case .dark: return "#171917"
-        case .privateBrowsing: return "#121a15"
+        case .light: return "#f7f7f7"
+        case .dark: return "#171717"
+        case .privateBrowsing: return "#131313"
         }
     }
     public static func surfaceRaised(_ theme: BlancTheme) -> String {
         switch theme {
         case .light: return "#ffffff"
-        case .dark: return "#1e221e"
-        case .privateBrowsing: return "#18231c"
+        case .dark: return "#1f1f1f"
+        case .privateBrowsing: return "#191919"
         }
     }
     public static func border(_ theme: BlancTheme) -> String {
         switch theme {
-        case .light: return "#dce2dc"
-        case .dark: return "#2a322b"
-        case .privateBrowsing: return "#2b3a30"
+        case .light: return "#dedede"
+        case .dark: return "#2e2e2e"
+        case .privateBrowsing: return "#333333"
         }
     }
     public static func text(_ theme: BlancTheme) -> String {
         switch theme {
         case .light: return "#0e0e0e"
-        case .dark: return "#f4f4f1"
-        case .privateBrowsing: return "#f4f4f1"
+        case .dark: return "#f5f5f5"
+        case .privateBrowsing: return "#f5f5f5"
         }
     }
     public static func textDim(_ theme: BlancTheme) -> String {
         switch theme {
-        case .light: return "#5b6b61"
-        case .dark: return "#86a08f"
-        case .privateBrowsing: return "#8fac99"
+        case .light: return "#6b6b6b"
+        case .dark: return "#9c9c9c"
+        case .privateBrowsing: return "#9c9c9c"
         }
     }
     public static func accent(_ theme: BlancTheme) -> String {
         switch theme {
-        case .light: return "#2f4639"
-        case .dark: return "#5d8b6b"
-        case .privateBrowsing: return "#a8c8b0"
+        case .light: return "#111111"
+        case .dark: return "#f5f5f5"
+        case .privateBrowsing: return "#f5f5f5"
         }
     }
     public static func accentDim(_ theme: BlancTheme) -> String {
         switch theme {
-        case .light: return "rgba(47, 70, 57, 0.14)"
-        case .dark: return "rgba(93, 139, 107, 0.16)"
-        case .privateBrowsing: return "rgba(168, 200, 176, 0.16)"
+        case .light: return "rgba(17, 17, 17, 0.08)"
+        case .dark: return "rgba(245, 245, 245, 0.12)"
+        case .privateBrowsing: return "rgba(245, 245, 245, 0.12)"
         }
     }
     public static func danger(_ theme: BlancTheme) -> String {
         switch theme {
         case .light: return "#ff3b30"
-        case .dark: return "#ff3b30"
-        case .privateBrowsing: return "#ff3b30"
+        case .dark: return "#ff453a"
+        case .privateBrowsing: return "#ff453a"
         }
     }
     public static func onDanger(_ theme: BlancTheme) -> String {
         switch theme {
         case .light: return "#ffffff"
-        case .dark: return "#f4f4f1"
-        case .privateBrowsing: return "#0c110e"
+        case .dark: return "#0e0e0e"
+        case .privateBrowsing: return "#0a0a0a"
         }
     }
     public static func selectCaret(_ theme: BlancTheme) -> String {

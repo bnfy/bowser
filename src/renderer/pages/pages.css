@@ -1,14 +1,15 @@
-/* Token roles mirror styles.css: one green in two lights, bone by day,
-   charcoal by night. Theme follows nativeTheme via prefers-color-scheme. */
+/* Token roles mirror styles.css: neutral monochrome — pure paper/ink with
+   graphite grays, no hue (matches the blancbrowser.com redesign). Theme
+   follows nativeTheme via prefers-color-scheme. */
 :root {
-  --bg: #f4f4f1;
-  --surface: #f9f8f4;
+  --bg: #ffffff;
+  --surface: #f7f7f7;
   --surface-raised: #ffffff;
-  --border: #dce2dc;
+  --border: #dedede;
   --text: #0e0e0e;
-  --text-dim: #5b6b61;
-  --accent: #2f4639;
-  --accent-dim: rgba(47, 70, 57, 0.14);
+  --text-dim: #6b6b6b;
+  --accent: #111111;
+  --accent-dim: rgba(17, 17, 17, 0.08);
   --danger: #ff3b30;
   --on-danger: #ffffff;
 
@@ -23,33 +24,33 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #0e0e0e;
-    --surface: #171917;
-    --surface-raised: #1e221e;
-    --border: #2a322b;
-    --text: #f4f4f1;
-    --text-dim: #86a08f;
-    --accent: #5d8b6b;
-    --accent-dim: rgba(93, 139, 107, 0.16);
-    --danger: #ff3b30;
-    --on-danger: #f4f4f1;
+    --surface: #171717;
+    --surface-raised: #1f1f1f;
+    --border: #2e2e2e;
+    --text: #f5f5f5;
+    --text-dim: #9c9c9c;
+    --accent: #f5f5f5;
+    --accent-dim: rgba(245, 245, 245, 0.12);
+    --danger: #ff453a;
+    --on-danger: #0e0e0e;
     --select-caret: url("select-caret-dark.svg");
   }
 }
 
-/* Private mode — a green-cast night: deeper than dark mode, sage-light
-   accent. Applied by pages loaded in a private tab (keep in sync with
-   styles.css). */
+/* Private mode — same neutral ink, deeper than dark mode; told apart by
+   dashed borders and a "private" chip, not a color cast. Applied by pages
+   loaded in a private tab (keep in sync with styles.css). */
 :root[data-theme="private"] {
-  --bg: #0c110e;
-  --surface: #121a15;
-  --surface-raised: #18231c;
-  --border: #2b3a30;
-  --text: #f4f4f1;
-  --text-dim: #8fac99;
-  --accent: #a8c8b0;
-  --accent-dim: rgba(168, 200, 176, 0.16);
-  --danger: #ff3b30;
-  --on-danger: #0c110e;
+  --bg: #0a0a0a;
+  --surface: #131313;
+  --surface-raised: #191919;
+  --border: #333333;
+  --text: #f5f5f5;
+  --text-dim: #9c9c9c;
+  --accent: #f5f5f5;
+  --accent-dim: rgba(245, 245, 245, 0.12);
+  --danger: #ff453a;
+  --on-danger: #0a0a0a;
   --select-caret: url("select-caret-dark.svg");
 }
 
