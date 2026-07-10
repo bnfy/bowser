@@ -35,11 +35,19 @@ final class WKRuleListStoreAdapter: RuleListStoring {
         found: @escaping (Bool) -> Void
     ) {
         store?.lookUpContentRuleList(forIdentifier: identifier) { [weak self] ruleList, _ in
-            if let ruleList {
-                self?.blocker?.compiledRuleList = ruleList
-                found(true)
-            } else {
-                found(false)
+            // WKContentRuleListStore — unlike WKWebView and its navigation delegate,
+            // which the SDK marks @MainActor — does not annotate its completion as
+            // main-actor, yet WebKit does invoke it on the main thread. ContentBlocker's
+            // state (isReady/pendingTargets/compiledRuleList) is main-actor-isolated and
+            // read by SwiftUI, so assert that isolation before touching it rather than
+            // mutating observable state from a nominally non-isolated context.
+            MainActor.assumeIsolated {
+                if let ruleList {
+                    self?.blocker?.compiledRuleList = ruleList
+                    found(true)
+                } else {
+                    found(false)
+                }
             }
         }
     }
@@ -53,12 +61,14 @@ final class WKRuleListStoreAdapter: RuleListStoring {
             forIdentifier: identifier,
             encodedContentRuleList: encodedContentRuleList
         ) { [weak self] ruleList, error in
-            if let ruleList {
-                self?.blocker?.compiledRuleList = ruleList
-                completed(true)
-            } else {
-                if let error { print("ContentBlocker compile error: \(error)") }
-                completed(false)
+            MainActor.assumeIsolated {
+                if let ruleList {
+                    self?.blocker?.compiledRuleList = ruleList
+                    completed(true)
+                } else {
+                    if let error { print("ContentBlocker compile error: \(error)") }
+                    completed(false)
+                }
             }
         }
     }

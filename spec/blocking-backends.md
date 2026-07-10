@@ -189,3 +189,14 @@ Resolved in [the iOS port roadmap](../docs/superpowers/specs/2026-07-07-ios-port
 
 Beta (M5) ships a single bundled list; the full partition / exception / cosmetic /
 remote-config machinery lands at M15.
+
+> **M5 converter caveat — exception asymmetry.** The bundled M5 converter maps only
+> an allowlist of network-filter options (party, resource type, `$domain=`) and drops
+> any filter carrying an unsupported one. For a **block** rule that is fail-safe:
+> dropping it merely under-blocks. But dropping an **`@@` exception** that carries an
+> unsupported option (`$document`, `$elemhide`, `$xmlhttprequest`, `$subdocument`, …)
+> can leave a broader block in force where EasyList intended an exemption — i.e. it
+> can **over-block and break a site**, the less-safe direction. Accepted for M5's
+> minimal single-list scope; M15 resolves it via the value-ordered partition plus the
+> `ignore-previous-rules` allowlist above, which together preserve exemptions instead
+> of dropping them.
