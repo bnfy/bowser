@@ -66,11 +66,19 @@ final class WKRuleListStoreAdapter: RuleListStoring {
 
 @Observable
 final class ContentBlocker {
+    /// A *weakly*-held queued attach target. Web views waiting on the cold-compile
+    /// window must not be pinned by the blocker: a tab closed mid-compile has to be
+    /// able to deallocate, and a terminal compile failure must not leak the whole
+    /// queue for the app's lifetime.
+    private struct WeakTarget {
+        weak var target: RuleListAttaching?
+    }
+
     var isReady = false
 
     @ObservationIgnored var compiledRuleList: WKContentRuleList?
     @ObservationIgnored private let store: RuleListStoring
-    @ObservationIgnored private var pendingTargets: [RuleListAttaching] = []
+    @ObservationIgnored private var pendingTargets: [WeakTarget] = []
 
     init(store: RuleListStoring = WKRuleListStoreAdapter()) {
         self.store = store
@@ -111,8 +119,17 @@ final class ContentBlocker {
         if isReady {
             target.attachContentBlockingRules(from: self)
         } else {
-            pendingTargets.append(target)
+            pendingTargets.append(WeakTarget(target: target))
         }
+    }
+
+    /// Removes `target` from the pending queue — called when a tab closes during the
+    /// compile window so its detached web view never receives a pointless add-rules +
+    /// reload on drain. `closeTab` calls this with the web view still alive (before the
+    /// tab is dropped), so an identity match is sufficient; `drainPending` separately
+    /// skips any box whose target deallocated while queued.
+    func cancelPending(for target: RuleListAttaching) {
+        pendingTargets.removeAll { $0.target === target }
     }
 
     private func compile(version: String, jsonString: String) {
@@ -120,17 +137,23 @@ final class ContentBlocker {
             forIdentifier: version,
             encodedContentRuleList: jsonString
         ) { [weak self] success in
-            guard let self, success else { return }
+            guard let self else { return }
+            guard success else {
+                // Terminal failure: drop the queue so it can't leak for the app's lifetime.
+                self.pendingTargets.removeAll()
+                return
+            }
             self.isReady = true
             self.drainPending()
         }
     }
 
     private func drainPending() {
-        let targets = pendingTargets
+        let boxes = pendingTargets
         pendingTargets.removeAll()
-        for target in targets {
-            target.attachContentBlockingRules(from: self)
+        for box in boxes {
+            // Skip any target that deallocated while queued (e.g. a tab closed mid-compile).
+            box.target?.attachContentBlockingRules(from: self)
         }
     }
 }

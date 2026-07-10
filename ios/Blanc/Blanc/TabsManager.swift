@@ -49,6 +49,9 @@ final class TabsManager {
     func closeTab(_ id: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
         let wasActive = id == activeTabId
+        // If the tab is still queued for a cold-compile drain, drop it so its web view
+        // isn't reloaded after it's gone (and isn't kept alive by the pending queue).
+        contentBlocker.cancelPending(for: tabs[index].webView)
         tabs.remove(at: index)
 
         if tabs.isEmpty {
