@@ -90,6 +90,10 @@ ASSETS=(
   "dist/Blanc-$VERSION-arm64-mac.zip.blockmap"
   "dist/Blanc-$VERSION-arm64.dmg"
   "dist/Blanc-$VERSION-arm64.dmg.blockmap"
+  "dist/Blanc-$VERSION-mac.zip"
+  "dist/Blanc-$VERSION-mac.zip.blockmap"
+  "dist/Blanc-$VERSION.dmg"
+  "dist/Blanc-$VERSION.dmg.blockmap"
   "dist/latest-mac.yml"
 )
 for f in "${ASSETS[@]}"; do
