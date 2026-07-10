@@ -92,6 +92,24 @@ body.has-consent .hero { padding-bottom: 154px; }
   78%, 100% { transform: translateY(-116px); }
 }
 
+/* Hero demo models the real Blanc window, same as the static figures (see the
+   .island-figure block near the end of this file): the resting Island lives in
+   a slim top strip and the page render begins BELOW it, so the Island is fixed
+   above the content area rather than sitting on top of the site. The strip is
+   color-matched to the current scene's page top edge (--demo-strip-bg, set per
+   scene by demo.js) so it reads as the page's own top margin, not a browser
+   bar. Only the resting pill is parked in the strip and scaled to true size;
+   the open panel is exempt because it genuinely floats over the page. */
+#demoStage { --demo-strip-h: 48px; background: var(--demo-strip-bg, var(--surface)); }
+#demoStage .demo-page,
+#demoStage .demo-shot { top: var(--demo-strip-h); height: auto; }
+#demoStage .demo-island { top: 6px; }
+#demoStage .demo-island:not(.open) .pill { transform: scale(0.8); transform-origin: top center; }
+/* The skeleton bars are only a pre-load fallback. Once a real page shot is up,
+   hide them — otherwise the scrolling scene animates a bar up into the top
+   strip (which the shot doesn't cover) and it peeks out over the strip color. */
+#demoStage:has(.demo-shot.show) .demo-page { display: none; }
+
 .demo-island { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 5; white-space: nowrap; }
 .demo-island .pill { display: flex; align-items: center; gap: 12px; padding: 9px 16px; background: var(--surface-raised); border: 1px solid var(--border); border-radius: 999px; box-shadow: 0 12px 28px rgba(14,14,14,0.1); transition: opacity 160ms ease, transform 160ms ease, background 220ms ease, border-color 220ms ease; }
 .demo-stage[data-theme="private"] .demo-island .pill { border-style: dashed; }
@@ -638,8 +656,37 @@ footer .foot-ic.ig svg path { stroke: currentColor; stroke-width: 0.35; stroke-l
    mirror the disabled-arrow dimming with a class instead of :disabled. */
 .demo-island .pbtn.off { color: var(--border); }
 
+/* ---------- resting-pill figures: model the real Blanc window ----------
+   In the app the resting pill lives in a slim top strip and the web page
+   begins BELOW it (page never sits behind the pill); the strip is color-
+   matched to the page's top edge so it reads as the page's own top margin,
+   not a browser bar. So here: push the page shot down by the strip height,
+   fill the strip band with the page's top-edge color (--fig-strip-bg, keyed
+   per figure via data-page-tone), and scale the pill to the same ratio the
+   shot itself is reduced to, so the Island reads at true size rather than
+   oversized. Panel figures are exempt — their expanded panel genuinely
+   floats over the page (overlay view), so they stay full-bleed. */
+.island-figure { --fig-strip-h: 36px; --fig-strip-bg: var(--bg); }
+.island-figure[data-page-tone="light"]   { --fig-strip-bg: #ffffff; }
+.island-figure[data-page-tone="github"]  { --fig-strip-bg: #030442; }
+.island-figure[data-page-tone="netflix"] { --fig-strip-bg: #080706; }
+
+.island-figure:not(.island-figure--panel) { background: var(--fig-strip-bg); }
+.island-figure:not(.island-figure--panel) .demo-page,
+.island-figure:not(.island-figure--panel) .demo-shot { top: var(--fig-strip-h); height: auto; }
+.island-figure:not(.island-figure--panel) .demo-island {
+  top: calc(var(--fig-strip-h) / 2);
+  transform: translateX(-50%) translateY(-50%) scale(0.56);
+  transform-origin: center center;
+}
+
 @media (max-width: 640px) {
-  .island-figure { height: 244px; }
+  .island-figure { height: 244px; --fig-strip-h: 30px; }
   .island-figure--panel { height: 360px; }
   .island-figure .demo-island .panel { width: 94%; max-height: 316px; }
+  /* The narrow pill has already shed its flanking chrome (≤560px), so it is
+     much smaller — scale it less so it doesn't shrink into illegibility. */
+  .island-figure:not(.island-figure--panel) .demo-island {
+    transform: translateX(-50%) translateY(-50%) scale(0.72);
+  }
 }

@@ -102,6 +102,12 @@
   const mobileMq = window.matchMedia('(max-width: 560px)');
   let MOBILE = mobileMq.matches;
   const SHOT_IDS = ['github', 'notion', 'scroll', 'netflix']; // sites with a bundled render
+  // Sampled top-edge color of each bundled render, so the Island's top strip
+  // blends into the page below it (the CSS reads --demo-strip-bg). A scene with
+  // no bundled shot falls back to the theme surface (matches the skeleton); a
+  // private scene uses Blanc's own dark page color.
+  const SHOT_TOP = { github: '#030442', notion: '#ffffff', scroll: '#ffffff', netflix: '#080706' };
+  const PRIVATE_TOP = '#0a0a0a';
   const shots = {}; // id -> { src, ready }
   let currentShotId = null;
 
@@ -396,6 +402,9 @@
 
     renderPill(s.layout, current, s);
     showShot(s.priv ? null : current); // private tabs open Blanc's own dark page
+    // Color-match the top strip to the page now behind it, so the Island reads
+    // as floating in the page's top margin rather than on a browser bar.
+    stage.style.setProperty('--demo-strip-bg', s.priv ? PRIVATE_TOP : (SHOT_TOP[current] || ''));
     setCap(s.cap);
 
     if (open) {
