@@ -9,11 +9,5 @@
   <true/>
   <key>com.apple.security.cs.disable-library-validation</key>
   <true/>
-
-  <!-- Must match WEBAUTHN_KEYCHAIN_ACCESS_GROUP in src/main/webauthn.js. -->
-  <key>keychain-access-groups</key>
-  <array>
-    <string>XYGUCY4498.me.bnfy.bowser.webauthn</string>
-  </array>
 </dict>
 </plist>
