@@ -209,4 +209,24 @@ final class TabsManagerTests: XCTestCase {
         XCTAssertEqual(dict["urls"] as? [String], ["blanc://newtab/", "https://test.com/"])
         XCTAssertEqual(dict["activeIndex"] as? Int, 1)
     }
+
+    func testSubmitAddressPersistsNavigation() {
+        // Typed-address navigation updates currentURL synchronously in submitAddress,
+        // so onURLChange (which fires only on a *change* at load time) is suppressed.
+        // submitActiveTabAddress must persist explicitly, or the typed URL is lost on
+        // the next launch. Regression test for that P1.
+        let sessionDir = tmpDir()
+        let m = makeManager(sessionDir: sessionDir)
+        m.activeTab?.addressText = "example.com"
+        m.submitActiveTabAddress()
+        m.flushSession()
+
+        let navigated = m.activeTab!.currentURL.absoluteString
+        XCTAssertTrue(navigated.contains("example.com"), "expected navigation to example.com, got \(navigated)")
+
+        let data = try! Data(contentsOf: sessionDir.appendingPathComponent("session.json"))
+        let dict = try! JSONSerialization.jsonObject(with: data) as! [String: Any]
+        XCTAssertEqual(dict["urls"] as? [String], [navigated],
+                       "typed navigation must be persisted, not the pre-navigation URL")
+    }
 }

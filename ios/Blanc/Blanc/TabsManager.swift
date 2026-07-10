@@ -107,6 +107,11 @@ final class TabsManager {
 
     func submitActiveTabAddress() {
         activeTab?.submitAddress(using: normalizer)
+        // submitAddress moves currentURL to the destination synchronously, so the
+        // later navigation's onURLChange sees no change and won't fire. Persist the
+        // typed navigation here, or a typed URL that resolves unchanged is lost on
+        // the next launch.
+        persistSession()
     }
 
     /// Snapshots the open tabs' URLs + active index to the session store
