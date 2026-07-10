@@ -14,7 +14,7 @@ const accounts = [
 ];
 
 test('uses Blanc’s stable signing identity for the Secure Enclave access group', () => {
-  assert.equal(WEBAUTHN_KEYCHAIN_ACCESS_GROUP, 'XYGUCY4498.me.bnfy.bowser.webauthn');
+  assert.equal(WEBAUTHN_KEYCHAIN_ACCESS_GROUP, 'XYGUCY4498.me.bnfy.bowser');
 });
 
 test('labels discoverable credentials for the native account chooser', () => {

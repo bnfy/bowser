@@ -1,9 +1,10 @@
 // Electron 41.5+ can back WebAuthn platform-authenticator requests with the
-// Mac's Secure Enclave. This is intentionally a Blanc-specific access group:
-// its passkeys are device-bound and do not expose a person's iCloud Keychain.
+// Mac's Secure Enclave. Uses the app's own default keychain access group
+// (TeamID.BundleID) — every signed app can access this implicitly, no
+// keychain-access-groups entitlement or provisioning profile required.
 const APPLE_TEAM_ID = 'XYGUCY4498';
 const BUNDLE_ID = 'me.bnfy.bowser';
-const WEBAUTHN_KEYCHAIN_ACCESS_GROUP = `${APPLE_TEAM_ID}.${BUNDLE_ID}.webauthn`;
+const WEBAUTHN_KEYCHAIN_ACCESS_GROUP = `${APPLE_TEAM_ID}.${BUNDLE_ID}`;
 
 function accountLabel(account, index) {
   const label = account?.displayName || account?.name;
