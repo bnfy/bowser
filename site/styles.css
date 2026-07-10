@@ -283,3 +283,33 @@ footer .line a:hover { color: var(--accent); border-color: var(--accent); }
 .more-line { margin: 6px auto; max-width: 640px; font-family: var(--font-mono); font-size: 12.5px; color: var(--text-dim); }
 .more-line a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--border); padding-bottom: 1px; transition: color 0.15s, border-color 0.15s; }
 .more-line a:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ---------- legal / document pages (privacy, terms) ---------- */
+.legal-top { display: flex; justify-content: center; padding: 30px 24px 4px; }
+.legal-home { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; color: var(--text); transition: opacity 0.15s; }
+.legal-home:hover { opacity: 0.7; }
+.legal-home .mark { height: 24px; width: auto; color: var(--accent); }
+.legal-home .wordmark { font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.02em; }
+
+.legal-doc { max-width: 680px; margin: 0 auto; padding: 44px 24px 76px; }
+.legal-doc .eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--text-dim); margin: 0 0 16px; }
+.legal-doc h1 { font-size: clamp(30px, 3.4vw, 40px); font-weight: 500; letter-spacing: -0.015em; line-height: 1.12; margin: 0; }
+.legal-updated { font-family: var(--font-mono); font-size: 12.5px; color: var(--text-dim); margin: 12px 0 0; }
+.legal-lead { font-size: 15.5px; line-height: 1.6; color: var(--text-dim); margin: 16px 0 0; max-width: 60ch; }
+
+.legal-tldr { margin: 30px 0 4px; padding: 18px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.legal-tldr p { margin: 0; font-size: 15px; line-height: 1.62; color: var(--text); }
+
+.legal-doc h2 { font-size: 19px; font-weight: 600; letter-spacing: -0.01em; margin: 42px 0 12px; }
+.legal-doc h3 { font-size: 15.5px; font-weight: 600; margin: 24px 0 8px; }
+.legal-doc p { font-size: 15px; line-height: 1.66; color: var(--text); margin: 0 0 14px; }
+.legal-doc ul { margin: 0 0 16px; padding-left: 20px; }
+.legal-doc li { font-size: 15px; line-height: 1.6; color: var(--text); margin: 0 0 9px; }
+.legal-doc strong { font-weight: 600; }
+.legal-doc a { color: var(--text); text-decoration: none; border-bottom: 1px solid var(--border); padding-bottom: 1px; transition: color 0.15s, border-color 0.15s; }
+.legal-doc a:hover { color: var(--accent); border-color: var(--accent); }
+
+@media (max-width: 480px) {
+  .legal-top { padding: 22px 18px 4px; }
+  .legal-doc { padding: 32px 18px 56px; }
+}
