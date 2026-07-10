@@ -404,14 +404,13 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outlin
 
 /* ---------- tablet containment ----------
    Between phone and desktop widths, the Island capture's intrinsic dimensions
-   could keep the two-column story wider than the viewport, while a centered
-   proof rail could start a few pixels offscreen. Let both regions yield before
-   the phone breakpoint takes over. */
+   could keep the two-column story wider than the viewport. Let it yield before
+   the phone breakpoint takes over. The proof rail stays centered here — it
+   wraps, so it can't overflow; only the ≤640px scroller needs flex-start. */
 @media (max-width: 1080px) {
   .home-story { grid-template-columns: minmax(0, 0.84fr) minmax(0, 1.16fr); gap: clamp(30px, 5vw, 56px); }
   .home-story > * { min-width: 0; }
   .home-story .product-capture { max-width: 100%; }
-  .proof-rail { justify-content: flex-start; }
 }
 
 @media (max-width: 760px) {
