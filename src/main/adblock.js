@@ -14,8 +14,8 @@ const cachePath = () =>
 
 /** @type {ElectronBlocker | null} */
 let blocker = null;
-/** @type {Electron.Session | null} */
-let attachedSession = null;
+/** @type {Set<Electron.Session>} */
+const attachedSessions = new Set();
 
 /**
  * Resolves the hostname of the tab a request came from, for per-site
@@ -98,21 +98,29 @@ async function setupAdBlocker(session, { enabled = true } = {}) {
     write: fs.promises.writeFile,
   });
 
-  attachedSession = session;
+  attachedSessions.add(session);
   if (enabled) applyBlockingWithExceptions(session);
   return blocker;
 }
 
 /** Toggle blocking at runtime (used by the settings page). */
 function setAdBlockEnabled(enabled) {
-  if (!blocker || !attachedSession) return;
-  const isEnabled = blocker.isBlockingEnabled(attachedSession);
-  if (enabled && !isEnabled) applyBlockingWithExceptions(attachedSession);
-  if (!enabled && isEnabled) blocker.disableBlockingInSession(attachedSession);
+  if (!blocker) return;
+  for (const ses of attachedSessions) {
+    const isEnabled = blocker.isBlockingEnabled(ses);
+    if (enabled && !isEnabled) applyBlockingWithExceptions(ses);
+    if (!enabled && isEnabled) blocker.disableBlockingInSession(ses);
+  }
+}
+
+function enableBlockingForSession(ses) {
+  if (!blocker) return;
+  attachedSessions.add(ses);
+  applyBlockingWithExceptions(ses);
 }
 
 function getBlocker() {
   return blocker;
 }
 
-module.exports = { setupAdBlocker, setAdBlockEnabled, getBlocker };
+module.exports = { setupAdBlocker, setAdBlockEnabled, enableBlockingForSession, getBlocker };

@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { pathToFileURL } = require('url');
-const { setupAdBlocker, setAdBlockEnabled, getBlocker } = require('./adblock');
+const { setupAdBlocker, setAdBlockEnabled, enableBlockingForSession, getBlocker } = require('./adblock');
 const { registerPagesScheme, setupPages } = require('./pages');
 const { setupPermissionPolicy, setPermissionPrompter } = require('./permissions');
 const { setupAutoUpdater, checkForUpdatesManually } = require('./updater');
@@ -135,7 +135,7 @@ function openExternalUrl(url) {
 // navigation (will-navigate), window.open children (setWindowOpenHandler),
 // the context menu's "Open Link" actions, and typed address-bar input.
 const HANDOFF_PROTOCOLS = new Set(['mailto:', 'tel:', 'facetime:', 'sms:']);
-function handOffToOs(url) {
+function handOffToOs(url, { silent = false } = {}) {
   let protocol;
   try {
     protocol = new URL(url).protocol;
@@ -143,6 +143,17 @@ function handOffToOs(url) {
     return false;
   }
   if (!HANDOFF_PROTOCOLS.has(protocol)) return false;
+  if (!silent && hasLiveWindow()) {
+    const choice = dialog.showMessageBoxSync(win, {
+      type: 'question',
+      buttons: ['Open', 'Cancel'],
+      defaultId: 0,
+      cancelId: 1,
+      message: `Open ${protocol.slice(0, -1)} link?`,
+      detail: url.length > 200 ? `${url.slice(0, 197)}…` : url,
+    });
+    if (choice !== 0) return true;
+  }
   shell.openExternal(url).catch(() => {});
   return true;
 }
@@ -294,6 +305,9 @@ function createOverlay() {
   });
   overlayView.setBackgroundColor('#00000000'); // page shows through around the panel
   overlayView.webContents.loadFile(path.join(__dirname, '../renderer/overlay.html'));
+
+  overlayView.webContents.on('will-navigate', (event) => event.preventDefault());
+  overlayView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
   // A show requested before the overlay document finished its first load
   // would be lost — leaving an invisible view blocking clicks. Replay it.
@@ -744,13 +758,20 @@ const TAB_WEB_PREFERENCES = {
   contextIsolation: true,
   nodeIntegration: false,
   sandbox: true,
-  // Chromium's built-in PDF viewer is a plugin; without this flag
-  // PDFs download instead of rendering inline.
   plugins: true,
-  // Exposes a data API to our own blanc:// pages ONLY — see the
-  // guards in tab-preload.js and pages.js. Web content gets nothing.
   preload: path.join(__dirname, 'tab-preload.js'),
 };
+
+const PRIVATE_PARTITION = 'private-browsing';
+let privateSessionReady = false;
+function ensurePrivateSession() {
+  if (privateSessionReady) return session.fromPartition(PRIVATE_PARTITION);
+  const ses = session.fromPartition(PRIVATE_PARTITION);
+  setupPermissionPolicy(ses);
+  if (settings.getSettings().adblockEnabled) enableBlockingForSession(ses);
+  privateSessionReady = true;
+  return ses;
+}
 
 function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = null, view = null, pinned = false, muted = false, restoreHistory = null } = {}) {
   const id = crypto.randomUUID();
@@ -758,7 +779,11 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
   // already constructed by Chromium with the opener relationship wired up;
   // everything else gets a fresh one.
   const adopted = !!view;
-  view ??= new WebContentsView({ webPreferences: TAB_WEB_PREFERENCES });
+  if (!adopted && isPrivate) ensurePrivateSession();
+  const prefs = isPrivate && !adopted
+    ? { ...TAB_WEB_PREFERENCES, partition: PRIVATE_PARTITION }
+    : TAB_WEB_PREFERENCES;
+  view ??= new WebContentsView({ webPreferences: prefs });
 
   const tab = {
     id,
@@ -1313,8 +1338,26 @@ function refocusAddressBarIfWanted() {
   }
 }
 
+function isChromeSender(event) {
+  const sender = event.sender;
+  return sender === win?.webContents || sender === overlayView?.webContents;
+}
+
 function registerIpcHandlers() {
-  ipcMain.handle('tabs:create', (_e, url, opts) => {
+  const chromeHandle = (channel, fn) => {
+    ipcMain.handle(channel, (event, ...args) => {
+      if (!isChromeSender(event)) throw new Error(`${channel}: unauthorized sender`);
+      return fn(...args);
+    });
+  };
+  const chromeOn = (channel, fn) => {
+    ipcMain.on(channel, (event, ...args) => {
+      if (!isChromeSender(event)) return;
+      fn(...args);
+    });
+  };
+
+  chromeHandle('tabs:create', (url, opts) => {
     const isPrivate = !!opts?.private;
     // A plain new tab is deliberately ungrouped — createTab defaults groupId
     // to null and we intentionally don't pass one. Only window.open/context-
@@ -1330,68 +1373,62 @@ function registerIpcHandlers() {
     setActiveTab(id, { focusContent: !blank, focusAddress: blank });
     return id;
   });
-  ipcMain.handle('tabs:close', (_e, id) => closeTab(id));
-  ipcMain.handle('tabs:switch', (_e, id) => setActiveTab(id));
-  ipcMain.handle('tabs:navigate', (_e, id, url) => {
+  chromeHandle('tabs:close', (id) => closeTab(id));
+  chromeHandle('tabs:switch', (id) => setActiveTab(id));
+  chromeHandle('tabs:navigate', (id, url) => {
     const tab = tabs.get(id);
     if (!tab) return;
-    // Checked against the raw address-bar text, before normalizeAddressInput
-    // — a bare mailto:/tel: URI has no "://" and would otherwise fall
-    // through its domain-guessing heuristic into an unreachable https:// URL.
-    if (handOffToOs(url)) return;
+    if (handOffToOs(url, { silent: true })) return;
     tabsWantingAddressBarFocus.delete(id);
     tab.view.webContents.loadURL(normalizeAddressInput(url));
   });
-  ipcMain.handle('tabs:back', (_e, id) => tabs.get(id)?.view.webContents.navigationHistory.goBack());
-  ipcMain.handle('tabs:forward', (_e, id) => tabs.get(id)?.view.webContents.navigationHistory.goForward());
-  ipcMain.handle('tabs:reload', (_e, id) => tabs.get(id)?.view.webContents.reload());
-  ipcMain.handle('tabs:stop', (_e, id) => tabs.get(id)?.view.webContents.stop());
-  ipcMain.handle('tabs:reorder', (_e, id, toIndex) => reorderTab(id, toIndex));
-  ipcMain.handle('tabs:set-group', (_e, id, groupId) => setTabGroup(id, groupId ?? null));
-  ipcMain.handle('tabs:group-by-name', (_e, id, name) => groupTabByName(id, name));
-  ipcMain.handle('tabs:toggle-group-collapsed', (_e, groupId) => toggleGroupCollapsed(groupId));
-  ipcMain.handle('tabs:focus-group', (_e, groupId) => focusGroup(groupId));
-  ipcMain.handle('tabs:close-group', (_e, groupId) => closeGroup(groupId));
-  ipcMain.handle('tabs:toggle-bookmark', () => toggleBookmarkForActiveTab());
-  ipcMain.handle('tabs:toggle-pinned', (_e, id) => toggleTabPinned(id));
-  ipcMain.handle('tabs:toggle-muted', (_e, id) => toggleTabMuted(id));
-  ipcMain.handle('tabs:duplicate', (_e, id) => duplicateTab(id));
-  ipcMain.handle('tabs:open-page', (_e, name) => {
+  chromeHandle('tabs:back', (id) => tabs.get(id)?.view.webContents.navigationHistory.goBack());
+  chromeHandle('tabs:forward', (id) => tabs.get(id)?.view.webContents.navigationHistory.goForward());
+  chromeHandle('tabs:reload', (id) => tabs.get(id)?.view.webContents.reload());
+  chromeHandle('tabs:stop', (id) => tabs.get(id)?.view.webContents.stop());
+  chromeHandle('tabs:reorder', (id, toIndex) => reorderTab(id, toIndex));
+  chromeHandle('tabs:set-group', (id, groupId) => setTabGroup(id, groupId ?? null));
+  chromeHandle('tabs:group-by-name', (id, name) => groupTabByName(id, name));
+  chromeHandle('tabs:toggle-group-collapsed', (groupId) => toggleGroupCollapsed(groupId));
+  chromeHandle('tabs:focus-group', (groupId) => focusGroup(groupId));
+  chromeHandle('tabs:close-group', (groupId) => closeGroup(groupId));
+  chromeHandle('tabs:toggle-bookmark', () => toggleBookmarkForActiveTab());
+  chromeHandle('tabs:toggle-pinned', (id) => toggleTabPinned(id));
+  chromeHandle('tabs:toggle-muted', (id) => toggleTabMuted(id));
+  chromeHandle('tabs:duplicate', (id) => duplicateTab(id));
+  chromeHandle('tabs:open-page', (name) => {
     if (['bookmarks', 'history', 'downloads', 'settings'].includes(name)) {
       openInternalPage(`blanc://${name}/`);
     }
   });
-  ipcMain.handle('tabs:get-all', () => ({ tabs: serializeTabs(), activeTabId, groups }));
-  ipcMain.handle('tabs:find', (_e, id, query, options) => tabs.get(id)?.view.webContents.findInPage(query, options));
-  ipcMain.handle('tabs:find-stop', (_e, id) => tabs.get(id)?.view.webContents.stopFindInPage('clearSelection'));
+  chromeHandle('tabs:get-all', () => ({ tabs: serializeTabs(), activeTabId, groups }));
+  chromeHandle('tabs:find', (id, query, options) => tabs.get(id)?.view.webContents.findInPage(query, options));
+  chromeHandle('tabs:find-stop', (id) => tabs.get(id)?.view.webContents.stopFindInPage('clearSelection'));
 
-  ipcMain.on('chrome:layout', (_e, { height }) => {
+  chromeOn('chrome:layout', ({ height }) => {
     if (typeof height === 'number' && height > 0) {
       chromeHeight = height;
       resizeActiveView();
     }
   });
 
-  ipcMain.on('chrome:open-island', () => showOverlay('panel'));
-  ipcMain.on('chrome:open-find', () => showOverlay('find'));
-  ipcMain.on('overlay:close', () => hideOverlay());
-  ipcMain.on('chrome:downloads-ack', () => {
+  chromeOn('chrome:open-island', () => showOverlay('panel'));
+  chromeOn('chrome:open-find', () => showOverlay('find'));
+  chromeOn('overlay:close', () => hideOverlay());
+  chromeOn('chrome:downloads-ack', () => {
     acknowledgeDownloads();
     broadcastDownloadsActivity();
   });
 
-  // Data + actions behind the island's slash commands and Quick Switcher.
-  ipcMain.handle('chrome:history-list', (_e, opts) => history.listHistory(opts ?? {}));
-  ipcMain.handle('chrome:favorites-list', () => bookmarks.listBookmarks());
-  ipcMain.handle('chrome:history-clear', () => history.clearHistory());
-  ipcMain.handle('chrome:adblock-toggle', () => {
+  chromeHandle('chrome:history-list', (opts) => history.listHistory(opts ?? {}));
+  chromeHandle('chrome:favorites-list', () => bookmarks.listBookmarks());
+  chromeHandle('chrome:history-clear', () => history.clearHistory());
+  chromeHandle('chrome:adblock-toggle', () => {
     const next = !settings.getSettings().adblockEnabled;
     settings.setSettings({ adblockEnabled: next });
     return next;
   });
-  // "/allow-ads" — allow ads on the active tab's site, then reload it so
-  // the exception actually takes effect on what's shown.
-  ipcMain.handle('chrome:adblock-exempt-active', () => {
+  chromeHandle('chrome:adblock-exempt-active', () => {
     const tab = activeTabId ? tabs.get(activeTabId) : null;
     if (!tab) return null;
     try {
@@ -1405,7 +1442,7 @@ function registerIpcHandlers() {
       return null;
     }
   });
-  ipcMain.handle('chrome:cycle-theme', () => {
+  chromeHandle('chrome:cycle-theme', () => {
     const order = ['system', 'light', 'dark'];
     const current = settings.getSettings().theme;
     const next = order[(order.indexOf(current) + 1) % order.length];
@@ -1413,9 +1450,9 @@ function registerIpcHandlers() {
     return next;
   });
 
-  ipcMain.on('window:minimize', () => win?.minimize());
-  ipcMain.on('window:maximize', () => (win?.isMaximized() ? win.unmaximize() : win?.maximize()));
-  ipcMain.on('window:close', () => win?.close());
+  chromeOn('window:minimize', () => win?.minimize());
+  chromeOn('window:maximize', () => (win?.isMaximized() ? win.unmaximize() : win?.maximize()));
+  chromeOn('window:close', () => win?.close());
 }
 
 // The native menu's dynamic content (tab list, favorites list, Pin/Mute/
@@ -1739,6 +1776,10 @@ function createMainWindow() {
   });
 
   win.loadFile(path.join(__dirname, '../renderer/index.html'));
+
+  win.webContents.on('will-navigate', (event) => event.preventDefault());
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
   createOverlay();
   win.on('resize', resizeActiveView);
   win.on('focus', refocusAddressBarIfWanted);
@@ -1788,7 +1829,8 @@ app.whenReady().then(async () => {
       win.webContents.send('permissions:prompt', { id: promptId, origin, permission, mediaTypes });
     })
   );
-  ipcMain.on('permissions:respond', (_e, { id, allow }) => {
+  ipcMain.on('permissions:respond', (event, { id, allow }) => {
+    if (!isChromeSender(event)) return;
     pendingPermissionPrompts.get(id)?.(!!allow);
     pendingPermissionPrompts.delete(id);
   });

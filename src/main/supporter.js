@@ -1,5 +1,4 @@
 const { app, net } = require('electron');
-const os = require('os');
 const settings = require('./settings');
 
 // Blanc Supporter activation against Polar's customer-portal API.
@@ -37,7 +36,7 @@ async function activateSupporter(key) {
       body: JSON.stringify({
         key: trimmed,
         organization_id: POLAR_ORGANIZATION_ID,
-        label: os.hostname().slice(0, 64),
+        label: `Blanc ${process.platform}`,
       }),
     });
   } catch {

@@ -18,7 +18,12 @@ const ensureStore = () => (store ??= new JsonStore('site-permissions', { decisio
 let prompter = null;
 function setPermissionPrompter(fn) { prompter = fn; }
 
-const keyFor = (origin, permission) => `${origin}|${permission}`;
+function keyFor(origin, permission, mediaTypes) {
+  if (permission === 'media' && mediaTypes?.length) {
+    return `${origin}|${permission}|${[...mediaTypes].sort().join(',')}`;
+  }
+  return `${origin}|${permission}`;
+}
 
 function normalizedOrigin(rawUrl) {
   try {
@@ -36,12 +41,14 @@ function normalizedOrigin(rawUrl) {
   }
 }
 
-function decisionFor(origin, permission) {
-  return ensureStore().data.decisions[keyFor(origin, permission)] ?? null;
+function decisionFor(origin, permission, mediaTypes) {
+  const decisions = ensureStore().data.decisions;
+  return decisions[keyFor(origin, permission, mediaTypes)]
+    ?? decisions[keyFor(origin, permission)] ?? null;
 }
 
-function rememberDecision(origin, permission, allow) {
-  ensureStore().update((d) => { d.decisions[keyFor(origin, permission)] = allow ? 'allow' : 'deny'; });
+function rememberDecision(origin, permission, allow, mediaTypes) {
+  ensureStore().update((d) => { d.decisions[keyFor(origin, permission, mediaTypes)] = allow ? 'allow' : 'deny'; });
 }
 
 function listDecisions() {
@@ -60,26 +67,26 @@ function setupPermissionPolicy(session) {
     const origin = normalizedOrigin(details.requestingUrl);
     if (!origin) return callback(false);
 
-    const saved = decisionFor(origin, permission);
+    const mediaTypes = details.mediaTypes ?? [];
+    const saved = decisionFor(origin, permission, mediaTypes);
     if (saved) return callback(saved === 'allow');
     if (!prompter) return callback(false);
 
-    // null = the prompt couldn't be shown (no window). Deny for now but
-    // DON'T persist it, or a transient no-window moment would silently
-    // block the site forever. Only a real Allow/Block answer is remembered.
-    const allow = await prompter({ origin, permission, mediaTypes: details.mediaTypes ?? [] });
+    const allow = await prompter({ origin, permission, mediaTypes });
     if (allow === null) return callback(false);
-    rememberDecision(origin, permission, allow);
+    rememberDecision(origin, permission, allow, mediaTypes);
     callback(allow);
   });
 
   // Synchronous checks (navigator.permissions.query, Notification.permission)
   // must agree with the request handler or sites see inconsistent state.
-  session.setPermissionCheckHandler((_wc, permission, requestingOrigin) => {
+  session.setPermissionCheckHandler((_wc, permission, requestingOrigin, details) => {
     if (AUTO_ALLOWED.has(permission)) return true;
     if (!PROMPTED.has(permission)) return false;
     const origin = normalizedOrigin(requestingOrigin);
-    return !!origin && decisionFor(origin, permission) === 'allow';
+    if (!origin) return false;
+    const mediaTypes = details?.mediaType ? [details.mediaType] : [];
+    return decisionFor(origin, permission, mediaTypes) === 'allow';
   });
 
   // Screen capture: still deny by never providing a stream (no picker UI yet).
