@@ -31,12 +31,25 @@ if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null ||
   exit 1
 fi
 
-# Artifacts must correspond to committed release sources. Other platform work
-# outside Electron's build inputs may remain in progress without contaminating
-# this desktop release.
-if ! git diff --quiet -- src package.json package-lock.json scripts/release.sh .github/workflows/release-windows-linux.yml ||
-   [ -n "$(git ls-files --others --exclude-standard -- src)" ]; then
-  echo "Release sources are dirty. Commit src/, package metadata, and release workflow changes before publishing." >&2
+# Artifacts must correspond to committed release sources. `build/` holds
+# Electron packaging inputs (including macOS entitlements and the app icon),
+# so include it alongside source and package metadata. Other platform work
+# outside those inputs may remain in progress without contaminating this
+# desktop release.
+RELEASE_SOURCES=(
+  src
+  build
+  package.json
+  package-lock.json
+  scripts/release.sh
+  .github/workflows/release-windows-linux.yml
+)
+# Check the index and working tree separately so staged and unstaged edits
+# both block a release.
+if ! git diff --cached --quiet HEAD -- "${RELEASE_SOURCES[@]}" ||
+   ! git diff --quiet -- "${RELEASE_SOURCES[@]}" ||
+   [ -n "$(git ls-files --others --exclude-standard -- "${RELEASE_SOURCES[@]}")" ]; then
+  echo "Release sources are dirty. Commit src/, build/, package metadata, and release workflow changes before publishing." >&2
   exit 1
 fi
 
