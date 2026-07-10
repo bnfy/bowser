@@ -274,15 +274,29 @@ body.has-consent .hero { padding-bottom: 154px; }
   .hero-message { transition: none; }
 }
 
-footer { border-top: 1px solid var(--border); padding: 24px 40px; text-align: center; font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); opacity: 0.75; }
-footer .line { white-space: nowrap; }
-footer .line b { color: var(--accent); font-weight: 400; }
-footer .line a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--border); padding-bottom: 1px; transition: color 0.15s, border-color 0.15s; }
-footer .line a:hover { color: var(--accent); border-color: var(--accent); }
+/* Two quiet lines: copyright/attribution up top, legal + social below. */
+footer { border-top: 1px solid var(--border); padding: 22px 40px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); opacity: 0.75; }
+footer .foot-copy { white-space: nowrap; }
+footer .foot-copy b { color: var(--accent); font-weight: 400; }
+footer .foot-links { display: inline-flex; align-items: center; gap: 8px; }
+footer .foot-sep { opacity: 0.5; }
+/* Text links (Bananify, Privacy, Terms) keep the hairline-underline → accent. */
+footer .foot-copy a, footer .foot-links a:not(.foot-ic) { color: inherit; text-decoration: none; border-bottom: 1px solid var(--border); padding-bottom: 1px; transition: color 0.15s, border-color 0.15s; }
+footer .foot-copy a:hover, footer .foot-links a:not(.foot-ic):hover { color: var(--accent); border-color: var(--accent); }
+/* Social glyphs: monochrome, muted with the footer, brightening to accent. */
+footer .foot-social { display: inline-flex; align-items: center; gap: 13px; margin-left: 4px; }
+footer .foot-ic { display: inline-flex; color: inherit; transition: color 0.15s; }
+footer .foot-ic:hover { color: var(--accent); }
+footer .foot-ic svg { width: 14px; height: 14px; display: block; fill: currentColor; }
+/* Instagram's official glyph is drawn as hairline shapes and reads thinner
+   than Threads' solid mark at the same size — add a slight stroke on top
+   of the fill (path geometry untouched) so the two brand marks sit closer
+   in visual weight without turning bold. */
+footer .foot-ic.ig svg path { stroke: currentColor; stroke-width: 0.35; stroke-linejoin: round; stroke-linecap: round; }
 
 @media (max-width: 480px) {
   footer { padding: 20px 16px; }
-  footer .line { white-space: normal; }
+  footer .foot-copy { white-space: normal; }
   .consent {
     flex-direction: column;
     align-items: stretch;
