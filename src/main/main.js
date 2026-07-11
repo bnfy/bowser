@@ -2004,6 +2004,8 @@ app.whenReady().then(async () => {
   setupPages({
     sessions: browsingSessions,
     onDataChanged: refreshBookmarkFlags,
+    // Parent for the favorites-import file dialog (evaluated lazily at click).
+    getMainWindow: () => (hasLiveWindow() ? win : undefined),
     // The start page's ledger sections read live tab-group state and the
     // rolling blocked counter, both owned here.
     startPage: {

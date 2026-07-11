@@ -1,5 +1,7 @@
 const crypto = require('crypto');
 const { JsonStore } = require('./store');
+const { validFavicon, validFolder } = require('./bookmark-validate');
+const data = require('./bookmark-data');
 
 let store = null;
 const ensureStore = () => (store ??= new JsonStore('bookmarks', { items: [], tombstones: [] }));
@@ -15,15 +17,6 @@ const onChanged = (fn) => changeListeners.add(fn);
 const onMerged = (fn) => mergeListeners.add(fn);
 const notifyChanged = () => { for (const fn of changeListeners) fn(); };
 const notifyMerged = () => { for (const fn of mergeListeners) fn(); };
-
-/** Same allow-list/length cap main.js's pickBestFavicon applies to the
- * async-refined favicon — the immediate page-favicon-updated value skips
- * that check, so anything persisted here must be validated independently. */
-function validFavicon(favicon) {
-  return typeof favicon === 'string' && favicon.length <= 2048 && /^(https?:|data:image\/)/i.test(favicon)
-    ? favicon
-    : null;
-}
 
 function listBookmarks() {
   return [...ensureStore().data.items];
@@ -50,7 +43,7 @@ function toggleBookmark(url, title, favicon) {
   }
   s.update((d) => {
     const now = Date.now();
-    d.items.push({ id: crypto.randomUUID(), url, title: title || url, favicon: validFavicon(favicon), addedAt: now, updatedAt: now });
+    d.items.push({ id: crypto.randomUUID(), url, title: title || url, favicon: validFavicon(favicon), addedAt: now, updatedAt: now, folder: null });
     d.tombstones = d.tombstones.filter((t) => t.url !== url); // re-favoriting clears a prior delete
   });
   notifyChanged();
@@ -86,6 +79,41 @@ function removeBookmark(id) {
   notifyChanged();
 }
 
+/** Bulk-import parsed entries; dedupe by url, one sync-triggering write. */
+function importBookmarks(entries) {
+  const s = ensureStore();
+  const res = data.addImported(s.data, entries, { now: Date.now(), makeId: crypto.randomUUID });
+  if (res.changed) {
+    s.update((d) => { d.items = res.items; d.tombstones = res.tombstones; });
+    notifyChanged();
+  }
+  return { added: res.added, skipped: res.skipped };
+}
+
+function setBookmarkFolder(id, folder) {
+  const s = ensureStore();
+  const res = data.applySetFolder(s.data, id, folder, { now: Date.now() });
+  if (!res.changed) return;
+  s.update((d) => { d.items = res.items; });
+  notifyChanged();
+}
+
+function renameFolder(oldName, newName) {
+  const s = ensureStore();
+  const res = data.applyRenameFolder(s.data, oldName, newName, { now: Date.now() });
+  if (!res.changed) return;
+  s.update((d) => { d.items = res.items; });
+  notifyChanged();
+}
+
+function removeFolder(name) {
+  const s = ensureStore();
+  const res = data.applyRemoveFolder(s.data, name, { now: Date.now() });
+  if (!res.changed) return;
+  s.update((d) => { d.items = res.items; });
+  notifyChanged();
+}
+
 function exportForSync() {
   const { items, tombstones } = ensureStore().data;
   return { items, tombstones };
@@ -109,6 +137,7 @@ function sanitizeRemoteItem(it) {
     favicon: validFavicon(it.favicon),
     addedAt,
     updatedAt: Number.isFinite(it.updatedAt) ? it.updatedAt : addedAt,
+    folder: validFolder(it.folder),
   };
 }
 
@@ -137,7 +166,12 @@ function mergeFromSync(remote) {
     }
     // Oldest-first: listBookmarks() consumers (favoritesMenuItems' slice(-20)
     // .reverse(), the start page) rely on insertion (oldest-first) order.
-    d.items = [...byUrl.values()].sort((a, b) => (a.addedAt ?? 0) - (b.addedAt ?? 0));
+    // Canonicalize folder spellings after merge: two devices can independently
+    // create Work and work, and sanitizeRemoteItem only validates strings — so
+    // collapse each folderKey group to one deterministic spelling here.
+    d.items = data.canonicalizeFolders(
+      [...byUrl.values()].sort((a, b) => (a.addedAt ?? 0) - (b.addedAt ?? 0))
+    );
     // Drop tombstones superseded by a surviving newer item, plus stale ones.
     const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
     d.tombstones = [...tomb.values()].filter((t) => {
@@ -149,4 +183,4 @@ function mergeFromSync(remote) {
   notifyMerged();
 }
 
-module.exports = { listBookmarks, isBookmarked, toggleBookmark, updateFavicon, removeBookmark, exportForSync, mergeFromSync, onChanged, onMerged };
+module.exports = { listBookmarks, isBookmarked, toggleBookmark, updateFavicon, removeBookmark, importBookmarks, setBookmarkFolder, renameFolder, removeFolder, exportForSync, mergeFromSync, onChanged, onMerged };

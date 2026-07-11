@@ -13,6 +13,10 @@ if (window.location.protocol === 'blanc:') {
       list: () => ipcRenderer.invoke('pages:bookmarks:list'),
       remove: (id) => ipcRenderer.invoke('pages:bookmarks:remove', id),
       clearFavicon: (url) => ipcRenderer.invoke('pages:bookmarks:clear-favicon', url),
+      import: () => ipcRenderer.invoke('pages:bookmarks:import'),
+      setFolder: (id, folder) => ipcRenderer.invoke('pages:bookmarks:set-folder', id, folder),
+      renameFolder: (oldName, newName) => ipcRenderer.invoke('pages:bookmarks:rename-folder', oldName, newName),
+      removeFolder: (name) => ipcRenderer.invoke('pages:bookmarks:remove-folder', name),
     },
     history: {
       list: (opts) => ipcRenderer.invoke('pages:history:list', opts),

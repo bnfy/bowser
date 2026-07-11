@@ -1,7 +1,11 @@
-const { app, protocol, net, ipcMain, session } = require('electron');
+const { app, protocol, net, ipcMain, session, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { pathToFileURL } = require('url');
 const bookmarks = require('./bookmarks');
+const { parseNetscapeBookmarks } = require('./bookmark-import');
+
+const MAX_IMPORT_BYTES = 20 * 1024 * 1024; // 20 MiB
 const history = require('./history');
 const downloads = require('./downloads');
 const settings = require('./settings');
@@ -73,6 +77,40 @@ function setupPages(hooks = {}) {
   // The start page reports a stored favicon URL that failed to load, so
   // it's cleared and stops being retried on future loads.
   handle('pages:bookmarks:clear-favicon', (url) => bookmarks.updateFavicon(url, null));
+
+  handle('pages:bookmarks:import', async () => {
+    const parent = hooks.getMainWindow?.();
+    const picked = await dialog.showOpenDialog(parent ?? undefined, {
+      title: 'Import favorites',
+      filters: [{ name: 'Bookmarks', extensions: ['html', 'htm'] }],
+      properties: ['openFile'],
+    });
+    if (picked.canceled || !picked.filePaths.length) return { cancelled: true };
+    try {
+      const stat = await fs.promises.stat(picked.filePaths[0]);
+      if (stat.size > MAX_IMPORT_BYTES) return { error: 'too-large' };
+      const html = await fs.promises.readFile(picked.filePaths[0], 'utf8');
+      const entries = parseNetscapeBookmarks(html);
+      if (!entries.length) return { error: 'empty' };
+      const { added, skipped } = bookmarks.importBookmarks(entries);
+      hooks.onDataChanged?.();
+      return { added, skipped };
+    } catch {
+      return { error: 'unreadable' };
+    }
+  });
+  handle('pages:bookmarks:set-folder', (id, folder) => {
+    bookmarks.setBookmarkFolder(id, folder);
+    hooks.onDataChanged?.();
+  });
+  handle('pages:bookmarks:rename-folder', (oldName, newName) => {
+    bookmarks.renameFolder(oldName, newName);
+    hooks.onDataChanged?.();
+  });
+  handle('pages:bookmarks:remove-folder', (name) => {
+    bookmarks.removeFolder(name);
+    hooks.onDataChanged?.();
+  });
 
   handle('pages:history:list', (opts) => history.listHistory(opts ?? {}));
   handle('pages:history:remove', (url, visitedAt) => history.removeVisit(url, visitedAt));
