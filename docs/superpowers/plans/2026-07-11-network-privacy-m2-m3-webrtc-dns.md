@@ -1103,13 +1103,18 @@ const app = await _electron.launch({
 });
 
 // Resolve a host through the default session's Chromium resolver, which honors the
-// process-wide app.configureHostResolver config. true = resolved, false = failed.
-const canResolve = (host) => app.evaluate(async (h) => {
-  const { session } = require('electron');
+// process-wide app.configureHostResolver config. Playwright passes the Electron module
+// as the FIRST callback arg and the supplied value SECOND (so no require() needed).
+// true = resolved, false = failed.
+const canResolve = (host) => app.evaluate(async ({ session }, h) => {
   try { await session.defaultSession.resolveHost(h); return true; } catch { return false; }
 }, host);
-// Let the onSettingsChanged listener's configureHostResolver + async cache clear settle.
-const settle = () => new Promise((r) => setTimeout(r, 750));
+// After a DNS setting change, app.configureHostResolver has already run synchronously
+// inside the settings listener; await a cache clear (deterministic — not a fixed sleep)
+// so the next probe uses the new resolver.
+const clearDnsCache = () => app.evaluate(async ({ session }) => {
+  await session.defaultSession.clearHostResolverCache();
+});
 
 try {
   await app.firstWindow(); // startup didn't crash (a ready-handler throw would prevent this)
@@ -1119,12 +1124,12 @@ try {
 
   // Secure mode WORKS here without enableBuiltInResolver (the Linux question).
   await app.evaluate(() => globalThis.__blanc.setSecureDns('cloudflare'));
-  await settle();
+  await clearDnsCache();
   assert.ok(await canResolve('example.com'), 'Cloudflare secure DoH should resolve example.com');
 
   // Strict custom FAILS CLOSED — unreachable resolver, distinct host to dodge any cache.
   await app.evaluate(() => globalThis.__blanc.setSecureDns('custom', 'https://127.0.0.1:9/dns-query'));
-  await settle();
+  await clearDnsCache();
   assert.ok(!(await canResolve('cloudflare.com')), 'unreachable strict custom DoH must fail closed');
 
   console.log(`dns-smoke OK on ${process.platform}`);
@@ -1155,6 +1160,8 @@ on:
     paths:
       - 'src/main/**'
       - 'test/desktop/**'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/prerelease-smoke.yml'
 
 permissions:
@@ -1174,10 +1181,10 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: DNS/WebRTC launch smoke (Linux, headless)
+      - name: DNS launch smoke (Linux, headless)
         if: runner.os == 'Linux'
         run: xvfb-run -a npm run test:dns-smoke
-      - name: DNS/WebRTC launch smoke (Windows)
+      - name: DNS launch smoke (Windows)
         if: runner.os == 'Windows'
         run: npm run test:dns-smoke
 ```
@@ -1189,12 +1196,12 @@ Locally the smoke runs headed but still passes:
 ```bash
 npm run test:dns-smoke
 ```
-Expected: `dns-smoke OK on darwin: secureDns=auto webrtcPolicy=standard`, exit 0.
+Expected: `dns-smoke OK on darwin`, exit 0.
 
 ```bash
 git status --short   # expect test-hook.js, dns-smoke.mjs, prerelease-smoke.yml, package.json
 git add src/main/test-hook.js test/desktop/dns-smoke.mjs .github/workflows/prerelease-smoke.yml package.json
-git commit -m "Add pre-release DNS/WebRTC launch smoke (Linux + Windows CI)"
+git commit -m "Add pre-release DNS launch smoke (Linux + Windows CI)"
 ```
 
 - [ ] **Step 5: Push, run the workflow on both runners, and require green**
@@ -1224,6 +1231,8 @@ gh run watch "$RUN_ID" --repo "$REPO" --exit-status
 - [ ] **Step 1: Decide the Electron devDependency**
 
 Per CLAUDE.md, releasing is the moment to consider bumping `electron` (it tracks Chromium stable, which can't be swapped out of a running app). Check whether a newer 43.x/stable is available and worth taking. If bumping, do it as its own commit and re-run the full suite (the verified API facts in this plan are for 43.1.0 — re-verify `configureHostResolver`/`setWebRTCIPHandlingPolicy` still match if you move a major version). If not bumping, note that explicitly and proceed. Do not bump silently.
+
+**If you bump Electron, the Task 8 smoke must be re-validated on the new version.** The smoke (Task 8) runs before this step, so a later Electron bump would otherwise ship untested. The workflow's `push` paths now include `package.json`/`package-lock.json`, so pushing the bump commit re-triggers the smoke automatically — require it green again (re-run Task 8 Step 5) before release. Because a bump changes what the smoke validates, the cleanest option is to make the Electron decision *before* Task 8 whenever a bump is likely.
 
 - [ ] **Step 2: Harden `release.sh` to tag the exact built commit**
 
@@ -1285,9 +1294,9 @@ The release tags the remote HEAD, so every implementation commit from Tasks 1–
 git fetch origin
 git rev-list --count HEAD..origin/main   # if > 0, another session pushed — rebase onto origin/main, do NOT force-push
 git push origin main
-test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" && echo "PARITY OK" || echo "NOT IN SYNC — stop"
+if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ]; then echo "PARITY OK"; else echo "NOT IN SYNC — stop" >&2; exit 1; fi
 ```
-Expected: `PARITY OK`. The hardened `release.sh` (Step 2) will independently refuse to release if this doesn't hold — this step makes it pass rather than fail at release time.
+Expected: `PARITY OK` (the guard `exit 1`s on mismatch, so automation can't continue past a divergence). The hardened `release.sh` (Step 2) will independently refuse to release if this doesn't hold — this step makes it pass rather than fail at release time.
 
 - [ ] **Step 7: Confirm the cross-platform release prerequisites**
 
