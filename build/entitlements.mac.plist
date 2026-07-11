@@ -9,5 +9,20 @@
   <true/>
   <key>com.apple.security.cs.disable-library-validation</key>
   <true/>
+
+  <!-- Touch ID passkeys (Secure Enclave). keychain-access-groups is a
+       restricted entitlement: it only launches when the embedded Developer ID
+       provisioning profile (build.mac.provisioningProfile) authorizes it, and
+       the profile pairs with the application-identifier entitlements below.
+       Main app only — helpers can't carry a profile, so the inherit plist
+       must never list these. -->
+  <key>keychain-access-groups</key>
+  <array>
+    <string>XYGUCY4498.me.bnfy.bowser</string>
+  </array>
+  <key>com.apple.application-identifier</key>
+  <string>XYGUCY4498.me.bnfy.bowser</string>
+  <key>com.apple.developer.team-identifier</key>
+  <string>XYGUCY4498</string>
 </dict>
 </plist>

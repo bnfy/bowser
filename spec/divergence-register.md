@@ -328,3 +328,33 @@ Liquid Glass on iOS 26+. The pill's layout, content, and interaction model
 are identical.
 
 **Status:** Accepted; **iOS material decided 2026-07-08: Liquid Glass with token fallback.**
+
+---
+
+## D16 — Private-tab passkey persistence
+**Features:** F4, F24
+**Why:** Desktop's device-bound Touch ID passkeys seal their credential metadata
+with a per-session secret that Electron keeps in the session's preferences, and
+the private session is deliberately non-persistent — its secret cannot survive a
+quit. Electron's WebAuthn configuration is app-global, so desktop also cannot
+selectively disable private-tab ceremonies (upstream per-session opt-out
+requested: [electron/electron#52302](https://github.com/electron/electron/issues/52302)).
+
+- **Desktop:** private tabs never see the normal profile's passkeys (consistent
+  with the session isolation in F4), and a passkey *created* in a private tab is
+  **ephemeral**: it works for the rest of the run, then becomes permanently
+  unusable after Blanc quits (its Secure Enclave keychain item is orphaned). The
+  private newtab copy states this.
+- **iOS / Android:** passkeys go through the OS credential provider, which owns
+  persistence (iCloud Keychain etc.) — a passkey created in a private tab
+  persists like any other; the OS, not Blanc, is the source of truth.
+
+**Parity contract:** passkey sign-in works in private tabs on every platform
+*within a session*; private tabs never leak credentials into the normal
+profile's store. Only the desktop treats private-*created* passkeys as
+ephemeral, and says so in the private-tab copy.
+
+**Status:** Accepted 2026-07-10 (Electron 43 offers no per-session WebAuthn
+opt-out; renderer-side blocking would be bypassable). Revisit if
+[electron/electron#52302](https://github.com/electron/electron/issues/52302)
+lands. Hardware acceptance: F4-6.

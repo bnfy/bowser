@@ -15,7 +15,7 @@ document.getElementById('goAnywhere').textContent = `${isMac ? '⌘' : 'Ctrl+'}L
 
 if (isPrivate) {
   document.getElementById('footerLeft').textContent =
-    'not saved to history · site data stays in a private in-memory session';
+    'not saved to history · site data stays in a private in-memory session · passkeys created here are lost on quit';
 }
 
 window.bowserPages?.appVersion().then((version) => {

@@ -1,7 +1,12 @@
 // Electron 41.5+ can back WebAuthn platform-authenticator requests with the
-// Mac's Secure Enclave. Uses the app's own default keychain access group
-// (TeamID.BundleID) — every signed app can access this implicitly, no
-// keychain-access-groups entitlement or provisioning profile required.
+// Mac's Secure Enclave. The configured group — even the app's own
+// TeamID.BundleID — must also appear in the app's keychain-access-groups
+// code-signing entitlement (no implicit exemption: Electron's TouchId docs
+// say "must", and hardware testing confirms AMFI SIGKILLs at spawn without
+// it). That's a restricted entitlement, so packaged builds embed a Developer
+// ID provisioning profile that authorizes it (build/embedded.provisionprofile,
+// wired via build.mac.provisioningProfile). Main app only: helpers can't
+// carry a profile, so the inherit entitlements must never list the group.
 const APPLE_TEAM_ID = 'XYGUCY4498';
 const BUNDLE_ID = 'me.bnfy.bowser';
 const WEBAUTHN_KEYCHAIN_ACCESS_GROUP = `${APPLE_TEAM_ID}.${BUNDLE_ID}`;
@@ -49,6 +54,13 @@ async function chooseWebAuthnAccount({ dialog, getParentWindow, details }) {
  * separate managed capability is required for iCloud/credential-provider
  * passkeys, while this feature stores device-bound passkeys in Blanc's own
  * Secure Enclave access group.
+ *
+ * Electron seals credential metadata with a per-session secret kept in the
+ * session's prefs, so the in-memory private session mints a fresh secret every
+ * launch: passkeys created in private tabs become unusable once Blanc quits,
+ * and normal-profile passkeys stay invisible to private tabs (spec D16).
+ * The access group itself is app-global — Electron offers no per-session
+ * opt-out, so private-tab ceremonies can't be selectively disabled.
  */
 function setupWebAuthn({ app, session, dialog, getParentWindow, platform = process.platform }) {
   if (platform !== 'darwin' || typeof app?.configureWebAuthn !== 'function') return false;

@@ -7,7 +7,9 @@
   "type": "commonjs",
   "scripts": {
     "start": "electron .",
+    "predist": "node scripts/preflight-mac-signing.mjs",
     "dist": "electron-builder",
+    "predist:dir": "node scripts/preflight-mac-signing.mjs",
     "dist:dir": "electron-builder --dir",
     "release": "scripts/release.sh",
     "test:unit": "node --test test/unit/*.test.js",
@@ -65,11 +67,14 @@
       "src/**/*",
       "package.json"
     ],
+    "afterSign": "scripts/after-sign-verify.js",
     "mac": {
       "category": "public.app-category.productivity",
       "hardenedRuntime": true,
+      "identity": "55283A84D3706D5A22386D5F002A0CD4845ECFD4",
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "provisioningProfile": "build/embedded.provisionprofile",
       "extendInfo": {
         "CFBundleDisplayName": "Blanc Browser",
         "CFBundleDocumentTypes": [

@@ -42,6 +42,8 @@ RELEASE_SOURCES=(
   package.json
   package-lock.json
   scripts/release.sh
+  scripts/preflight-mac-signing.mjs
+  scripts/after-sign-verify.js
   .github/workflows/release-windows-linux.yml
 )
 # Check the index and working tree separately so staged and unstaged edits
@@ -69,6 +71,12 @@ if [ -n "$NEWER_ELECTRON" ] && [ -n "$INSTALLED_ELECTRON" ] && [ "$NEWER_ELECTRO
   echo "==> Note: electron $INSTALLED_ELECTRON is installed, but $NEWER_ELECTRON is the latest stable."
   echo "    Chromium can't be swapped at runtime — consider bumping the devDependency for this release."
 fi
+
+# The embedded provisioning profile must list the exact certificate this
+# build will be signed with, or the restricted keychain-access-groups
+# entitlement is unauthorized and AMFI kills the shipped app at spawn.
+echo "==> Preflight: signing identity vs embedded provisioning profile"
+node scripts/preflight-mac-signing.mjs
 
 echo "==> Cleaning dist/"
 rm -rf dist

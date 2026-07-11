@@ -35,3 +35,10 @@ Feature: Private tabs
   Scenario: A private new tab actually loads its start page
     Given the active tab is private
     Then the private tab's start page loads in the non-persistent session
+
+  @F4-6 @F4 @desktop @D16
+  Scenario: Passkeys created in a private tab are ephemeral
+    Given the active tab is private
+    When I register a device-bound passkey on a site in the private tab
+    And Blanc quits and relaunches
+    Then that passkey is no longer offered on the site

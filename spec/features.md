@@ -82,6 +82,9 @@ toolbar (Bowser Design System "Island Chrome").
 - While the active tab is private, chrome uses the **private theme** (F15): dashed
   pill border, hollow dots, and a "private" chip that closes the tab (quick exit).
 - Shield counts, downloads, favorites behave normally.
+- On desktop, device-bound passkeys follow the session split: private tabs can't
+  see the normal profile's passkeys, and passkeys *created* in a private tab are
+  **ephemeral** — unusable after Blanc quits (D16).
 - **Acceptance:** Open a private tab, visit a site → it does not appear in history
   or share normal-session site data; closing and reopen-closed does not bring it
   back; the pill shows the private chip and dashed styling.
@@ -340,6 +343,8 @@ From the desktop `DEFAULTS`:
 - On mobile, the system **credential provider** (iCloud Keychain / 1Password / etc.)
   and **platform passkeys/WebAuthn** work inside the web view — the desktop
   limitation (vendor code-signature allowlists) does not apply (D12). `N/A` on
-  desktop.
+  desktop for credential providers; desktop *does* offer **device-bound Secure
+  Enclave passkeys** via Touch ID in signed builds (Blanc's own keychain access
+  group, not iCloud-synced), with private-tab passkeys ephemeral per D16.
 - **Acceptance:** On a login form in a Blanc tab, the OS AutoFill affordance offers
   saved credentials; a passkey sign-in invokes the platform authenticator.
