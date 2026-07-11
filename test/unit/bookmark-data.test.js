@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const {
   addImported, applySetFolder, applyRenameFolder, applyRemoveFolder, canonicalizeFolders,
+  groupFavoritesForMenu,
 } = require('../../src/main/bookmark-data');
 
 const NOW = 2000;
@@ -109,4 +110,26 @@ test('canonicalizeFolders: mixed spellings collapse deterministically without to
   assert.equal(out.find((it) => it.id === 'c').folder, null);
   // idempotent / convergent
   assert.deepEqual(canonicalizeFolders(out).map((it) => it.folder), out.map((it) => it.folder));
+});
+
+test('groupFavoritesForMenu: folders alphabetical (case-insensitive) + newest-first, then ungrouped newest-first', () => {
+  const items = [
+    { id: '1', url: 'ua', title: 'A', addedAt: 1, folder: 'Zeta' },
+    { id: '2', url: 'ub', title: 'B', addedAt: 5, folder: 'alpha' },
+    { id: '3', url: 'uc', title: 'C', addedAt: 3, folder: 'alpha' },
+    { id: '4', url: 'ud', title: 'D', addedAt: 2, folder: null },
+    { id: '5', url: 'ue', title: 'E', addedAt: 9, folder: null },
+  ];
+  const { folders, ungrouped } = groupFavoritesForMenu(items);
+  assert.deepEqual(folders.map((f) => f.name), ['alpha', 'Zeta']); // case-insensitive alpha order
+  assert.deepEqual(folders[0].items.map((b) => b.title), ['B', 'C']); // newest-first (addedAt 5, 3)
+  assert.deepEqual(ungrouped.map((b) => b.title), ['E', 'D']); // newest-first (addedAt 9, 2)
+});
+
+test('groupFavoritesForMenu: empty and all-ungrouped inputs', () => {
+  assert.deepEqual(groupFavoritesForMenu([]), { folders: [], ungrouped: [] });
+  const only = [{ id: '1', url: 'u', title: 'T', addedAt: 1, folder: null }];
+  const r = groupFavoritesForMenu(only);
+  assert.equal(r.folders.length, 0);
+  assert.equal(r.ungrouped.length, 1);
 });

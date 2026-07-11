@@ -20,6 +20,7 @@ const { attachContextMenu } = require('./context-menu');
 const { promptForCredentials } = require('./auth-dialog');
 const settings = require('./settings');
 const bookmarks = require('./bookmarks');
+const { groupFavoritesForMenu } = require('./bookmark-data');
 const history = require('./history');
 const { JsonStore } = require('./store');
 const { shouldClearFaviconOnNavigate } = require('./favicon-policy');
@@ -1599,7 +1600,7 @@ function tabMenuItems() {
     }
     const label = `${tab.title || 'New Tab'} — ${domain}${group ? ` (${group.name})` : ''}`;
     return {
-      label: label.length > 120 ? `${label.slice(0, 119)}…` : label,
+      label: escapeMenuLabel(label.length > 120 ? `${label.slice(0, 119)}…` : label),
       type: 'checkbox',
       checked: id === activeTabId,
       click: () => setActiveTab(id),
@@ -1607,13 +1608,27 @@ function tabMenuItems() {
   });
 }
 
-/** Native-menu items for the most-recently-added favorites, newest first. */
+/** Double a literal '&' so native menus on Windows/Linux don't swallow it as
+ * an Alt-mnemonic (macOS has no mnemonics). Apply to every menu label built
+ * from user content — tab/favorite titles and folder names. */
+const escapeMenuLabel = (label) => (process.platform === 'darwin' ? label : label.replace(/&/g, '&&'));
+
+/** Native Favorites-menu items: folder submenus first (alphabetical), then
+ * ungrouped favorites inline — mirroring the Favorites page. */
 function favoritesMenuItems() {
-  const all = bookmarks.listBookmarks(); // oldest-first
-  return all.slice(-20).reverse().map((b) => ({
-    label: (b.title || b.url).length > 120 ? `${(b.title || b.url).slice(0, 119)}…` : (b.title || b.url),
-    click: () => setActiveTab(createTab(b.url)),
-  }));
+  const label = (b) => {
+    const t = b.title || b.url;
+    return t.length > 120 ? `${t.slice(0, 119)}…` : t;
+  };
+  const open = (b) => ({ label: escapeMenuLabel(label(b)), click: () => setActiveTab(createTab(b.url)) });
+  // Folders as submenus first (alphabetical), then ungrouped favorites inline —
+  // mirroring the Favorites page. Everything is shown; folders keep the menu
+  // navigable regardless of favorite count (no flat cap on ungrouped either).
+  const { folders, ungrouped } = groupFavoritesForMenu(bookmarks.listBookmarks());
+  const items = folders.map((f) => ({ label: escapeMenuLabel(f.name), submenu: f.items.map(open) }));
+  if (folders.length && ungrouped.length) items.push({ type: 'separator' });
+  items.push(...ungrouped.map(open));
+  return items;
 }
 
 // --- Keyboard shortcuts inventory (Help → Keyboard Shortcuts page) ---
@@ -1715,7 +1730,8 @@ function buildMenu() {
   // On Windows/Linux native menus a lone "&" marks the next char as an Alt
   // mnemonic and is swallowed; a literal ampersand must be doubled. macOS
   // has no mnemonics, so leave labels untouched there.
-  const mn = (label) => (isMac ? label : label.replace(/&/g, '&&'));
+  const mn = escapeMenuLabel; // literal '&' → '&&' on Win/Linux; see helper
+  const favItems = favoritesMenuItems(); // computed once; drives the separator below
   const appMenu = isMac
     ? [{
         label: app.name,
@@ -1831,11 +1847,10 @@ function buildMenu() {
           click: addAllTabsToFavorites,
         },
         { type: 'separator' },
-        ...favoritesMenuItems(),
-        ...(bookmarks.listBookmarks().length > 20
-          ? [{ label: 'Show All Favorites…', click: () => openInternalPage('blanc://bookmarks/') }]
-          : []),
-        { type: 'separator' },
+        ...favItems,
+        // Only divide the favorites list from Show Favorites when there ARE
+        // favorites — otherwise the two separators would collapse into one gap.
+        ...(favItems.length ? [{ type: 'separator' }] : []),
         { label: 'Show Favorites', accelerator: isMac ? 'Cmd+Alt+B' : 'Ctrl+Shift+O', click: () => openInternalPage('blanc://bookmarks/') },
         { label: 'Show History', accelerator: 'CmdOrCtrl+Y', click: () => openInternalPage('blanc://history/') },
       ],

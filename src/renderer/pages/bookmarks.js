@@ -26,6 +26,9 @@
   const folderKey = (name) => (typeof name === 'string' ? name.trim().toLowerCase() : '');
   const byDateDesc = (a, b) => (b.addedAt ?? 0) - (a.addedAt ?? 0);
 
+  // Ordering (folders alpha, items newest-first, ungrouped last) is mirrored by
+  // groupFavoritesForMenu in src/main/bookmark-data.js for the native menu —
+  // keep the two in sync.
   function group(items) {
     const byKey = new Map();       // key -> { name, items }
     const ungrouped = [];

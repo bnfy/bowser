@@ -124,6 +124,32 @@ function canonicalizeFolders(items) {
   });
 }
 
+/** Group favorites for the native Favorites menu: folders first (alphabetical,
+ * case-insensitive), each folder's items newest-first, then ungrouped items
+ * newest-first — mirroring the Favorites page. Pure: the menu builder wires
+ * click handlers onto the returned bookmarks.
+ *
+ * Ordering is intentionally identical to `group()` in
+ * src/renderer/pages/bookmarks.js (the page can't share this — different
+ * runtime); keep the two in sync so the menu and page never disagree. */
+function groupFavoritesForMenu(items) {
+  const newestFirst = (a, b) => (b.addedAt ?? 0) - (a.addedAt ?? 0);
+  const byKey = new Map(); // folderKey -> { name, items }
+  const ungrouped = [];
+  for (const b of items) {
+    if (b.folder == null) { ungrouped.push(b); continue; }
+    const key = folderKey(b.folder);
+    if (!byKey.has(key)) byKey.set(key, { name: b.folder, items: [] });
+    byKey.get(key).items.push(b);
+  }
+  const folders = [...byKey.values()].sort((a, b) =>
+    a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+  for (const f of folders) f.items.sort(newestFirst);
+  ungrouped.sort(newestFirst);
+  return { folders, ungrouped };
+}
+
 module.exports = {
   addImported, applySetFolder, applyRenameFolder, applyRemoveFolder, canonicalizeFolders,
+  groupFavoritesForMenu,
 };
