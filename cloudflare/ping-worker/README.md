@@ -36,6 +36,7 @@ cd cloudflare/ping-worker
 npx wrangler login                              # opens a browser to authorize
 npx wrangler kv namespace create PINGS          # copy the returned id into wrangler.toml
 npx wrangler secret put STATS_TOKEN             # pick any long random string, save it somewhere safe
+npx wrangler secret put INSTALL_HASH_SECRET     # long random string; HMAC key for install ids — without it, unique-install counting is skipped (fail closed)
 npx wrangler secret put GA_API_SECRET           # optional: GA4 Measurement Protocol API secret; when set, pings are mirrored to GA as app_launch events
 npx wrangler deploy
 ```
@@ -49,6 +50,41 @@ To attach it to `api.blancbrowser.com` instead of the `workers.dev`
 subdomain, add a route in the Cloudflare dashboard (Workers & Pages →
 blanc-ping → Settings → Triggers → Custom Domains) once
 `blancbrowser.com`'s DNS is on Cloudflare.
+
+## One-time migration: purge legacy raw install ids (2026-07-11)
+
+Pings sent before the HMAC change wrote `seen:*` markers keyed by the **raw**
+install UUID (some monthly ones with the old 800-day TTL). After deploying the
+HMAC worker and setting `INSTALL_HASH_SECRET`, purge them — this is what makes
+the privacy policy's "the raw install ID is never stored" hold for the whole
+store, and it must run **before** the updated policy page is published:
+
+```
+curl -X POST -H "Authorization: Bearer <STATS_TOKEN>" https://<worker-url>/admin/purge-legacy-ids
+```
+
+Re-run until it returns `{"done": true}` (each call deletes up to 800 keys —
+under the ~1,000-operation ceiling a single Worker invocation gets; the
+endpoint is idempotent). **Quota note:** on Workers' free tier, KV allows only
+1,000 *deletes per day* account-wide, so purging a store with more than ~1,000
+legacy markers will hit the daily cap partway — keep re-running across daily
+quota resets (UTC midnight) until `done:true`; on a paid plan it completes in
+one sitting. Only legacy-UUID-format keys are deleted — HMAC keys and the
+aggregate counters are untouched. Expect a one-time discontinuity: installs re-count as new in the
+current day/week/month buckets, and the month-over-month retention figure is
+meaningless across the migration boundary.
+
+**Google Analytics history:** events mirrored before the migration carried the
+raw random token as GA's `client_id` (it identified the install, never a
+person). GA can't be purged from here, and note the right mechanism: GA4's
+"Data deletion request" (Admin) only scrubs event/user-property *parameter*
+text — it does not remove data keyed to a client id. Removing pre-migration
+client ids means GA4's user-deletion path: per-user via User Explorer's
+"Delete user" (impractical beyond a handful) or programmatically via the
+Analytics Admin API's [`properties.submitUserDeletion`](https://developers.google.com/analytics/devguides/config/admin/v1/rest/v1alpha/properties/submitUserDeletion),
+passing each token as the `clientId` (the legacy standalone User Deletion API
+is retired). Otherwise, let the property's configured event-data retention age
+those events out. The privacy policy discloses this transition either way.
 
 ## Checking the numbers
 

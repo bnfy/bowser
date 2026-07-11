@@ -118,12 +118,17 @@
             <div class="setting">
               <div class="label">
                 <span>Help improve Blanc</span>
-                <span class="hint">Counts active users so we can see how Blanc is growing. On launch, sends the app version, your OS, and a random id for this install (used only to avoid counting one device twice). No browsing data, no account, no way to identify you. Turn this off to stop sending it.</span>
+                <span class="hint">Counts active users so we can see how Blanc is growing. On launch, sends the app version, your OS, and a random id for this install (used only to avoid counting one device twice, and stored on our side only as a one-way hash). No browsing data, no account, no way to identify you. Turn this off to stop sending it.</span>
               </div>
               <label class="toggle">
                 <input id="usagePing" type="checkbox" />
                 <span class="track"></span>
               </label>
+            </div>
+
+            <div class="toolbar-row">
+              <button id="resetInstallId">Reset install ID</button>
+              <span id="resetInstallIdStatus" class="section-hint"></span>
             </div>
 
             <h3 class="section-title">Clear browsing data</h3>

@@ -7,6 +7,7 @@ const downloads = require('./downloads');
 const settings = require('./settings');
 const supporter = require('./supporter');
 const sync = require('./sync');
+const telemetry = require('./telemetry');
 const { listDecisions, removeDecision } = require('./permissions');
 
 // Internal chrome pages (bookmarks, history, downloads, settings, the new
@@ -138,6 +139,10 @@ function setupPages(hooks = {}) {
 
   handle('pages:permissions:list', () => listDecisions());
   handle('pages:permissions:remove', (key) => removeDecision(String(key)));
+
+  // Privacy reset for the usage ping's per-install id (see telemetry.js) —
+  // from the next ping on, this install counts as brand new.
+  handle('pages:telemetry:reset-install-id', () => telemetry.resetInstallId());
 
   // The settings page promises "cookies, cache & site data" — clear both.
   handle('pages:clear-browsing-data', () => {

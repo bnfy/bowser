@@ -51,8 +51,19 @@
     usagePing.checked = settings.usagePing;
     usagePing.addEventListener('change', () =>
       window.bowserPages.settings.set({ usagePing: usagePing.checked }));
+
+    const resetInstallId = document.getElementById('resetInstallId');
+    const resetInstallIdStatus = document.getElementById('resetInstallIdStatus');
+    resetInstallId.addEventListener('click', async () => {
+      const ok = await window.bowserPages.resetInstallId();
+      resetInstallIdStatus.textContent = ok
+        ? 'Reset — this install now counts as brand new.'
+        : 'Couldn’t save the reset — check disk space and try again.';
+      setTimeout(() => { resetInstallIdStatus.textContent = ''; }, 3000);
+    });
   } else {
     document.getElementById('usagePing')?.closest('.setting')?.remove();
+    document.getElementById('resetInstallId')?.closest('.toolbar-row')?.remove();
   }
 
   // --- Default browser (live OS state, nothing stored) ---
@@ -426,8 +437,10 @@
 
       disableBtn.addEventListener('click', async () => {
         const res = await window.bowserPages.settings.syncDisable({ wipeRemote: wipeEl.checked });
-        wipeEl.checked = false;
-        render(res.status);
+        // A failed remote wipe keeps sync ON (the accountId is the only handle
+        // on the server copy) — leave the checkbox set for the retry and say why.
+        wipeEl.checked = res.ok ? false : wipeEl.checked;
+        render(res.status, res.ok ? null : res.message);
       });
     })();
   } else {

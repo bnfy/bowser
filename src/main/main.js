@@ -24,6 +24,8 @@ const history = require('./history');
 const { JsonStore } = require('./store');
 const { shouldClearFaviconOnNavigate } = require('./favicon-policy');
 const { setupWebAuthn } = require('./webauthn');
+const { HANDOFF_PROTOCOLS, classifyExternalNavigation } = require('./external-protocols');
+const { isTrustedSender } = require('./ipc-trust');
 
 const NEW_TAB_URL = 'blanc://newtab/';
 const newTabUrl = () => settings.getSettings().homePage || NEW_TAB_URL;
@@ -143,26 +145,22 @@ function openExternalUrl(url) {
 // Checked at every point a URL becomes a navigation target: page-initiated
 // navigation (will-navigate), window.open children (setWindowOpenHandler),
 // the context menu's "Open Link" actions, and typed address-bar input.
-const HANDOFF_PROTOCOLS = new Set(['mailto:', 'tel:', 'facetime:', 'sms:']);
+// The allowlist and trusted/confirm policy live in external-protocols.js
+// (pure, unit-tested); this wrapper owns the side effects only.
 let externalProtocolPromptOpen = false;
 function handOffToOs(url, { trusted = false } = {}) {
-  let protocol;
-  try {
-    protocol = new URL(url).protocol;
-  } catch {
-    return false;
-  }
-  if (!HANDOFF_PROTOCOLS.has(protocol)) return false;
+  const decision = classifyExternalNavigation(url, { trusted });
+  if (decision.action === 'none') return false;
 
   // Address-bar input is an explicit user instruction. Page-initiated
   // navigations/window.open and context-menu targets are untrusted URL data,
   // so require confirmation before launching another application. One prompt
   // at a time prevents a hostile page from flooding the desktop with dialogs.
-  if (trusted) {
+  if (decision.action === 'open') {
     shell.openExternal(url).catch(() => {});
   } else if (!externalProtocolPromptOpen && hasLiveWindow()) {
     externalProtocolPromptOpen = true;
-    const label = protocol.slice(0, -1);
+    const label = decision.protocol.slice(0, -1);
     dialog.showMessageBox(win, {
       type: 'question',
       title: 'Open external application?',
@@ -1426,16 +1424,15 @@ function refocusAddressBarIfWanted() {
   }
 }
 
+// The predicate itself lives in ipc-trust.js (pure, unit-tested); this
+// wrapper only supplies the live trusted surfaces.
 function isTrustedChromeSender(event) {
-  const frame = event.senderFrame;
-  if (!frame || frame !== event.sender.mainFrame) return false;
-  if (hasLiveWindow() && event.sender === win.webContents) {
-    return frame.url === CHROME_INDEX_URL && event.sender.getURL() === CHROME_INDEX_URL;
-  }
-  if (overlayView && !overlayView.webContents.isDestroyed() && event.sender === overlayView.webContents) {
-    return frame.url === CHROME_OVERLAY_URL && event.sender.getURL() === CHROME_OVERLAY_URL;
-  }
-  return false;
+  return isTrustedSender(event, [
+    hasLiveWindow() ? { webContents: win.webContents, url: CHROME_INDEX_URL } : null,
+    overlayView && !overlayView.webContents.isDestroyed()
+      ? { webContents: overlayView.webContents, url: CHROME_OVERLAY_URL }
+      : null,
+  ]);
 }
 
 function chromeHandle(channel, handler) {

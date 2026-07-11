@@ -52,14 +52,19 @@ class JsonStore {
     this.saveTimer = setTimeout(() => this.flush(), SAVE_DELAY_MS);
   }
 
+  /** @returns {boolean} whether the write actually reached disk — callers
+   * that promise the user something persisted (e.g. the install-id reset)
+   * must not report success off a swallowed write error. */
   flush() {
     clearTimeout(this.saveTimer);
     this.saveTimer = null;
     this.pendingSince = null;
     try {
       fs.writeFileSync(this.file, JSON.stringify(this.data, null, 2));
+      return true;
     } catch (err) {
       console.warn(`[store] could not write ${this.file}:`, err.message);
+      return false;
     }
   }
 }

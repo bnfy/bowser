@@ -18,7 +18,7 @@ npm run dist:dir                # quick unpacked build in dist/, no installer
 npm run release                 # scripts/release.sh: clean, build, sign, publish to GitHub Releases
 ```
 
-There is no test suite and no linter configured in this repo — don't assume `npm test` or `npm run lint` exist.
+There is no linter configured and no plain `npm test` — the real commands are `npm run test:unit` (node --test over `test/unit/`), `npm run test:acceptance:dry` / `test:acceptance:desktop` (Cucumber scenarios in `spec/acceptance/`, the latter launching the app via Playwright), `npm run test:oauth:desktop`, and `npm run substrate:check` (tokens/settings/copy/adblock generated files match their sources).
 
 `npm run release` bumps nothing itself — bump `version` in `package.json` (and consider the `electron` devDependency, since Chromium can't be swapped out of a running app) *before* running it. It shells out to `scripts/release.sh`, which authenticates via the `gh` CLI's own cached session (no `GH_TOKEN` needed locally), builds unpublished, then uses `gh release create` directly instead of electron-builder's own GitHub publisher — that publisher races its per-artifact upload tasks against each other on first publish for a tag and can leave a release missing `latest-mac.yml` or a blockmap; creating the release once with the complete macOS asset set avoids that. **Released versions are immutable:** the script checks local/remote tags and GitHub releases before building and fails if the version already exists; always bump to a new version, never overwrite assets. It also refuses dirty desktop release sources and wipes `dist/` before building so artifacts correspond to committed code and stale files never linger.
 

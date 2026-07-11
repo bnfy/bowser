@@ -12,6 +12,14 @@
 //      active users (DAU/WAU/MAU) and growth over time. The install id is an
 //      opaque random token — it maps to a device install, never a person, and
 //      no name/account/IP/browsing data is ever stored beside it.
+//
+// The raw install id is never stored or forwarded (2026-07-11 audit decision):
+// it's HMAC'd with the INSTALL_HASH_SECRET worker secret on arrival, and only
+// that keyed hash appears in KV keys and in the GA4 mirror's client_id. The
+// hash is stable per install (so dedup and retention still work) but can't be
+// reversed or recomputed by anyone without the secret — the privacy policy
+// describes exactly this. If the secret is unset, uniques are SKIPPED (fail
+// closed) rather than falling back to the raw id; launches still count.
 
 const ALLOWED_PLATFORMS = new Set(['darwin', 'win32', 'linux']);
 const VERSION_RE = /^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?$/;
@@ -26,13 +34,34 @@ const GA_ENDPOINT = 'https://www.google-analytics.com/mp/collect';
 // retention against adjacent periods, so they're given generous but bounded
 // TTLs to keep KV from growing without limit.
 const DAY_SEEN_TTL = 90 * 24 * 3600; // ~3 months of daily-cohort history
-const WEEK_SEEN_TTL = 400 * 24 * 3600; // >1 year of weekly cohorts
-const MONTH_SEEN_TTL = 800 * 24 * 3600; // ~26 months of monthly cohorts (retention)
+const WEEK_SEEN_TTL = 400 * 24 * 3600; // ~13 months of weekly cohorts
+const MONTH_SEEN_TTL = 400 * 24 * 3600; // ~13 months of monthly cohorts (retention) — trimmed from 800d, 2026-07-11 audit
+
+// Keyed hash of the install id — the only form that ever touches storage or
+// GA. HMAC-SHA-256 under a worker secret, hex-encoded. Returns null (uniques
+// skipped, launches still counted) when the secret isn't configured, so a
+// misdeployed worker degrades to less data, never to raw ids at rest.
+// Deploy note: set with `wrangler secret put INSTALL_HASH_SECRET`. Rotating
+// the secret (or first enabling it) re-buckets every install once — active
+// counts see a one-time discontinuity, then dedup as before.
+async function hashInstallId(env, installId) {
+  if (!env.INSTALL_HASH_SECRET) {
+    console.warn('INSTALL_HASH_SECRET unset — skipping unique-install counting');
+    return null;
+  }
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(env.INSTALL_HASH_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(installId));
+  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
 
 // Mirrors each ping into GA4 so app launches sit next to website traffic in
 // one dashboard. Three things make GA4's Measurement Protocol actually count
 // the user as "active" in its built-in reports:
-//   1. client_id — stable per install (the install id); GA keys users on this.
+//   1. client_id — stable per install (the HASHED install id — see
+//      hashInstallId; Google never receives the raw token); GA keys users on this.
 //   2. session_id — a random number per launch; GA needs it to count sessions.
 //   3. engagement_time_msec > 0 — without this GA silently drops the user from
 //      its Active Users metric. We send 1ms (nominal) since the ping is a
@@ -142,9 +171,13 @@ async function handlePing(request, env, ctx, now) {
       ? String(Math.floor(body.sessionId))
       : null;
 
+  // The raw id stops here: everything downstream — KV seen-keys AND the GA
+  // mirror — sees only the keyed hash (or nothing, if the secret is unset).
+  const hashedId = installId ? await hashInstallId(env, installId) : null;
+
   // GA mirror is queued before the KV writes so a KV failure can't cost
   // the launch event too.
-  ctx.waitUntil(forwardToGA(env, { version, platform, arch, installId, sessionId }));
+  ctx.waitUntil(forwardToGA(env, { version, platform, arch, installId: hashedId, sessionId }));
 
   // KV get/put can throw transiently; the counts are best-effort anyway
   // (see bump()), so log and still 204 rather than turning a blip into a
@@ -155,11 +188,11 @@ async function handlePing(request, env, ctx, now) {
     bump(env.PINGS, `version:${version}`),
     bump(env.PINGS, `platform:${platform}`),
   ];
-  if (installId) {
+  if (hashedId) {
     work.push(
-      markActive(env.PINGS, 'day', dayBucket(now), installId, DAY_SEEN_TTL),
-      markActive(env.PINGS, 'week', weekBucket(now), installId, WEEK_SEEN_TTL),
-      markActive(env.PINGS, 'month', monthBucket(now), installId, MONTH_SEEN_TTL)
+      markActive(env.PINGS, 'day', dayBucket(now), hashedId, DAY_SEEN_TTL),
+      markActive(env.PINGS, 'week', weekBucket(now), hashedId, WEEK_SEEN_TTL),
+      markActive(env.PINGS, 'month', monthBucket(now), hashedId, MONTH_SEEN_TTL)
     );
   }
   await Promise.all(work).catch((err) => console.error('KV write failed:', err.message));
@@ -213,6 +246,47 @@ function pickRecent(map, n) {
       .slice(-n)
       .map((k) => [k, map[k]])
   );
+}
+
+// POST /admin/purge-legacy-ids — one-shot migration for the 2026-07-11 HMAC
+// change: pings before it wrote seen:* markers keyed by the RAW install UUID
+// (some monthly ones with the old 800-day TTL). Deleting them is what makes
+// the privacy policy's "the raw install ID is never stored" true for the
+// whole store, not just for new pings. Deletes ONLY keys whose install
+// segment matches the old UUID format — 64-hex HMAC keys and the aggregate
+// active:*/day:*/version:* counters are untouched. Bounded per invocation to
+// stay inside the Workers subrequest budget; idempotent, so re-run until it
+// returns done:true. Note: deleting the legacy markers breaks active-user
+// dedup and retention cohorts ACROSS the migration boundary only — installs
+// re-count as new once, then dedup as before.
+const PURGE_DELETE_BUDGET = 800;
+const purgeReport = (obj) =>
+  new Response(JSON.stringify(obj), { headers: { 'Content-Type': 'application/json' } });
+async function handlePurgeLegacy(request, env) {
+  if (!env.STATS_TOKEN || request.headers.get('Authorization') !== `Bearer ${env.STATS_TOKEN}`) {
+    return new Response('unauthorized', { status: 401 });
+  }
+  let scanned = 0;
+  let deleted = 0;
+  let cursor;
+  for (;;) {
+    const res = await env.PINGS.list({ prefix: 'seen:', cursor });
+    for (const { name } of res.keys) {
+      scanned++;
+      // Buckets never contain ':' (YYYY-MM-DD / GGGG-Www / YYYY-MM), so the
+      // final segment is always the install token.
+      const installSegment = name.slice(name.lastIndexOf(':') + 1);
+      if (UUID_RE.test(installSegment)) {
+        await env.PINGS.delete(name);
+        deleted++;
+        if (deleted >= PURGE_DELETE_BUDGET) {
+          return purgeReport({ scanned, deleted, done: false });
+        }
+      }
+    }
+    if (res.list_complete) return purgeReport({ scanned, deleted, done: true });
+    cursor = res.cursor;
+  }
 }
 
 // GET /stats — bearer-token-gated readout so the counts are visible
@@ -276,6 +350,7 @@ export default {
     const now = new Date();
     if (request.method === 'POST' && url.pathname === '/ping') return handlePing(request, env, ctx, now);
     if (request.method === 'GET' && url.pathname === '/stats') return handleStats(request, env, now);
+    if (request.method === 'POST' && url.pathname === '/admin/purge-legacy-ids') return handlePurgeLegacy(request, env);
     return new Response('not found', { status: 404 });
   },
 };

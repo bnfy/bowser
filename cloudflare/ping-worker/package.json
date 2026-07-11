@@ -1,0 +1,5 @@
+{
+  "name": "blanc-ping-worker",
+  "private": true,
+  "type": "module"
+}

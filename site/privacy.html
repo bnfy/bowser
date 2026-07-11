@@ -31,10 +31,10 @@
 <main class="legal-doc">
   <p class="eyebrow">privacy</p>
   <h1>Privacy Policy</h1>
-  <p class="legal-updated">Last updated: July 9, 2026</p>
+  <p class="legal-updated">Last updated: July 11, 2026</p>
 
   <div class="legal-tldr">
-    <p><strong>The short version.</strong> Blanc is built to collect as little as possible. Your browsing history, downloads, and favorites stay on your device — we never receive them. The installed app sends one anonymous usage ping you can switch off, and nothing else leaves your device unless you opt in. This website uses analytics only if you allow it.</p>
+    <p><strong>The short version.</strong> Blanc is built to collect as little as possible. Your browsing history, downloads, and favorites stay on your device — we never receive them. The installed app sends one small usage ping you can switch off, and nothing else leaves your device unless you opt in. This website uses analytics only if you allow it.</p>
   </div>
 
   <h2>Who this covers</h2>
@@ -56,18 +56,26 @@
   <p>Because this data is local, you're the one in control of it — Blanc's history, downloads, and favorites screens let you remove items, and uninstalling Blanc removes its data folder.</p>
 
   <h2>What Blanc sends — and only when</h2>
-  <p>There are exactly three things Blanc can send off your device. One is a small anonymous ping that's on by default and easy to turn off. The other two happen only if you choose them.</p>
+  <p>There are exactly three things Blanc can send off your device. One is a small pseudonymous usage ping that's on by default and easy to turn off. The other two happen only if you choose them.</p>
 
-  <h3>Anonymous usage ping</h3>
+  <h3>Usage ping</h3>
   <p>So we can gauge roughly how many people use Blanc, the installed app sends a small ping when it launches. <strong>It's on by default, and you can turn it off any time in Settings, under "Help improve Blanc."</strong></p>
   <p>Each ping contains only:</p>
   <ul>
-    <li>a random install ID — a token that identifies the installation, not you</li>
+    <li>a random install ID — a token that identifies the installation, not you (this makes the ping <em>pseudonymous</em> rather than fully anonymous: repeat launches from the same install can be recognized as such, but nothing links the token to a person)</li>
     <li>a random per-launch session ID</li>
     <li>the app version</li>
     <li>your operating system and processor type (for example, macOS on arm64)</li>
   </ul>
-  <p>That's the entire payload. It carries <strong>no browsing data, no personal details, no account, no name, and no precise location.</strong> The install ID isn't tied to any identity; it's kept in its own small file on your device and is cleared when you remove the app's data. We use these pings only in aggregate — counts like "launches this week" — and those totals may be reflected in Google Analytics. Development builds send no pings at all.</p>
+  <p>That's the entire payload. It carries <strong>no browsing data, no personal details, no account, no name, and no precise location.</strong> Here is exactly what happens to it on our side:</p>
+  <ul>
+    <li>The raw install ID is never stored. Our collector immediately replaces it with a salted hash (a one-way scramble using a server-side secret), and only that hash is used from then on.</li>
+    <li>The hash is used to tell repeat launches apart from distinct installs — daily, weekly, and monthly active-install counts, and whether installs come back month over month. The per-install markers behind those counts expire automatically: after 90 days for daily, and after about 13 months for weekly and monthly.</li>
+    <li>The resulting <em>totals</em> — launch and active-install counts by day, version, and platform, with no install IDs in them — are what we keep long-term.</li>
+    <li>The same hashed token is forwarded to Google Analytics as its "client ID," so app launches appear alongside our website's traffic stats. Since the July 2026 migration described in the transition note below, Google receives only the hashed token, and the event carries only the version/platform details listed above.</li>
+  </ul>
+  <p>The install ID is kept in its own small file on your device. You can reset it any time with the <strong>"Reset install ID"</strong> button in Settings — from then on you count as a brand-new install — and it's also cleared when you remove the app's data. Development builds send no pings at all.</p>
+  <p>One transition note, in the interest of full honesty: before a migration in July 2026, our collector used the random token directly — in its own storage and in what it forwarded to Google Analytics — rather than a salted hash of it. The pre-hashing markers have been deleted from our storage, and the older Google Analytics events age out under its data-retention settings. Those events contained the same random token and version/platform details described above, and nothing more.</p>
 
   <h3>Profile Sync (optional, off by default)</h3>
   <p>If you turn on Profile Sync in Settings, Blanc can keep your <strong>favorites and settings</strong> in step across your own devices. It stays off until you set it up with a sync name and passphrase.</p>
@@ -106,14 +114,14 @@
   <ul>
     <li>Turn the usage ping off in Settings at any time.</li>
     <li>Leave Profile Sync off, or turn it off to stop syncing.</li>
-    <li>Reset your install ID by clearing the app's data.</li>
+    <li>Reset your install ID with the "Reset install ID" button in Settings, or by clearing the app's data.</li>
     <li>Clear your history, downloads, and favorites from within Blanc.</li>
     <li>Allow or decline analytics on this site, and change your mind by clearing the site's stored choice in your browser.</li>
   </ul>
-  <p>If you're in the European Union, the United Kingdom, California, or a similar place, you have rights over your personal data, including the right to access or delete it. We don't sell personal data. Because we hold so little — an anonymous install ping and, only if you enable sync, encrypted data we can't read — there's usually very little to act on, but you're welcome to email us at <a href="mailto:support@blancbrowser.com">support@blancbrowser.com</a> with any request.</p>
+  <p>If you're in the European Union, the United Kingdom, California, or a similar place, you have rights over your personal data, including the right to access or delete it. We don't sell personal data. Because we hold so little — a pseudonymous install ping and, only if you enable sync, encrypted data we can't read — there's usually very little to act on, but you're welcome to email us at <a href="mailto:support@blancbrowser.com">support@blancbrowser.com</a> with any request.</p>
 
   <h2>Keeping data, and keeping it safe</h2>
-  <p>Usage pings are kept only in aggregate. Synced data stays on our server as encrypted blobs until you turn sync off or delete it. We take reasonable steps to protect the information we handle. One honest note: the data Blanc stores on your own device is kept in ordinary files, so the security of that data depends on your device's own protections.</p>
+  <p>Usage pings are kept as described above: long-term only as aggregate totals, with the per-install markers behind the active-install counts expiring after 90 days to about 13 months. Synced data stays on our server as encrypted blobs until you turn sync off and erase the server copy. Two honest notes: the encryption on synced data protects its <em>secrecy</em> — we can never read it — but it doesn't make the server copy indestructible, so treat a device that has your data as the source of truth, not the sync server. And the data Blanc stores on your own device is kept in ordinary files, so its security depends on your device's own protections.</p>
 
   <h2>Changes to this policy</h2>
   <p>If we change this policy, we'll update the date at the top and call out anything significant.</p>

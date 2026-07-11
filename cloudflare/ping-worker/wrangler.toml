@@ -7,8 +7,11 @@ kv_namespaces = [
   { binding = "PINGS", id = "2c71bddea5b842d49fee1c972b70e8d9" }
 ]
 
-# STATS_TOKEN is a secret, not a var — set it with:
+# STATS_TOKEN and INSTALL_HASH_SECRET are secrets, not vars — set them with:
 #   wrangler secret put STATS_TOKEN
+#   wrangler secret put INSTALL_HASH_SECRET
+# INSTALL_HASH_SECRET keys the HMAC applied to install ids before storage/GA
+# forwarding; unset means unique-install counting is skipped (fail closed).
 
 # Workers Logs — keeps a searchable history of invocations/exceptions in the
 # dashboard, so a runtime 500 can be diagnosed after the fact instead of

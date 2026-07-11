@@ -301,10 +301,23 @@ From the desktop `DEFAULTS`:
   session tracking. Endpoint is the shared `blanc-ping` worker, which dedupes
   repeat launches into DAU/WAU/MAU via TTL'd `seen:*` flags and optionally
   mirrors to GA4.
+- **Pseudonymity guarantees (2026-07-11 audit):** the worker never stores or
+  forwards the raw `installId` — it's HMAC'd under the `INSTALL_HASH_SECRET`
+  worker secret on arrival (secret unset ⇒ uniques skipped, fail closed), and
+  GA4's `client_id` receives only the hash. Per-install `seen:*` flags expire
+  at 90d (daily) / 400d (weekly, monthly); only aggregate counters live
+  longer. Settings offers a **"Reset install ID"** button (mints a fresh id in
+  `install.json`; the install counts as brand new from the next ping). The
+  privacy policy (`site/privacy.html`) describes exactly this pipeline — keep
+  the two in lockstep. Pre-migration `seen:*` markers (raw UUIDs, some with
+  the old 800d TTL) are purged via the worker's bearer-gated
+  `POST /admin/purge-legacy-ids` — run to `done:true` after deploy and BEFORE
+  publishing the policy page (see the worker README); pre-migration GA events
+  carried the raw token, disclosed in the policy's transition note.
 - **Acceptance:** With the setting off, no ping is sent; with the default (on),
   exactly one ping is sent at launch in a packaged build; blocking the network
-  changes nothing user-visible; deleting `install.json` resets the install
-  identity.
+  changes nothing user-visible; deleting `install.json` — or the Settings
+  "Reset install ID" button — resets the install identity.
 
 ## F22 — Distribution & updates
 

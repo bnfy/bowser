@@ -3,6 +3,7 @@ const { JsonStore } = require('./store');
 const settings = require('./settings');
 const bookmarks = require('./bookmarks');
 const { deriveKeys, encrypt, decrypt } = require('./sync-crypto');
+const { wipeDecision } = require('./sync-wipe');
 
 // Blanc-hosted E2EE profile sync. This module holds the only network calls;
 // the Worker (cloudflare/sync-worker) stores AES-GCM ciphertext keyed by an
@@ -80,7 +81,24 @@ async function disable({ wipeRemote = false } = {}) {
   timer = null;
   const d = ensureStore().data;
   if (wipeRemote && d.accountId) {
-    try { await net.fetch(`${SYNC_ENDPOINT}/v1/blob/${d.accountId}`, { method: 'DELETE' }); } catch { /* best effort */ }
+    // The wipe must be confirmed before the credentials are erased: the
+    // accountId is the only handle on the server copy, so clearing it after
+    // a failed DELETE would strand unreachable ciphertext while telling the
+    // user it's gone. On failure, keep the record intact (sync stays enabled)
+    // and report, so "erase server copy" can be retried — or the user can
+    // turn sync off without the wipe. The clear-vs-keep rule is pinned by
+    // sync-wipe.js and its unit test.
+    let outcome;
+    try {
+      const res = await net.fetch(`${SYNC_ENDPOINT}/v1/blob/${d.accountId}`, { method: 'DELETE' });
+      outcome = { status: res.status };
+    } catch {
+      outcome = { error: true };
+    }
+    const decision = wipeDecision(outcome);
+    if (!decision.clearCredentials) {
+      return { ok: false, message: decision.message, status: status() };
+    }
   }
   ensureStore().update((s) => { s.enabled = false; s.handle = ''; s.accountId = ''; s.key = ''; s.lastError = null; });
   return { ok: true, status: status() };

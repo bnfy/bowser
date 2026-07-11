@@ -1,4 +1,3 @@
-const { JsonStore } = require('./store');
 const {
   normalizedMediaTypes,
   storedDecision,
@@ -16,8 +15,18 @@ const {
 const AUTO_ALLOWED = new Set(['fullscreen', 'pointerLock', 'clipboard-sanitized-write']);
 const PROMPTED = new Set(['media', 'geolocation', 'notifications']);
 
+// store.js requires electron at load, so it's pulled in lazily: the module
+// itself then loads under plain `node --test`, and the private-permissions
+// unit test doubles as a canary — any code path that touches persistence
+// with persistDecisions:false would blow up on the electron require.
 let store = null;
-const ensureStore = () => (store ??= new JsonStore('site-permissions', { decisions: {} }));
+const ensureStore = () => {
+  if (!store) {
+    const { JsonStore } = require('./store');
+    store = new JsonStore('site-permissions', { decisions: {} });
+  }
+  return store;
+};
 
 /** @type {((req: {origin: string, permission: string, mediaTypes: string[]}) => Promise<boolean | null>) | null} */
 let prompter = null;

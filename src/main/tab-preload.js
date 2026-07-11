@@ -51,5 +51,6 @@ if (window.location.protocol === 'blanc:') {
       set: () => ipcRenderer.invoke('pages:default-browser:set'),
     },
     clearBrowsingData: () => ipcRenderer.invoke('pages:clear-browsing-data'),
+    resetInstallId: () => ipcRenderer.invoke('pages:telemetry:reset-install-id'),
   });
 }
