@@ -1,4 +1,4 @@
-const { app, webContents } = require('electron');
+const { app, ipcMain, webContents } = require('electron');
 const { ElectronBlocker } = require('@ghostery/adblocker-electron');
 const fs = require('fs');
 const path = require('path');
@@ -62,6 +62,17 @@ function isExcepted(details) {
  * @param {Electron.Session} session
  */
 function applyBlockingWithExceptions(session) {
+  // `enableBlockingInSession` registers the library's cosmetic-filter IPC
+  // handlers via the process-global `ipcMain.handle`, which throws if a
+  // handler for the channel already exists. We attach the same blocker to
+  // more than one session (default + the isolated private-browsing session),
+  // so a second enable would otherwise crash startup with "Attempted to
+  // register a second handler". Clear any prior registration first: the
+  // handlers always dispatch to this one shared blocker instance, so which
+  // session's enable call owns them is irrelevant. Removing when none is
+  // registered is a safe no-op.
+  ipcMain.removeHandler('@ghostery/adblocker/inject-cosmetic-filters');
+  ipcMain.removeHandler('@ghostery/adblocker/is-mutation-observer-enabled');
   blocker.enableBlockingInSession(session);
   session.webRequest.onBeforeRequest({ urls: ['<all_urls>'] }, (details, callback) => {
     if (isExcepted(details)) return callback({});
