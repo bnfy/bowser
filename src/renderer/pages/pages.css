@@ -620,3 +620,63 @@ a.ledger-label:hover { color: var(--accent); }
 }
 .page-head h1 { margin-bottom: 12px; }
 #importStatus { margin: 0 0 16px; min-height: 16px; }
+
+.folder-section { margin-bottom: 14px; }
+.folder-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2px;
+}
+.folder-name { font-family: var(--font-mono); font-size: 12.5px; color: var(--text); }
+.folder-name-dim { color: var(--text-dim); }
+.folder-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+.folder-actions { margin-left: auto; display: flex; gap: 6px; }
+.folder-actions button { padding: 3px 9px; font-size: 11px; }
+.folder-rename-input { width: 220px; }
+.folder-chip {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 9px;
+}
+/* Favorites rows only. The shared `.row .actions { opacity: 0 }` (used by
+   history/downloads too) is left untouched; child opacity can't override an
+   ancestor's, so instead keep this container visible and hide ONLY Remove
+   until hover/focus, leaving the folder chip always reachable. The extra
+   class raises specificity above the shared rule. */
+.row .actions.bookmark-actions { opacity: 1; position: relative; }
+.row .actions.bookmark-actions .danger { opacity: 0; }
+.row:hover .actions.bookmark-actions .danger,
+.row:focus-within .actions.bookmark-actions .danger { opacity: 1; }
+.folder-picker {
+  position: absolute;
+  z-index: 20;
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 180px;
+  padding: 6px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+.picker-item {
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  border: none;
+  background: transparent;
+}
+.picker-item:hover { background: var(--surface); border-color: transparent; }
+.picker-new { margin-top: 4px; font-size: 11.5px; }
