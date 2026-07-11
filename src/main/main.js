@@ -1351,6 +1351,18 @@ function toggleBookmarkForActiveTab() {
   scheduleMenuRebuild();
 }
 
+/** The `/save [folder]` command: add-only favorite of the active tab, into an
+ * optional folder. Same guards as toggleBookmarkForActiveTab; re-derives
+ * bookmarked from the store so add / move / rejected-folder all report right. */
+function saveActiveTabAsFavorite(folder) {
+  const tab = activeTabId ? tabs.get(activeTabId) : null;
+  if (!tab || tab.private || !/^https?:\/\//.test(tab.url)) return;
+  bookmarks.saveFavorite(tab.url, tab.title, tab.favicon, folder);
+  tab.bookmarked = bookmarks.isBookmarked(tab.url);
+  broadcastTabs();
+  scheduleMenuRebuild();
+}
+
 /** "Add All Open Tabs to Favorites" — mirrors toggleBookmarkForActiveTab's
  * own URL guard. Skips private tabs (favorites never populate from private
  * browsing) and anything already favorited (idempotent). */
@@ -1497,6 +1509,7 @@ function registerIpcHandlers() {
   chromeHandle('tabs:focus-group', (_e, groupId) => focusGroup(groupId));
   chromeHandle('tabs:close-group', (_e, groupId) => closeGroup(groupId));
   chromeHandle('tabs:toggle-bookmark', () => toggleBookmarkForActiveTab());
+  chromeHandle('tabs:save-favorite', (_e, folder) => saveActiveTabAsFavorite(folder));
   chromeHandle('tabs:toggle-pinned', (_e, id) => toggleTabPinned(id));
   chromeHandle('tabs:toggle-muted', (_e, id) => toggleTabMuted(id));
   chromeHandle('tabs:duplicate', (_e, id) => duplicateTab(id));

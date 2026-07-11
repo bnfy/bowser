@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('browserAPI', {
   focusGroup: (groupId) => ipcRenderer.invoke('tabs:focus-group', groupId),
   closeGroup: (groupId) => ipcRenderer.invoke('tabs:close-group', groupId),
   toggleBookmark: () => ipcRenderer.invoke('tabs:toggle-bookmark'),
+  saveFavorite: (folder) => ipcRenderer.invoke('tabs:save-favorite', folder),
   toggleTabPinned: (id) => ipcRenderer.invoke('tabs:toggle-pinned', id),
   toggleTabMuted: (id) => ipcRenderer.invoke('tabs:toggle-muted', id),
   duplicateTab: (id) => ipcRenderer.invoke('tabs:duplicate', id),

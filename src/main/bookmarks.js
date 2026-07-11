@@ -50,6 +50,18 @@ function toggleBookmark(url, title, favicon) {
   return true;
 }
 
+/** Add-only quick-save (the `/save` command). One write + one change
+ * notification on change, mirroring setBookmarkFolder; a rejected/idempotent
+ * call writes nothing. Folder validation/canonicalization live in the pure
+ * transform. */
+function saveFavorite(url, title, favicon, folder) {
+  const s = ensureStore();
+  const res = data.applySaveFavorite(s.data, { url, title, favicon, folder }, { now: Date.now(), makeId: crypto.randomUUID });
+  if (!res.changed) return;
+  s.update((d) => { d.items = res.items; d.tombstones = res.tombstones; });
+  notifyChanged();
+}
+
 /** Patch an existing bookmark's favicon — called as a tab's favicon
  * resolves/upgrades (self-healing a bookmark made before the sharp icon
  * loaded, or one bulk-added while its tab was still loading) and when the
@@ -183,4 +195,4 @@ function mergeFromSync(remote) {
   notifyMerged();
 }
 
-module.exports = { listBookmarks, isBookmarked, toggleBookmark, updateFavicon, removeBookmark, importBookmarks, setBookmarkFolder, renameFolder, removeFolder, exportForSync, mergeFromSync, onChanged, onMerged };
+module.exports = { listBookmarks, isBookmarked, toggleBookmark, saveFavorite, updateFavicon, removeBookmark, importBookmarks, setBookmarkFolder, renameFolder, removeFolder, exportForSync, mergeFromSync, onChanged, onMerged };
