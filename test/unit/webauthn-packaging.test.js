@@ -79,3 +79,25 @@ test('the profile provisions all devices — a device-listed profile would stran
   assert.match(profile, /<key>ProvisionsAllDevices<\/key>\s*<true\s*\/>/);
   assert.equal(profile.includes('<key>ProvisionedDevices</key>'), false);
 });
+
+test('the profile targets macOS and has not expired', () => {
+  const profile = readBuildFile(pkg.build.mac.provisioningProfile);
+  const platformKey = profile.indexOf('<key>Platform</key>');
+  assert.notEqual(platformKey, -1, 'profile declares a Platform');
+  assert.ok(
+    profile.slice(platformKey, profile.indexOf('</array>', platformKey)).includes('<string>OSX</string>'),
+    'profile Platform must include OSX',
+  );
+  const expiry = profile.match(/<key>ExpirationDate<\/key>\s*<date>([^<]+)<\/date>/);
+  assert.ok(expiry, 'profile has an ExpirationDate');
+  assert.ok(new Date(expiry[1]).getTime() > Date.now(), `profile expired ${expiry[1]}`);
+});
+
+test('the signer is deterministic: identity pinned by fingerprint, after-sign verification wired', () => {
+  // With several identically-named Developer ID certificates on the account,
+  // a name-based identity is ambiguous — the pin must be a SHA-1 fingerprint,
+  // and the afterSign hook re-checks whatever certificate actually signed.
+  assert.match(pkg.build.mac.identity ?? '', /^[0-9A-F]{40}$/);
+  assert.equal(pkg.build.afterSign, 'scripts/after-sign-verify.js');
+  assert.ok(fs.existsSync(path.join(root, pkg.build.afterSign)), 'afterSign hook script exists');
+});

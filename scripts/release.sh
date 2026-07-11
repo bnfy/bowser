@@ -42,6 +42,8 @@ RELEASE_SOURCES=(
   package.json
   package-lock.json
   scripts/release.sh
+  scripts/preflight-mac-signing.mjs
+  scripts/after-sign-verify.js
   .github/workflows/release-windows-linux.yml
 )
 # Check the index and working tree separately so staged and unstaged edits
