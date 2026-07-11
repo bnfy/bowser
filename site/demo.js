@@ -102,10 +102,12 @@
   const mobileMq = window.matchMedia('(max-width: 560px)');
   let MOBILE = mobileMq.matches;
   const SHOT_IDS = ['github', 'notion', 'scroll', 'netflix']; // sites with a bundled render
+  const PRIVATE_SHOT = 'private'; // page shown behind the private-tab scene
+  const PRELOAD_IDS = [...SHOT_IDS, PRIVATE_SHOT];
   // Sampled top-edge color of each bundled render, so the Island's top strip
   // blends into the page below it (the CSS reads --demo-strip-bg). A scene with
-  // no bundled shot falls back to the theme surface (matches the skeleton); a
-  // private scene uses Blanc's own dark page color.
+  // no bundled shot falls back to the theme surface (matches the skeleton); the
+  // private scene keeps Blanc's own dark strip regardless of the page behind it.
   const SHOT_TOP = { github: '#030442', notion: '#ffffff', scroll: '#ffffff', netflix: '#080706' };
   const PRIVATE_TOP = '#0a0a0a';
   const shots = {}; // id -> { src, ready }
@@ -121,7 +123,7 @@
     img.onload = () => { rec.src = src; rec.ready = true; showShot(currentShotId); };
     img.src = src;
   }
-  SHOT_IDS.forEach(preloadShot);
+  PRELOAD_IDS.forEach(preloadShot);
 
   // Crossing the 560px breakpoint (mainly a phone rotation) swaps the desktop
   // renders for the mobile ones and vice versa. Drop the cached other-mode
@@ -129,8 +131,8 @@
   // background never disagrees with the pill the CSS is now showing.
   mobileMq.addEventListener('change', (e) => {
     MOBILE = e.matches;
-    SHOT_IDS.forEach((id) => delete shots[id]);
-    SHOT_IDS.forEach(preloadShot);
+    PRELOAD_IDS.forEach((id) => delete shots[id]);
+    PRELOAD_IDS.forEach(preloadShot);
     showShot(currentShotId);
   });
 
@@ -385,6 +387,23 @@
     { view: 'rest',  layout: 'grouped', current: 'youtube', priv: true, hold: 3800, cap: 'Private tabs shift the chrome and save nothing to history.' },
   ];
 
+  // Chapters group the scenes into the demo's topics; each scrub-bar marker sits
+  // at the start of one and jumps playback there.
+  const CHAPTERS = [
+    { label: 'the island', scene: 0 },
+    { label: 'command bar', scene: 2 },
+    { label: 'tab groups', scene: 6 },
+    { label: 'ad blocking', scene: 10 },
+    { label: 'private tabs', scene: 11 },
+  ];
+  // A scene's on-screen duration: typing scenes run for the keystrokes plus a
+  // read beat, everything else uses its authored hold. The scrub fill and the
+  // scene timer share this so the bar tracks playback exactly.
+  const sceneDuration = (s) => s.typed ? s.typed.length * TYPE_MS + POST_TYPE_HOLD : s.hold;
+  const DUR = SCENES.map(sceneDuration);
+  const TOTAL = DUR.reduce((sum, d) => sum + d, 0);
+  const START = []; DUR.reduce((acc, d, i) => (START[i] = acc, acc + d), 0);
+
   let idx = 0, timer = null, typeTimer = null;
 
   function applyScene(s) {
@@ -401,7 +420,7 @@
     footEl.textContent = s.priv ? PRIVATE_FOOT : lay.groups.length > 1 ? GROUP_FOOT : NORMAL_FOOT;
 
     renderPill(s.layout, current, s);
-    showShot(s.priv ? null : current); // private tabs open Blanc's own dark page
+    showShot(s.priv ? PRIVATE_SHOT : current); // private scene shows a page browsed privately
     // Color-match the top strip to the page now behind it, so the Island reads
     // as floating in the page's top margin rather than on a browser bar.
     stage.style.setProperty('--demo-strip-bg', s.priv ? PRIVATE_TOP : (SHOT_TOP[current] || ''));
@@ -421,14 +440,54 @@
     }
   }
 
+  // ---- scrub bar: progress fill + clickable chapter markers ----
+  const trackEl = document.getElementById('demoScrubTrack');
+  const fillEl = document.getElementById('demoScrubFill');
+  const markerEls = trackEl ? CHAPTERS.map((ch) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'demo-scrub-marker';
+    b.style.left = (START[ch.scene] / TOTAL * 100) + '%';
+    b.setAttribute('aria-label', 'Jump to ' + ch.label);
+    const lbl = document.createElement('span');
+    lbl.className = 'demo-scrub-label';
+    lbl.textContent = ch.label;
+    b.appendChild(lbl);
+    b._scene = ch.scene;
+    b.addEventListener('click', () => jumpTo(ch.scene));
+    trackEl.appendChild(b);
+    return b;
+  }) : [];
+
+  // Fill the bar linearly over the current scene's duration. The fill is snapped
+  // back to the scene's start with the transition disabled (so a loop wrap
+  // doesn't animate backwards), then transitions to the scene's end.
+  function updateScrub() {
+    if (fillEl) {
+      const from = START[idx] / TOTAL * 100;
+      const to = (START[idx] + DUR[idx]) / TOTAL * 100;
+      fillEl.style.transition = 'none';
+      fillEl.style.width = from + '%';
+      void fillEl.offsetWidth; // reflow so the snap-back applies before animating
+      fillEl.style.transition = 'width ' + DUR[idx] + 'ms linear';
+      fillEl.style.width = to + '%';
+    }
+    let activeScene = 0;
+    for (const ch of CHAPTERS) if (ch.scene <= idx) activeScene = ch.scene;
+    markerEls.forEach((m) => m.classList.toggle('active', m._scene === activeScene));
+  }
+
+  function jumpTo(sceneIndex) {
+    clearTimeout(timer);
+    stopTyping();
+    idx = sceneIndex;
+    tick();
+  }
+
   function tick() {
-    const s = SCENES[idx];
-    applyScene(s);
-    // Typing scenes advance a fixed beat after the keystrokes land, not on a
-    // long fixed hold — otherwise the panel sits idle for seconds once the
-    // short typed string is done. Everything else keeps its authored hold.
-    const hold = s.typed ? s.typed.length * TYPE_MS + POST_TYPE_HOLD : s.hold;
-    timer = setTimeout(() => { idx = (idx + 1) % SCENES.length; tick(); }, hold);
+    applyScene(SCENES[idx]);
+    updateScrub();
+    timer = setTimeout(() => { idx = (idx + 1) % SCENES.length; tick(); }, DUR[idx]);
   }
   tick();
 })();
