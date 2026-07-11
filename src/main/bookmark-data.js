@@ -77,6 +77,36 @@ function applySetFolder({ items }, id, folder, { now }) {
   return { items: next, changed: true };
 }
 
+/** Save a favorite — add-only and idempotent. `folder`: null = save at / keep
+ * at top level; a non-null candidate is validated (blank/over-long → reject,
+ * NEVER a silent top-level save) and canonicalized to an existing folder's
+ * spelling. On an already-saved url, only an explicitly named folder moves it
+ * (a bare save leaves it untouched). Mirrors toggleBookmark's add path
+ * (append, clear the url's tombstone) plus applySetFolder's folder resolution. */
+function applySaveFavorite({ items, tombstones }, { url, title, favicon, folder }, { now, makeId }) {
+  let target = null;
+  if (folder != null) {
+    const valid = validFolder(folder);
+    if (valid === null) return { items, tombstones, changed: false }; // reject before any add
+    const existing = buildCanonMap(items).get(folderKey(valid));
+    target = existing ? existing.folder : valid;
+  }
+  const idx = items.findIndex((it) => it.url === url);
+  if (idx !== -1) {
+    // Already saved: bare save is a no-op; a named folder moves it.
+    if (folder == null || (items[idx].folder ?? null) === target) return { items, tombstones, changed: false };
+    const next = items.slice();
+    next[idx] = { ...items[idx], folder: target, updatedAt: now };
+    return { items: next, tombstones, changed: true };
+  }
+  const item = { id: makeId(), url, title: title || url, favicon: validFavicon(favicon), addedAt: now, updatedAt: now, folder: target };
+  return {
+    items: [...items, item],
+    tombstones: tombstones.filter((t) => t.url !== url), // re-favoriting clears a prior delete
+    changed: true,
+  };
+}
+
 function applyRenameFolder({ items }, oldName, newName, { now }) {
   const target0 = validFolder(newName);
   if (target0 === null) return { items, changed: false }; // reject blank/over-long
@@ -150,6 +180,6 @@ function groupFavoritesForMenu(items) {
 }
 
 module.exports = {
-  addImported, applySetFolder, applyRenameFolder, applyRemoveFolder, canonicalizeFolders,
+  addImported, applySaveFavorite, applySetFolder, applyRenameFolder, applyRemoveFolder, canonicalizeFolders,
   groupFavoritesForMenu,
 };

@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const {
-  addImported, applySetFolder, applyRenameFolder, applyRemoveFolder, canonicalizeFolders,
+  addImported, applySaveFavorite, applySetFolder, applyRenameFolder, applyRemoveFolder, canonicalizeFolders,
   groupFavoritesForMenu,
 } = require('../../src/main/bookmark-data');
 
@@ -132,4 +132,63 @@ test('groupFavoritesForMenu: empty and all-ungrouped inputs', () => {
   const r = groupFavoritesForMenu(only);
   assert.equal(r.folders.length, 0);
   assert.equal(r.ungrouped.length, 1);
+});
+
+test('applySaveFavorite: new url adds at top level (folder null)', () => {
+  const res = applySaveFavorite(snap([]), { url: 'https://a.com/', title: 'A', favicon: null, folder: null }, opts);
+  assert.equal(res.changed, true);
+  assert.equal(res.items.length, 1);
+  const a = res.items[0];
+  assert.equal(a.url, 'https://a.com/');
+  assert.equal(a.folder, null);
+  assert.equal(a.addedAt, NOW);
+  assert.equal(a.updatedAt, NOW);
+  assert.equal(a.id, 'id1');
+});
+
+test('applySaveFavorite: new url into a folder adopts existing canonical spelling', () => {
+  const cur = snap([{ id: 'a', url: 'https://a.com/', title: 'A', favicon: null, addedAt: 1, updatedAt: 1, folder: 'Work' }]);
+  const res = applySaveFavorite(cur, { url: 'https://b.com/', title: 'B', favicon: null, folder: 'WORK' }, opts);
+  assert.equal(res.changed, true);
+  assert.equal(res.items.find((it) => it.url === 'https://b.com/').folder, 'Work'); // canonical spelling
+});
+
+test('applySaveFavorite: new url with a fresh folder keeps its trimmed spelling', () => {
+  const res = applySaveFavorite(snap([]), { url: 'https://a.com/', title: 'A', favicon: null, folder: '  Reading List  ' }, opts);
+  assert.equal(res.items[0].folder, 'Reading List');
+});
+
+test('applySaveFavorite: over-long folder is rejected — nothing added', () => {
+  const res = applySaveFavorite(snap([]), { url: 'https://a.com/', title: 'A', favicon: null, folder: 'x'.repeat(101) }, opts);
+  assert.equal(res.changed, false);
+  assert.equal(res.items.length, 0); // never falls back to a top-level save
+});
+
+test('applySaveFavorite: already saved + bare save is a no-op', () => {
+  const cur = snap([{ id: 'a', url: 'https://a.com/', title: 'A', favicon: null, addedAt: 1, updatedAt: 1, folder: 'Work' }]);
+  const res = applySaveFavorite(cur, { url: 'https://a.com/', title: 'A2', favicon: null, folder: null }, opts);
+  assert.equal(res.changed, false);
+  assert.equal(res.items[0].folder, 'Work'); // untouched
+  assert.equal(res.items[0].title, 'A');     // not overwritten
+});
+
+test('applySaveFavorite: already saved + named folder moves it (updatedAt bumped)', () => {
+  const cur = snap([{ id: 'a', url: 'https://a.com/', title: 'A', favicon: null, addedAt: 1, updatedAt: 1, folder: null }]);
+  const res = applySaveFavorite(cur, { url: 'https://a.com/', title: 'A', favicon: null, folder: 'Work' }, opts);
+  assert.equal(res.changed, true);
+  assert.equal(res.items[0].folder, 'Work');
+  assert.equal(res.items[0].updatedAt, NOW);
+});
+
+test('applySaveFavorite: already saved + same folder (case-variant) is a no-op', () => {
+  const cur = snap([{ id: 'a', url: 'https://a.com/', title: 'A', favicon: null, addedAt: 1, updatedAt: 1, folder: 'Work' }]);
+  const res = applySaveFavorite(cur, { url: 'https://a.com/', title: 'A', favicon: null, folder: 'work' }, opts);
+  assert.equal(res.changed, false);
+});
+
+test('applySaveFavorite: adding clears a prior tombstone for that url', () => {
+  const cur = snap([], [{ url: 'https://a.com/', deletedAt: 100 }]);
+  const res = applySaveFavorite(cur, { url: 'https://a.com/', title: 'A', favicon: null, folder: null }, opts);
+  assert.equal(res.changed, true);
+  assert.equal(res.tombstones.length, 0);
 });
