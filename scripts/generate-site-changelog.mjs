@@ -233,6 +233,7 @@ function renderChangelog(releases) {
     </a>
     <div class="site-nav-links">
       <a href="features.html">features</a>
+      <a href="about.html" class="nav-secondary">about</a>
       <a href="changelog.html" class="is-current" aria-current="page">changelog</a>
     </div>
     <a class="site-nav-cta" href="download.html">download blanc</a>
@@ -251,8 +252,8 @@ ${items || '    <p>No published releases yet.</p>'}
 </main>
 
 <footer class="compact-footer">
-  <span>zero bloat <b>|</b> fast focus · © 2026 · Built by <a href="https://bnfy.me" target="_blank" rel="noopener">Bananify</a></span>
-  <span><a href="features.html">Features</a> · <a href="download.html">Download</a> · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a></span>
+  <span>built in Rochester, NY · no investors · © 2026 · <a href="https://bnfy.me" target="_blank" rel="noopener">Bananify</a></span>
+  <span><a href="features.html">Features</a> · <a href="about.html">About</a> · <a href="changelog.html">Changelog</a> · <a href="download.html">Download</a> · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a></span>
 </footer>
 
 <div id="consent" class="consent" hidden>
