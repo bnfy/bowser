@@ -157,6 +157,25 @@ Then('the private tab uses a different web session from ordinary tabs', async fu
   );
 });
 
+// Regression guard for the blanc:// scheme being registered only on the
+// default session: a private new tab would open blank (committed URL empty)
+// while its tab-model .url still read blanc://newtab. Assert the ACTUAL
+// committed WebContents URL (loadedUrl), not the model's stored url.
+Then("the private tab's start page loads in the non-persistent session", async function () {
+  const s = await this.waitForState((st) => {
+    const t = st.tabs.find((x) => x.id === ctx.privateTabId);
+    return t && t.loadedUrl === 'blanc://newtab/?private=1' && t.loading === false;
+  });
+  const t = s.tabs.find((x) => x.id === ctx.privateTabId);
+  assert.equal(t.sessionKind, 'private', 'private tab must use the private session');
+  assert.equal(t.sessionPersistent, false, 'the private session must be non-persistent');
+  assert.equal(
+    t.loadedUrl,
+    'blanc://newtab/?private=1',
+    'the committed WebContents URL must be the private start page, not a blank load'
+  );
+});
+
 Then('a group named {string} exists', async function (name) {
   const s = await this.state();
   assert.ok(s.groups.some((g) => g.name === name.toLowerCase()), `group ${name} should exist`);

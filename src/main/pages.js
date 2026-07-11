@@ -28,7 +28,7 @@ function registerPagesScheme() {
  * (e.g. so the star button updates when a bookmark is deleted from the
  * bookmarks page). */
 function setupPages(hooks = {}) {
-  protocol.handle('blanc', (request) => {
+  const serveBlanc = (request) => {
     const { host, pathname } = new URL(request.url);
     if (!KNOWN_PAGES.has(host)) return new Response('Not found', { status: 404 });
 
@@ -37,7 +37,16 @@ function setupPages(hooks = {}) {
     const name = pathname === '/' ? `${host}.html` : path.basename(pathname);
     if (!/^[\w.-]+$/.test(name)) return new Response('Bad request', { status: 400 });
     return net.fetch(pathToFileURL(path.join(PAGES_DIR, name)).toString());
-  });
+  };
+
+  // The top-level `protocol` module binds only to the default session, so a
+  // tab in any other session gets no `blanc://` handler and loads blank —
+  // which is exactly what happened to private new tabs once private browsing
+  // moved to its own isolated `session.fromPartition`. Register the handler
+  // on every browsing session passed in. (The privileged-scheme registration
+  // in registerPagesScheme is process-global and needs no per-session repeat.)
+  const sessions = hooks.sessions?.length ? hooks.sessions : [session.defaultSession];
+  for (const ses of sessions) ses.protocol.handle('blanc', serveBlanc);
 
   // Every handler below double-checks the sender really is an internal
   // page — the preload only exposes the API on blanc:// documents, but

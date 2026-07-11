@@ -30,3 +30,8 @@ Feature: Private tabs
   Scenario: Private tabs use an isolated in-memory web session
     Given the active tab is private
     Then the private tab uses a different web session from ordinary tabs
+
+  @F4-5 @F4 @all
+  Scenario: A private new tab actually loads its start page
+    Given the active tab is private
+    Then the private tab's start page loads in the non-persistent session

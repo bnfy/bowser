@@ -48,6 +48,12 @@ function install(refs) {
     if (typeof t.url === 'string' && t.url) return t.url;
     try { return t.view.webContents.getURL(); } catch { return ''; }
   };
+  // The ACTUAL committed WebContents URL — not the model's stored .url, which
+  // can still read blanc://newtab after a load fails and the page is blank.
+  // Regression checks for "did this page really load" must use this.
+  const committedUrlOf = (t) => { try { return t.view.webContents.getURL(); } catch { return ''; } };
+  const isLoadingOf = (t) => { try { return t.view.webContents.isLoadingMainFrame(); } catch { return false; } };
+  const sessionPersistentOf = (t) => { try { return t.view.webContents.session.isPersistent(); } catch { return null; } };
   const lc = (s) => String(s).trim().toLowerCase();
 
   globalThis.__blanc = {
@@ -58,11 +64,14 @@ function install(refs) {
         list.push({
           id,
           url: urlOf(t),
+          loadedUrl: committedUrlOf(t),
+          loading: isLoadingOf(t),
           groupId: t.groupId ?? null,
           pinned: !!t.pinned,
           muted: !!t.muted,
           private: !!t.private,
           sessionKind: t.view.webContents.session === getPrivateBrowsingSession() ? 'private' : 'default',
+          sessionPersistent: sessionPersistentOf(t),
         });
       }
       return {
