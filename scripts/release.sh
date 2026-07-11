@@ -45,6 +45,7 @@ RELEASE_SOURCES=(
   scripts/preflight-mac-signing.mjs
   scripts/after-sign-verify.js
   .github/workflows/release-windows-linux.yml
+  scripts/generate-site-changelog.mjs
 )
 # Check the index and working tree separately so staged and unstaged edits
 # both block a release.
@@ -112,6 +113,15 @@ echo "==> Creating GitHub release $TAG"
 gh release create "$TAG" "${ASSETS[@]}" --repo "$REPO" --title "$VERSION" --generate-notes
 
 echo "==> Done: https://github.com/$REPO/releases/tag/$TAG"
+
+# Refresh the static changelog now that the new release exists on GitHub.
+# Non-fatal: the release is already published and aborting here would strand
+# the Windows/Linux dispatch below.
+if npm run site:changelog; then
+  echo "==> Changelog refreshed — commit and redeploy site/ after this release."
+else
+  echo "==> Warning: changelog refresh failed; continuing with platform builds." >&2
+fi
 
 # Windows (NSIS) and Linux (AppImage) can't be built here — this script runs
 # on a macOS dev machine, and cross-compiling a *signed* Windows installer
