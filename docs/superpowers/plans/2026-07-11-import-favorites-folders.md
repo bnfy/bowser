@@ -152,6 +152,8 @@ git commit -m "feat(bookmarks): add pure favorite/folder validators"
 
 - [ ] **Step 1: Create the three fixtures**
 
+Per the spec, these are **structurally representative** of each browser's real export — swap in a sanitized real export if you have one, but keep every quirk exercised below (`DOCTYPE`, `PERSONAL_TOOLBAR_FOLDER`, `ICON` data-URIs, single/bare/mixed-case attributes, Firefox `place:` entries, Safari's `HTML/HEAD/BODY` wrapper). If you replace a fixture, keep the URLs/folders the Step 2 assertions reference (or update both together).
+
 Create `test/fixtures/chrome-bookmarks.html`:
 
 ```html
@@ -455,14 +457,15 @@ test('applySetFolder: adopts existing spelling for a case-variant target', () =>
 
 test('applyRenameFolder: merge-on-collision, case-only re-spell, rejects invalid', () => {
   const cur = snap([
-    { id: 'a', url: 'ua', title: 'A', favicon: null, addedAt: 1, updatedAt: 1, folder: 'News' },
+    { id: 'a', url: 'ua', title: 'A', favicon: null, addedAt: 1, updatedAt: 1, folder: 'news' },
     { id: 'b', url: 'ub', title: 'B', favicon: null, addedAt: 2, updatedAt: 2, folder: 'Reading' },
   ]);
   const merged = applyRenameFolder(cur, 'News', 'Reading', opts); // collision -> merge
   assert.equal(merged.items.find((it) => it.id === 'a').folder, 'Reading');
   assert.equal(merged.items.find((it) => it.id === 'a').updatedAt, NOW);
 
-  const respell = applyRenameFolder(cur, 'news', 'News', opts); // case-only -> verbatim
+  // case-only rename: stored 'news' re-spelled to 'News' (a real change)
+  const respell = applyRenameFolder(cur, 'news', 'News', opts);
   assert.equal(respell.items.find((it) => it.id === 'a').folder, 'News');
   assert.equal(respell.changed, true);
 
@@ -1096,14 +1099,25 @@ In `src/renderer/pages/bookmarks.js`, replace the entire existing `refresh` func
     input.maxLength = 100;
     input.value = oldName;
     input.className = 'folder-rename-input';
+    // One-shot guard shared by Enter/Escape/blur: Escape (and Enter) call
+    // refresh(), which detaches the input and fires its own blur handler —
+    // without this guard, an Escape-cancel would still commit via that blur.
+    let settled = false;
     const commit = async () => {
+      if (settled) return;
+      settled = true;
       const next = input.value.trim();
       if (next && next !== oldName) await window.bowserPages.bookmarks.renameFolder(oldName, next);
       refresh();
     };
+    const cancel = () => {
+      if (settled) return;
+      settled = true;
+      refresh();
+    };
     input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') commit();
-      else if (e.key === 'Escape') refresh();
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
     });
     input.addEventListener('blur', commit);
     head.replaceChildren(input);
@@ -1131,7 +1145,7 @@ In `src/renderer/pages/bookmarks.js`, replace the entire existing `refresh` func
     meta.textContent = new Date(b.addedAt).toLocaleDateString();
 
     const actions = document.createElement('div');
-    actions.className = 'actions';
+    actions.className = 'actions bookmark-actions';
     const folderBtn = document.createElement('button');
     folderBtn.type = 'button';
     folderBtn.className = 'folder-chip';
@@ -1230,7 +1244,15 @@ In `src/renderer/pages/pages.css`, append:
   font-size: 11px;
   padding: 3px 9px;
 }
-.row .actions .folder-chip { opacity: 1; }
+/* Favorites rows only. The shared `.row .actions { opacity: 0 }` (used by
+   history/downloads too) is left untouched; child opacity can't override an
+   ancestor's, so instead keep this container visible and hide ONLY Remove
+   until hover/focus, leaving the folder chip always reachable. The extra
+   class raises specificity above the shared rule. */
+.row .actions.bookmark-actions { opacity: 1; position: relative; }
+.row .actions.bookmark-actions .danger { opacity: 0; }
+.row:hover .actions.bookmark-actions .danger,
+.row:focus-within .actions.bookmark-actions .danger { opacity: 1; }
 .folder-picker {
   position: absolute;
   z-index: 20;
@@ -1256,16 +1278,12 @@ In `src/renderer/pages/pages.css`, append:
 .picker-new { margin-top: 4px; font-size: 11.5px; }
 ```
 
-The `.row .actions` rule hides action buttons until row hover (`opacity: 0`). The `.row .actions .folder-chip { opacity: 1; }` override keeps the folder chip always visible (it must be reachable to move an ungrouped favorite). The picker is `position: absolute`; its containing `.actions` is not positioned, so add one more rule:
-
-```css
-.row .actions { position: relative; }
-```
+Note: the `.bookmark-actions` container is `position: relative` (above) so the `position: absolute` `.folder-picker` anchors to it; the shared `.row .actions` rule for history/downloads is not modified.
 
 - [ ] **Step 3: Manually verify folders end-to-end**
 
 Reload the `blanc://bookmarks/` tab (Cmd/Ctrl+R). With the chrome fixture imported from Task 7, expect:
-- A **Bookmarks bar** section (Example, Plain), a **News** section (Tech & Science), an **Other bookmarks** section — alphabetical.
+- A **Bookmarks bar** section (Example), a **News** section (Tech & Science), and an **Other bookmarks** section (Plain) — alphabetical.
 - Click a row's **▸ folder** chip → picker lists the other folders, **→ none**, and a **new folder…** field. Pick another folder → the row moves; the emptied folder disappears if it was its last item.
 - On a folder header, **Rename** → inline input; type a name colliding (case-insensitively) with another folder → the two sections merge. **Remove folder** → its rows drop to the Ungrouped section.
 - Type a brand-new name in a row's **new folder…** field + Enter → a new alphabetical section appears.

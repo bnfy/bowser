@@ -282,6 +282,7 @@ extra IPC.
 - **Status copy** (inline, no modal dialogs):
   - Success: `Imported 42 favorites (skipped 7 already saved).`
     (singular/plural aware; the "(skipped …)" clause omitted when 0)
+  - All duplicates (added 0, skipped > 0): `All 7 favorites were already saved.`
   - `empty` → `No bookmarks found in that file.`
   - `unreadable` → `Couldn't read that file.`
   - `too-large` → `That file is too large to import.`
@@ -295,9 +296,13 @@ All logic lives in the pure modules, so tests import them directly (no Electron)
 matching the existing `favicon-policy.test.js` / `permission-decisions.test.js`
 pattern.
 
-- **`bookmark-import.test.js`** — parse **representative real fixtures** from
-  Chrome, Firefox, and Safari exports (checked into `test/fixtures/`), not one
-  synthetic file: immediate-parent folder naming, ungrouped top-level links,
+- **`bookmark-import.test.js`** — parse **structurally representative fixtures**
+  for Chrome, Firefox, and Safari exports (sanitized real exports where
+  available, else hand-authored to encode each browser's real quirks —
+  `DOCTYPE`, `PERSONAL_TOOLBAR_FOLDER`, `ICON` data-URIs, single/bare-quoted and
+  mixed-case attributes, Firefox `place:` entries, Safari's `HTML/HEAD/BODY`
+  wrapper), checked into `test/fixtures/` — not one oversimplified sample:
+  immediate-parent folder naming, ungrouped top-level links,
   entity decoding, `ICON` (valid + over-length dropped), `ADD_DATE` (valid /
   missing / future), dropped non-`http(s)` links, and mixed tag/attribute case
   with quoted values. A fixed injected `now` makes the missing/future-date
