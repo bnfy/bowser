@@ -139,8 +139,10 @@
     }
   }
 
-  function setFavicon(el, tab) {
-    el.className = 'favicon' + (tab?.isLoading ? ' loading' : '');
+  // `base` kept for parity with renderer.js's twin (the dot-peek reuses it
+  // there); the overlay only ever needs the default. Keep the two in sync.
+  function setFavicon(el, tab, base = 'favicon') {
+    el.className = base + (tab?.isLoading ? ' loading' : '');
     el.style.backgroundImage = '';
     if (!tab || tab.isLoading) return;
     if (tab.url.startsWith('blanc://')) {

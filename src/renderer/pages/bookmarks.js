@@ -77,11 +77,17 @@
     acts.className = 'folder-actions';
     const renameBtn = document.createElement('button');
     renameBtn.type = 'button';
-    renameBtn.textContent = 'Rename';
+    renameBtn.textContent = 'rename';
+    // `title` only (no aria-label): the visible text is the accessible name,
+    // so voice control's "click rename" resolves; title adds the detail. An
+    // aria-label would replace the name with text the label doesn't contain
+    // (WCAG 2.5.3 Label in Name).
+    renameBtn.title = `Rename ${folder.name}`;
     renameBtn.addEventListener('click', () => startRename(head, folder.name));
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
-    removeBtn.textContent = 'Remove folder';
+    removeBtn.textContent = 'remove folder';
+    removeBtn.title = `Remove ${folder.name} (its favorites become ungrouped)`;
     removeBtn.addEventListener('click', async () => {
       await window.bowserPages.bookmarks.removeFolder(folder.name);
       refresh();
@@ -162,14 +168,19 @@
 
     const actions = document.createElement('div');
     actions.className = 'actions bookmark-actions';
+    // Quiet ledger actions: the section header already names the folder, so
+    // the chip no longer repeats it on every row — "move ▸" is the picker's
+    // anchor and says what it does instead of where the row already is.
     const folderBtn = document.createElement('button');
     folderBtn.type = 'button';
     folderBtn.className = 'folder-chip';
-    folderBtn.textContent = b.folder ? `▸ ${b.folder}` : '▸ folder';
+    folderBtn.textContent = 'move ▸';
+    // `title` only — see the folder-header buttons above (WCAG 2.5.3).
+    folderBtn.title = b.folder ? `In ${b.folder} — move to another folder` : 'Move to a folder';
     folderBtn.addEventListener('click', () => openPicker(folderBtn, b, allNames));
     const remove = document.createElement('button');
     remove.className = 'danger';
-    remove.textContent = 'Remove';
+    remove.textContent = 'remove';
     remove.addEventListener('click', async () => {
       await window.bowserPages.bookmarks.remove(b.id);
       refresh();

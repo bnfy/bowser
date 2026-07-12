@@ -145,8 +145,8 @@
     }
   }
 
-  function setFavicon(el, tab) {
-    el.className = 'favicon' + (tab?.isLoading ? ' loading' : '');
+  function setFavicon(el, tab, base = 'favicon') {
+    el.className = base + (tab?.isLoading ? ' loading' : '');
     el.style.backgroundImage = '';
     if (!tab || tab.isLoading) return;
     if (tab.url.startsWith('blanc://')) {
@@ -182,9 +182,12 @@
    * DOT_CAP with a trailing "+k" that opens the panel; the window slides only
    * when needed to keep the active dot visible. The pill deliberately does
    * NOT map other groups — that lives in ⌘L. */
-  function activeGroupDots() {
+  /** The windowed dot set: which tabs get a dot, and how many overflow into
+   * the trailing "+k". Shared by the node builder and the render-skip
+   * signature so the two never disagree. */
+  function activeGroupMembers() {
     const tab = activeTab();
-    if (!tab) return [];
+    if (!tab) return { shown: [], hidden: 0 };
     const g = tab.groupId ?? null;
     const members = state.tabs
       .filter((t) => (
@@ -192,22 +195,54 @@
         (g !== null || !t.pinned || t.id === state.activeTabId)
       ))
       .sort((a, b) => Number(b.pinned) - Number(a.pinned));
-    if (members.length <= DOT_CAP) return members.map(tabDot);
+    if (members.length <= DOT_CAP) return { shown: members, hidden: 0 };
 
     const activeIdx = Math.max(0, members.indexOf(tab));
     const start = activeIdx < DOT_CAP ? 0 : Math.min(activeIdx - (DOT_CAP - 1), members.length - DOT_CAP);
-    const nodes = members.slice(start, start + DOT_CAP).map(tabDot);
+    return { shown: members.slice(start, start + DOT_CAP), hidden: members.length - DOT_CAP };
+  }
 
-    const hidden = members.length - DOT_CAP;
-    const more = document.createElement('button');
-    more.className = 'pill-overflow';
-    more.textContent = `+${hidden}`;
-    more.title = `${hidden} more ${hidden === 1 ? 'tab' : 'tabs'} in this group — open the list`;
-    more.setAttribute('aria-label', more.title);
-    more.addEventListener('click', (e) => { e.stopPropagation(); window.browserAPI.openIsland(); });
-    nodes.push(more);
+  function activeGroupDots() {
+    const { shown, hidden } = activeGroupMembers();
+    const nodes = shown.map(tabDot);
+    if (hidden > 0) {
+      const more = document.createElement('button');
+      more.className = 'pill-overflow';
+      more.textContent = `+${hidden}`;
+      more.title = `${hidden} more ${hidden === 1 ? 'tab' : 'tabs'} in this group — open the list`;
+      more.setAttribute('aria-label', more.title);
+      more.addEventListener('click', (e) => { e.stopPropagation(); window.browserAPI.openIsland(); });
+      nodes.push(more);
+    }
     return nodes;
   }
+
+  /** Everything the dot row's DOM depends on, as a string. Deliberately omits
+   * blockedCount (the shield owns it): tab loads emit ~10 tabs:updated/s that
+   * only bump blocked counts, and rebuilding the row on each would restart a
+   * hovered peek's reveal and drop keyboard focus off a focused dot. */
+  function dotsSignature() {
+    const { shown, hidden } = activeGroupMembers();
+    return JSON.stringify({
+      shown: shown.map((t) => ({
+        id: t.id,
+        active: t.id === state.activeTabId,
+        loading: t.isLoading,
+        private: t.private,
+        title: t.title || 'New Tab',
+        // While loading, setFavicon deliberately ignores both URL and favicon;
+        // omit them here too so an irrelevant favicon event cannot churn the
+        // row before the loading state changes.
+        favicon: t.isLoading
+          ? 'loading'
+          : t.url?.startsWith('blanc://')
+            ? 'internal'
+            : t.favicon || 'fallback',
+      })),
+      hidden,
+    });
+  }
+  let lastDotsSig = null;
 
   function tabDot(t) {
     const dot = document.createElement('button');
@@ -218,6 +253,13 @@
       (t.private ? ' private' : '');
     dot.title = t.title || 'New Tab';
     dot.setAttribute('aria-label', `Switch to ${t.title || 'New Tab'}`);
+    // Hover/focus peek: the dot blooms into its tab's favicon so you can tell
+    // which site it holds before switching. Reuses the pill favicon rendering
+    // (has-icon / internal / loading / fallback); the native title tooltip
+    // still carries the exact page title a beat later.
+    const peek = document.createElement('span');
+    setFavicon(peek, t, 'dot-peek favicon');
+    dot.appendChild(peek);
     dot.addEventListener('click', (e) => {
       e.stopPropagation(); // switch without expanding
       window.browserAPI.switchTab(t.id);
@@ -243,7 +285,14 @@
     favoriteBtn.classList.toggle('on', favoritable && !!tab?.bookmarked);
     favoriteBtn.title = tab?.bookmarked ? 'Remove favorite' : 'Favorite this page';
 
-    pillDots.replaceChildren(...activeGroupDots());
+    // Only rebuild the dot row when the dots themselves change — not on every
+    // blocked-count broadcast (see dotsSignature). Rebuilding tears down each
+    // dot's peek span and any keyboard focus on it.
+    const dotsSig = dotsSignature();
+    if (dotsSig !== lastDotsSig) {
+      lastDotsSig = dotsSig;
+      pillDots.replaceChildren(...activeGroupDots());
+    }
 
     const activeGroup = state.groups.find((g) => g.id === tab?.groupId) || null;
     pillGroupName.hidden = !activeGroup;

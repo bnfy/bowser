@@ -92,6 +92,7 @@ public enum BlancTokens {
     public static let fontMono = "\"JetBrains Mono\", ui-monospace, \"SF Mono\", \"Cascadia Code\", Menlo, Consolas, monospace"
     public static let shadowPopover = "0 14px 30px rgba(14, 14, 14, 0.16)"
     public static let shadowPill = "0 4px 12px -3px rgba(14, 14, 14, 0.22)"
-    public static let stripH = "56px"
+    public static let stripH = "64px"
+    public static let pillZoom = "1.15"
     public static let radius = "6px"
 }

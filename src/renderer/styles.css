@@ -21,12 +21,17 @@
   /* The island is the one shadowed chrome element. The full popover shadow
      is reserved for the overlay states (panel/palette/find), which render
      over the page and can't clip; the resting pill wears the fitted pill
-     shadow, which fades out entirely inside the 56px strip — a shadow
+     shadow, which fades out entirely inside the 64px strip — a shadow
      crossing the strip/page seam would be sliced off at the boundary. */
   --shadow-popover: 0 14px 30px rgba(14, 14, 14, 0.16);
   --shadow-pill: 0 4px 12px -3px rgba(14, 14, 14, 0.22);
-  --strip-h: 56px;
+  --strip-h: 64px;
   --radius: 6px;
+  /* The resting pill's proportional scale-up (see #islandPill). Lives here so
+     counter-scaled children (#pillDomain's font, #pillFavicon's pixel-grid
+     snap) stay coupled to the one factor. Keep in step with --strip-h
+     (56 × zoom ≈ 64). */
+  --pill-zoom: 1.15;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -140,8 +145,19 @@ button svg {
   gap: 10px;
   margin-top: 10px;
   padding: 4px 14px;
-  /* Clear the macOS traffic lights / window controls on narrow windows. */
-  max-width: calc(100vw - 170px);
+  /* Scale the whole resting pill — and every element inside it (buttons,
+     favicon, domain, dots, shield, the dot favicon-peek) — up proportionally
+     in one place. `zoom` reflows (so the pill genuinely grows and its box
+     drives layout) and re-rasterizes text crisp, unlike `transform: scale`.
+     Kept in lockstep with `--strip-h` (56 × 1.15 ≈ 64) so the band grows with
+     it and the web view below drops to match. Only the collapsed pill scales;
+     the expanded panel is a separate overlay surface. */
+  zoom: var(--pill-zoom);
+  /* Clear the macOS traffic lights / window controls on narrow windows.
+     `100vw` resolves against the unscaled viewport, but `zoom` then multiplies
+     the used length — so divide by the zoom to keep the real 170px clearance
+     (without this the pill renders 1.15× wider and runs under the controls). */
+  max-width: calc((100vw - 170px) / var(--pill-zoom));
   background: var(--surface-raised);
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -218,6 +234,19 @@ button svg {
   background: var(--border);
   transition: background 120ms ease;
   flex: 0 0 auto;
+  position: relative; /* anchor for the hover/focus favicon peek */
+}
+/* Invisible hover/click halo: the 6px dot is a needle target, so extend each
+   dot's hit area to its full slot — the peek appears as the pointer nears the
+   dot instead of only dead-center (where the cursor would sit on top of the
+   favicon). Dot centers are 16px apart (6px dot + 10px gap), so ±5px tiles
+   the slots edge-to-edge without neighbours fighting over hover; vertically
+   there's no competition, so reach further. Clicks on the halo hit the dot's
+   own button, growing the switch target too. */
+.island-dot::before {
+  content: '';
+  position: absolute;
+  inset: -9px -5px;
 }
 .island-dot.active { background: var(--accent); }
 .island-dot.loading { animation: island-pulse 0.9s ease-in-out infinite; }
@@ -238,7 +267,11 @@ button svg {
 
 #pillDomain {
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  /* Counter-scaled against the pill's zoom so the URL keeps its pre-scale
+     visual size — the bigger pill shouldn't shout its URL. Expressed as a
+     division (like #pillFavicon) so it tracks --pill-zoom automatically
+     instead of a hand-computed constant. */
+  font-size: calc(12.5px / var(--pill-zoom));
   color: var(--text);
   flex: 0 1 auto;
   min-width: 0;
@@ -332,6 +365,78 @@ button svg {
   border-top-color: var(--accent);
   animation: favicon-spin 0.8s linear infinite;
   border-radius: 50%;
+}
+/* Pixel-grid snap for the pill's favicon: under the pill's zoom the base
+   14px box lands on a fractional 16.09px, and the internal pages' Blanc
+   mark — fine line art whose strokes are already sub-pixel at this size —
+   rasterizes visibly mushy off the integer grid. Pre-divide so the
+   post-zoom box is exactly 16px. (Pill only: the overlay panel's .favicon
+   rows aren't zoomed and stay on the plain 14px.) */
+#pillFavicon {
+  width: calc(16px / var(--pill-zoom));
+  height: calc(16px / var(--pill-zoom));
+}
+
+/* Hover/focus peek: an otherwise-anonymous tab dot blooms into a disc showing
+   its tab's favicon, so you can tell which site you're about to switch to
+   before clicking. Absolutely centered on the 6px dot so the row never
+   reflows, and z-raised over its neighbours. It also carries the `favicon`
+   class, so the `.favicon.has-icon` / `.internal` / `.loading` rules above
+   paint the icon exactly as the pill favicon does — these `.dot-peek` rules
+   sit after them and only override size, shape, the resting (no-icon) fill,
+   and the reveal transition. */
+.dot-peek {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-pill);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.25);
+  transition: opacity 120ms ease, transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1.3);
+  pointer-events: none; /* the dot itself owns the click */
+  z-index: 6;
+}
+.island-dot:hover .dot-peek,
+.island-dot:focus-visible .dot-peek {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+/* Two-class overrides (outranking .favicon.has-icon / .favicon.internal):
+   site icons sit inset within the disc rather than bleeding to its edge, and
+   internal pages draw the Blanc mark on a pseudo-element instead of masking
+   the element — .favicon.internal's whole-element mask would cut the disc's
+   own fill and border into the mark's shape. */
+.dot-peek.has-icon {
+  background-color: var(--surface-raised);
+  background-size: 12px 12px;
+}
+.dot-peek.internal {
+  background: var(--surface-raised);
+  -webkit-mask: none;
+  mask: none;
+}
+.dot-peek.internal::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  background: var(--text);
+  -webkit-mask: url("pages/icon.svg") center / contain no-repeat;
+  mask: url("pages/icon.svg") center / contain no-repeat;
+}
+/* A loading tab's peek carries `loading` too (setFavicon adds it), and
+   `.favicon.loading` (0,2,0) would otherwise win — turning the disc into a
+   transparent spinner whose `favicon-spin` animation also hijacks `transform`,
+   knocking the peek off-centre. Restore the plain centred disc: the peek just
+   says "this tab" while it loads; the favicon fills in on the next render. */
+.dot-peek.loading {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  animation: none;
 }
 
 @keyframes favicon-spin {
@@ -856,6 +961,8 @@ body:not(.mac) #permissionBar { right: 118px; } /* clear the window controls */
   .island-dot,
   .island-dot.loading { transition: none; animation: none; }
   .favicon.loading { animation: none; }
+  /* Peek still appears on hover/focus, just without the fade + pop. */
+  .dot-peek { transition: none; }
   .island-ghead svg.caret { transition: none; }
   #strip { transition: none; }
 }

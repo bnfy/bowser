@@ -66,6 +66,7 @@ object BlancTokens {
     const val fontMono: String = "\"JetBrains Mono\", ui-monospace, \"SF Mono\", \"Cascadia Code\", Menlo, Consolas, monospace"
     const val shadowPopover: String = "0 14px 30px rgba(14, 14, 14, 0.16)"
     const val shadowPill: String = "0 4px 12px -3px rgba(14, 14, 14, 0.22)"
-    const val stripH: String = "56px"
+    const val stripH: String = "64px"
+    const val pillZoom: String = "1.15"
     const val radius: String = "6px"
 }

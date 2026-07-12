@@ -353,8 +353,10 @@ function flushPermissionPrompts() {
 
 // Height (in CSS px) of the chrome strip the resting island pill floats
 // in. The renderer measures its own layout and reports it here, so this
-// is just a sane default before the first report arrives.
-let chromeHeight = 56;
+// is just a sane default before the first report arrives — keep it in step
+// with the `--strip-h` token (styles.css) so the initial web-view offset
+// doesn't jump on the first layout report.
+let chromeHeight = 64;
 
 // The island's expanded states (command bar, ⌘L palette, find capsule)
 // render in a separate always-on-top WebContentsView so they float OVER

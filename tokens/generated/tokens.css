@@ -18,7 +18,8 @@
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
   --shadow-popover: 0 14px 30px rgba(14, 14, 14, 0.16);
   --shadow-pill: 0 4px 12px -3px rgba(14, 14, 14, 0.22);
-  --strip-h: 56px;
+  --strip-h: 64px;
+  --pill-zoom: 1.15;
   --radius: 6px;
 }
 @media (prefers-color-scheme: dark) {

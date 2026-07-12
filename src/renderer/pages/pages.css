@@ -642,23 +642,59 @@ a.ledger-label:hover { color: var(--accent); }
   border-radius: 999px;
   padding: 1px 7px;
 }
-.folder-actions { margin-left: auto; display: flex; gap: 6px; }
-.folder-actions button { padding: 3px 9px; font-size: 11px; }
+.folder-actions { margin-left: auto; display: flex; gap: 14px; }
 .folder-rename-input { width: 220px; }
-.folder-chip {
+
+/* Quiet-ledger actions (folder headers + favorite rows): mono text, no
+   button chrome — the resting page is pure text and the Import button stays
+   the page's one bordered shape. Scoped to each container's DIRECT buttons so
+   the folder picker's own `.picker-item` options — nested one level deeper in
+   the row's action container — keep their styling and stay visible. Revealed
+   on the enclosing header/row's hover or focus-within (keyboard tabbing
+   reveals them too); opacity keeps layout stable so the date column never
+   shifts. */
+.folder-actions > button,
+.bookmark-actions > button {
   font-family: var(--font-mono);
   font-size: 11px;
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
   padding: 3px 9px;
+  opacity: 0;
 }
+.folder-actions > button:hover,
+.bookmark-actions > button:hover { color: var(--text); }
+/* Out-rank the global `button.danger:hover` (filled red) — a quiet text
+   action just turns danger-colored. */
+.bookmark-actions > button.danger:hover { color: var(--danger); background: transparent; }
+.folder-header:hover .folder-actions > button,
+.folder-header:focus-within .folder-actions > button { opacity: 1; }
+.row:hover .actions.bookmark-actions > button,
+.row:focus-within .actions.bookmark-actions > button { opacity: 1; }
+
 /* Favorites rows only. The shared `.row .actions { opacity: 0 }` (used by
-   history/downloads too) is left untouched; child opacity can't override an
-   ancestor's, so instead keep this container visible and hide ONLY Remove
-   until hover/focus, leaving the folder chip always reachable. The extra
-   class raises specificity above the shared rule. */
-.row .actions.bookmark-actions { opacity: 1; position: relative; }
-.row .actions.bookmark-actions .danger { opacity: 0; }
-.row:hover .actions.bookmark-actions .danger,
-.row:focus-within .actions.bookmark-actions .danger { opacity: 1; }
+   history/downloads too) is left untouched; the container stays visible
+   (the folder picker anchors inside it) and the buttons above carry the
+   hide/reveal themselves. Fixed width + right-justify give every row the
+   same action column, so dates align down the page. */
+.row .actions.bookmark-actions {
+  opacity: 1;
+  position: relative;
+  min-width: 112px;
+  justify-content: flex-end;
+  gap: 14px;
+}
+/* Date column (favorites sections only — history/downloads keep the shared
+   flexible .meta). Floors at 76px so short US dates align, but grows rather
+   than clips for longer locale formats (e.g. "2026. 07. 12."); right-aligned
+   and no-wrap so the dates share one right edge whatever their width. */
+.folder-section .row .meta {
+  flex: 0 0 auto;
+  min-width: 76px;
+  text-align: right;
+  white-space: nowrap;
+}
 .folder-picker {
   position: absolute;
   z-index: 20;

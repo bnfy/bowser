@@ -17,15 +17,16 @@ toolbar (Bowser Design System "Island Chrome").
 
 - **Resting pill** shows, left→right: back/forward (desktop; mobile uses edge-swipe
   gestures per D7), the *active group's* tab dots (capped at 8, with a quiet `+N`
-  that opens the panel), favicon, the active group's name, domain, shield count
-  (F12), a private chip when private (F4), and a trailing action cluster
-  (reload / favorite / downloads).
+  that opens the panel; on a pointer platform, hovering/focusing a dot reveals
+  that tab's favicon so it can be identified before switching), favicon, the
+  active group's name, domain, shield count (F12), a private chip when private
+  (F4), and a trailing action cluster (reload / favorite / downloads).
 - **Expanded states** (one at a time): `panel` (command bar expanded in place),
   `palette` (same panel summoned by the ⌘L-equivalent, floated over a scrim),
   `find` (F8). Only the active state shows; Escape/back dismisses.
 - The panel's list area shows: the **tab switcher** at rest, **slash commands**
   (F7) when input starts with `/`, the **Quick Switcher** (F6) otherwise.
-- **Platform note:** desktop draws this as a 56px strip + an always-on-top overlay
+- **Platform note:** desktop draws this as a 64px strip + an always-on-top overlay
   view. Mobile renders it natively (SwiftUI / Compose) driven by shared design
   tokens (→ substrate). The *layout, contents, and states* are the contract; the
   windowing is D11, the input affordances are D7.

@@ -235,7 +235,7 @@ is platform-native.
 **Why:** Desktop is a resizable window with window controls and a strip + overlay;
 mobile is a single full-screen surface with system insets.
 
-- **Desktop:** one `BrowserWindow`, a 56px strip, an always-on-top overlay view,
+- **Desktop:** one `BrowserWindow`, a 64px strip, an always-on-top overlay view,
   traffic-lights / window controls.
 - **Mobile:** a single surface; the island adapts to safe-area insets; no window
   controls; multi-window is a tablet/foldable consideration, not a phone one.
