@@ -113,6 +113,16 @@ test('reconcileSecureDnsWrite: clearing the template while custom is active is r
   );
 });
 
+test('reconcileSecureDnsWrite: resubmitting custom with a dropped invalid template keeps the old valid one', () => {
+  // sanitize drops an invalid replacement template, so reconcile sees {secureDns:'custom'}
+  // with no template key while custom is already active — it must retain the prior valid
+  // template (the renderer detects this "template unchanged" case and shows the error).
+  assert.deepEqual(
+    reconcileSecureDnsWrite({ secureDns: 'custom', secureDnsTemplate: VALID }, { secureDns: 'custom' }),
+    { secureDns: 'custom', secureDnsTemplate: VALID },
+  );
+});
+
 test('reconcileSecureDnsWrite: replacing with another valid template is accepted', () => {
   const V2 = 'https://dns.quad9.net/dns-query';
   assert.deepEqual(

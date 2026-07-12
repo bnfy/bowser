@@ -1250,11 +1250,31 @@ if [ "$LOCAL_HEAD" != "$(git rev-parse origin/main)" ]; then
 fi
 ```
 
-Then change the release-create line (currently line 113) to bind the tag to that commit:
+Then change the release-create line (currently line 113) to bind the tag to that commit **and lead with an explicit privacy-boundary disclosure**. `--generate-notes` alone lists commit/PR titles, not the DoH boundary the spec requires in release notes (F25: destination IPs stay visible, provider choice is a trust decision, Automatic can fall back to plaintext). Compose notes = boundary paragraph + generated changelog, and pass them via `--notes-file` (do **not** combine `--notes*` with `--generate-notes` — gh ignores the generated notes when explicit notes are given, so generate them into the file first):
 
 ```bash
-gh release create "$TAG" "${ASSETS[@]}" --repo "$REPO" --title "$VERSION" --target "$LOCAL_HEAD" --generate-notes
+# Explicit privacy-boundary disclosure required by the F25 spec, prepended to the
+# auto-generated changelog. Written to a temp notes file passed as --notes-file.
+NOTES_FILE="$(mktemp)"
+{
+  echo "### Network privacy (v$VERSION)"
+  echo
+  echo "This release adds WebRTC leak protection and optional encrypted DNS (DoH)."
+  echo "Encrypted DNS hides your DNS lookups from the network *in transit* to the"
+  echo "resolver you choose — it does **not** hide the sites you visit (destination"
+  echo "IPs remain visible to your network), and choosing a provider is a trust"
+  echo "decision. Automatic mode upgrades opportunistically and can fall back to"
+  echo "unencrypted DNS; only the named-provider and custom positions are strict."
+  echo
+  echo "---"
+  echo
+  gh api "repos/$REPO/releases/generate-notes" -f tag_name="$TAG" -f target_commitish="$LOCAL_HEAD" --jq .body 2>/dev/null || true
+} > "$NOTES_FILE"
+gh release create "$TAG" "${ASSETS[@]}" --repo "$REPO" --title "$VERSION" --target "$LOCAL_HEAD" --notes-file "$NOTES_FILE"
+rm -f "$NOTES_FILE"
 ```
+
+(`gh api .../releases/generate-notes` returns the same changelog `--generate-notes` would, so the boundary text leads and the changelog follows; if that API call is unavailable the release still publishes with just the boundary disclosure, which is the spec-required part.)
 
 Then syntax-check the edited script before relying on it at release time (a slip here wouldn't surface until `npm run release`):
 

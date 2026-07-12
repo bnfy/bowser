@@ -72,14 +72,17 @@
     };
 
     // The main process is the sole validator. Send the change, then render from the
-    // ACTUAL persisted result (set() returns the settings). If the user asked for
-    // custom but it wasn't stored, the guard rejected the template: keep their draft
-    // visible — dropdown on custom, row OPEN, typed text intact — and show the error.
-    // Do NOT snap back to the old provider (that would hide the row and the error and
-    // erase what they typed).
+    // ACTUAL persisted result (set() returns the settings). A custom write is REJECTED
+    // when the store didn't take it — either the provider isn't custom, OR (Custom
+    // already active) the submitted template wasn't stored because it was invalid and
+    // sanitize dropped it, leaving the previous valid template in place. Comparing only
+    // the provider would miss that second case: keep the draft visible (dropdown on
+    // custom, row OPEN, typed text intact) and show the error — never snap back.
     const commit = async (partial, attempted) => {
       const next = await window.bowserPages.settings.set(partial);
-      if (attempted === 'custom' && next.secureDns !== 'custom') {
+      const rejected = attempted === 'custom' &&
+        (next.secureDns !== 'custom' || next.secureDnsTemplate !== partial.secureDnsTemplate);
+      if (rejected) {
         secureDns.value = 'custom';
         secureDnsRow.hidden = false;
         secureDnsError.hidden = false;
