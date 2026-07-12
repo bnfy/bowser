@@ -7,3 +7,7 @@ out/
 brand/
 .superpowers/
 .playwright-cli/
+
+# Local press-outreach drafts (do not commit)
+docs/press-release-blanc-desktop.md
+docs/press-outreach-plan.md
