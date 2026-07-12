@@ -1702,6 +1702,7 @@ function listShortcuts() {
 // SLASH_COMMANDS — keep all three in sync when adding or changing a command.
 const SLASH_COMMANDS = [
   ['/favorites', 'Open favorites'],
+  ['/save [folder]', 'Save this page to favorites, into a folder if you name one'],
   ['/history', 'Open browsing history'],
   ['/downloads', 'Open downloads'],
   ['/settings', 'Open settings'],

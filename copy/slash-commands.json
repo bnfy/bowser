@@ -1,11 +1,13 @@
 {
-  "$note": "Single source of truth for slash-command copy (substrate S3). Guards the two desktop copies against drift — overlay.js (the live command table) and pages/shortcuts.js (the reference list on blanc://shortcuts/), which are hand-synced today (overlay.js even carries a comment saying so) — and generates mobile string resources. `hint` is the primary user-facing description (what overlay.js shows and what mobile would use). `doc` overrides the pages/shortcuts.js listing where it deliberately differs (only /group: the palette shows an input helper, the reference page shows a description).",
+  "$note": "Single source of truth for slash-command copy (substrate S3). Guards the two desktop copies against drift — overlay.js (the live command table) and pages/shortcuts.js (the reference list on blanc://shortcuts/), which are hand-synced today (overlay.js even carries a comment saying so) — and generates mobile string resources. The Help → Slash Commands list in main.js (SLASH_COMMANDS) is a third copy in the doc-override spelling, guarded the same way. `hint` is the primary user-facing description (what overlay.js shows and what mobile would use). `doc` overrides the pages/shortcuts.js and main.js listings where they deliberately differ (e.g. /group: the palette shows an input helper, the reference page shows a description).",
   "sources": {
     "overlay": "src/renderer/overlay.js",
-    "shortcuts": "src/renderer/pages/shortcuts.js"
+    "shortcuts": "src/renderer/pages/shortcuts.js",
+    "main": "src/main/main.js"
   },
   "commands": [
     { "command": "/favorites", "hint": "Open favorites" },
+    { "command": "/save", "hint": "Save this page to favorites — name a folder to file it", "doc": { "command": "/save [folder]", "hint": "Save this page to favorites, into a folder if you name one" } },
     { "command": "/history", "hint": "Open browsing history" },
     { "command": "/downloads", "hint": "Open downloads" },
     { "command": "/settings", "hint": "Open settings" },

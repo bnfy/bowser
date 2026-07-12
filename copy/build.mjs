@@ -1,11 +1,12 @@
 // Blanc copy-catalog generator — slash commands (substrate S3).
 //
 //   node copy/build.mjs           emit generated/{SlashCommands.strings,slash_commands.xml}
-//   node copy/build.mjs --check    verify BOTH desktop copies (overlay.js command table and
-//                                  pages/shortcuts.js reference list) match slash-commands.json,
-//                                  and the generated files are current. Exit 1 on drift.
+//   node copy/build.mjs --check    verify all THREE desktop copies (overlay.js command table,
+//                                  pages/shortcuts.js reference list, and main.js's Help-menu
+//                                  SLASH_COMMANDS) match slash-commands.json, and the generated
+//                                  files are current. Exit 1 on drift.
 //
-// Same shape as tokens/ and settings-schema/: one source, desktop guarded (the two
+// Same shape as tokens/ and settings-schema/: one source, desktop guarded (the
 // hand-synced JS copies are parsed and compared, not rewritten), mobile string
 // resources generated so the lowercase-mono command copy never forks.
 
@@ -42,8 +43,10 @@ function parseOverlay() {
   const js = fs.readFileSync(path.join(ROOT, spec.sources.overlay), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
   return [...js.matchAll(/^\s*\{\s*cmd:\s*'([^']+)',\s*hint:\s*'([^']*)'/gm)].map((m) => ({ command: m[1], hint: m[2] }));
 }
-function parseShortcuts() {
-  const js = fs.readFileSync(path.join(ROOT, spec.sources.shortcuts), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+// shortcuts.js and main.js each hold a `const SLASH_COMMANDS = [ ['cmd','hint'], … ]`
+// in the doc-override spelling — parse either by its spec.sources key.
+function parseTupleList(sourceKey) {
+  const js = fs.readFileSync(path.join(ROOT, spec.sources[sourceKey]), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
   const block = js.match(/const SLASH_COMMANDS = \[([\s\S]*?)\];/)?.[1] ?? '';
   return [...block.matchAll(/^\s*\['([^']+)',\s*'([^']*)'\]/gm)].map((m) => ({ command: m[1], hint: m[2] }));
 }
@@ -67,7 +70,8 @@ function check() {
   const shortcutsExpected = spec.commands.map((c) => ({ command: c.doc?.command ?? c.command, hint: c.doc?.hint ?? c.hint }));
   const problems = [
     ...diffList('overlay.js', parseOverlay(), overlayExpected),
-    ...diffList('shortcuts.js', parseShortcuts(), shortcutsExpected),
+    ...diffList('shortcuts.js', parseTupleList('shortcuts'), shortcutsExpected),
+    ...diffList('main.js', parseTupleList('main'), shortcutsExpected),
   ];
 
   let failed = problems.length > 0;
