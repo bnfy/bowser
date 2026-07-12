@@ -84,7 +84,7 @@ function check() {
   }
 
   if (failed) { console.error('\ncopy:check failed.'); process.exit(1); }
-  console.log('copy:check OK — both desktop copies match the source, generated files current.');
+  console.log('copy:check OK — all three desktop copies match the source, generated files current.');
 }
 
 function build() {
