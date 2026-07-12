@@ -1,7 +1,7 @@
 # 1Password fill — subdomain + multi-step matching improvements
 
 **Date:** 2026-07-12
-**Status:** Approved for planning (rev. 3 — after two security-review rounds)
+**Status:** Ready for planning (rev. 4 — after three security-review rounds; planning deferred)
 **Branch:** `feature/1password-fill` (builds on the feasibility spike)
 
 ## What
@@ -71,16 +71,20 @@ function matchesHost(itemUrls, host) {
 
 ## Part 2 — Multi-step fill: two-phase, isolated-world, least-privilege
 
-The fill runs in **two isolated-world injections** so (a) the password is only
-sent to the renderer when a password field exists, and (b) the credential and the
+The fill runs in **two isolated-world injections** so (a) the password is sent to
+the renderer only *after* inspection observes a password field — and written only
+if the isolated fill pass still finds one — and (b) the credential and the
 selection/setter logic live in a JS realm the page cannot hook or scrape.
 
 **Isolated world.** Both injections use
-`wc.executeJavaScriptInIsolatedWorld(FILL_WORLD_ID, [{ code }])` with a dedicated
-constant world id (distinct from the main world `0`), not `executeJavaScript`.
-The page's main-world JS cannot observe or tamper the isolated realm's
-intrinsics (`Object.getOwnPropertyDescriptor`, the `HTMLInputElement` value
-setter) or read the embedded credential.
+`wc.executeJavaScriptInIsolatedWorld(FILL_WORLD_ID, [{ code }])`, not
+`executeJavaScript`. **`FILL_WORLD_ID = 1001`** — a dedicated custom world;
+`0` (main world) and `999` (Electron's context-isolation / preload world) are
+**forbidden**, and Electron recommends custom isolated worlds at id ≥ 1000
+([docs](https://www.electronjs.org/docs/latest/api/web-contents#contentsexecutejavascriptinisolatedworldworldid-scripts-usergesture)).
+The page's main-world JS cannot observe or tamper the isolated realm's intrinsics
+(`Object.getOwnPropertyDescriptor`, the `HTMLInputElement` value setter) or read
+the embedded credential.
 
 **Accurate guarantee (not overclaimed).** Isolation protects the credential and
 the decision/setter logic **up to the intended DOM write**. Once Blanc writes the
@@ -90,24 +94,33 @@ does secure: an unused credential (e.g. a password on a username-only step) is
 never written and stays in the isolated realm, and the page cannot hijack the
 selection/setter to redirect or capture the write.
 
-**Flow:**
+**Flow** (matching + item selection happen before this, as today — `findLogins`
+→ chooser if needed → a chosen item):
 
 1. **Inspect (credential-free, isolated world).** Run the identity guard, collect
    candidate inputs, run the shared `selectFields`, return booleans only:
    `{ originMismatch } | { originMismatch: false, hasPassword, hasUsername }`.
-2. **Decide (main process).** `sendPass = hasPassword ? password : null`,
+   `originMismatch` → `origin-or-focus-mismatch`; `!hasPassword && !hasUsername`
+   → `no-fillable-field` — **and nothing is decrypted** in that case.
+2. **Reveal (main process).** Only now, with a fillable field confirmed, call
+   `revealCredential(chosen)` — the sole decrypt.
+3. **Re-validate.** After the reveal await, re-check the full identity set
+   (live+focused window, same active tab, live+focused webContents, unchanged
+   `navEpoch`, exact `wc.getURL() === expectedURL`) before the second injection.
+4. **Decide (main process).** `sendPass = hasPassword ? password : null`,
    `sendUser = hasUsername ? username : null`. On a username-only step the
-   password is never sent to the renderer at all.
-3. **Re-validate.** Re-check the identity set (live+focused window, same active
-   tab, live+focused webContents, unchanged `navEpoch`, exact
-   `wc.getURL() === expectedURL`) before the second injection.
-4. **Fill (isolated world).** Inject with only the non-null credentials. It
+   password is never sent to the renderer.
+5. **Fill (isolated world).** Inject with only the non-null credentials. It
    re-runs the identity guard, then **synchronously** re-runs `selectFields` and
    sets the fields in the same execution — page JS gets no window between select
    and set to mutate the DOM or hook the setter. If the expected field is absent
    (DOM changed since inspect), the credential is simply not written; it never
    leaves the isolated realm. Returns `{ originMismatch, filledUser, filledPass }`.
-   Errors keep the **binding-less catch → fixed `fill-error`** (never a message).
+
+**Everything from the reveal (step 2) onward runs inside the binding-less catch
+→ fixed `fill-error`** — once a credential is in main-process memory, no failure
+path may log a page- or SDK-controlled message. (Pre-reveal errors keep the
+detailed `setup-error` line, as today.)
 
 ### Shared field logic — pure `selectFields`, embedded by `.toString()`
 
@@ -141,10 +154,14 @@ is exported for tests.
     newsletter-like.
   - **`passwordIndex`** = first visible `type==='password'`.
   - **`usernameIndex`**:
-    - *Password present* (single-page / password step): the focused candidate,
-      else the nearest candidate preceding the password in document order,
-      preferring the same `formKey`. (Proximity to a password field is the
-      evidence here.)
+    - *Password present* (single-page / password step): define the password's
+      **scope** = candidates sharing the password's `formKey` (when it is
+      non-null); if the password has no form (`formKey` null), scope =
+      candidates also with `formKey` null. Within that scope: the focused
+      candidate **if it is in scope**, else the nearest scope candidate preceding
+      the password in document order. A focused field *outside* the password's
+      form is **not** used — otherwise Blanc could type the username into an
+      unrelated field while filling the login form's password.
     - *No password* (username step): from candidates with `loginEvidence != null`
       (call them *positives*) — **no lone-field fallback, no bare guessing**:
       `pool` = the `strong` positives if any, else all positives; if `pool` has
@@ -163,9 +180,10 @@ is exported for tests.
 - `filledPass && !filledUser` → `filled` `pass-only (username field not found)`
 - otherwise → `nothing-filled`
 
-Unchanged: `revealCredential` decrypts only the chosen item; fill never submits;
-the password is embedded/sent only when a password field exists; credentials are
-never logged.
+Unchanged: `revealCredential` decrypts only the chosen item (and now only after
+inspection confirms a fillable field); fill never submits; the password is sent to
+the renderer only after inspection observes a password field and written only if
+the isolated fill pass still finds one; credentials are never logged.
 
 ## Footprint
 
@@ -175,8 +193,8 @@ never logged.
   credential-free); `buildFillScript` (rewritten: `collectCandidates` +
   `selectFields`, synchronous select+set, fill only provided creds).
 - **`src/main/main.js`** — `fillActiveTabFrom1Password`: isolated-world inspect →
-  decide → re-validate → isolated-world fill; the outcome map above; a
-  `FILL_WORLD_ID` constant.
+  reveal → re-validate → decide → isolated-world fill; the outcome map above; the
+  `FILL_WORLD_ID = 1001` constant.
 - **`test/unit/onepassword-match.test.js`** — matching + `selectFields`
   behavioral cases (below).
 - **`package.json` / `package-lock.json`** — pinned `tldts-experimental@7.4.6`.
@@ -206,6 +224,8 @@ navigation (stateless — per-press), TOTP, and 1Password's per-item
   - **focused *generic* text field, no login evidence** → username `null` (focus
     is not evidence).
   - **camelCase search** (`id="siteSearch"`, `name="queryInput"`) focused → `null`.
+  - **focused candidate in a *different* form than the password** → username
+    resolves within the password's form scope, **not** the focused field.
   - **sole newsletter email** (`id="newsletter-email"`) → `null`.
   - **login email + newsletter email** → login email (newsletter excluded).
   - **two positive emails, neither strong, none focused** → `null` (ambiguous).
@@ -216,9 +236,10 @@ navigation (stateless — per-press), TOTP, and 1Password's per-item
 - **`buildInspectScript` / `buildFillScript`** (string assertions, secondary):
   inspect source carries **no** credential literal; fill source JSON-embeds only
   provided creds, contains the identity guard + native setter; both embed the same
-  `selectFields`/`collectCandidates` source; both target
-  `executeJavaScriptInIsolatedWorld` (the orchestrator call, asserted in a main.js
-  reference or by the call shape).
+  `selectFields`/`collectCandidates` source.
+- **`FILL_WORLD_ID` constant** — assert it is `1001` (or at least `≥ 1000` and
+  neither `0` nor `999`), so a refactor can't silently move the fill into the main
+  or preload world.
 
 **Manual** (fresh `npm start` with `BLANC_1P_ACCOUNT`):
 - `accounts.google.com`, item for `google.com` → `filled user-only`; next screen
@@ -243,12 +264,13 @@ navigation (stateless — per-press), TOTP, and 1Password's per-item
   chooser), so this is load-bearing — covered by the cross-tenant unit tests.
 - **`tldts-experimental` currently transitive** — promoting to a direct pinned
   dependency removes the adblocker-bump risk.
-- **Isolated-world return plumbing** — `executeJavaScriptInIsolatedWorld`'s
-  resolved value can differ from `executeJavaScript` (last-`WebSource` completion
-  value; behavior worth confirming). The flow depends on the status object
-  round-tripping; the plan must verify this in its first isolated-world step and,
-  if it doesn't return cleanly, fall back to a readback (e.g. a sentinel the fill
-  writes and inspect-of-the-next-call reads). Verify before building on it.
+- **Isolated-world return plumbing** — `executeJavaScriptInIsolatedWorld` returns
+  `Promise<any>` and, like `executeJavaScript`, resolves with the completion value
+  of a single `WebSource` ending in the status-object expression, so it should
+  round-trip directly. The plan verifies this with a throwaway probe in its first
+  isolated-world step; if the result is unexpectedly `undefined`, the flow **fails
+  closed as `fill-error`** — no persistent cross-call sentinel state (which could
+  go stale across navigation).
 - **Inspect→fill DOM race** — closed for credential exposure by isolated-world +
   synchronous select-then-set: if the field vanishes, the credential is not
   written and never leaves the isolated realm. Residual (inherent to all
@@ -258,5 +280,7 @@ navigation (stateless — per-press), TOTP, and 1Password's per-item
   unit-tested. jsdom is not used (its no-layout `offsetParent`/`getBoundingClientRect`
   make visibility fixtures unreliable).
 - **Username heuristic residual** — search + newsletter exclusion, login-positive
-  evidence required, focus only a tie-break, no lone-field guess; worst case is a
-  no-op, never a wrong-field fill.
+  evidence required, focus only an in-scope tie-break, no lone-field guess. This
+  makes a wrong-field fill unlikely but **not impossible** (e.g. a page whose
+  login form genuinely contains a mislabeled extra input); the common failure mode
+  is a no-op, and the fixtures cover the known traps.
