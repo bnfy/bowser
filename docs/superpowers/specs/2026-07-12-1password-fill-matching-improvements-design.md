@@ -1,57 +1,51 @@
 # 1Password fill — subdomain + multi-step matching improvements
 
 **Date:** 2026-07-12
-**Status:** Approved for planning (rev. 2 — after security review)
+**Status:** Approved for planning (rev. 3 — after two security-review rounds)
 **Branch:** `feature/1password-fill` (builds on the feasibility spike)
 
 ## What
 
-Two focused improvements to Blanc's 1Password fill so it works on more of the
-user's real logins:
+Two improvements to Blanc's 1Password fill so it works on more real logins:
 
-1. **Subdomain matching** — an item saved for `google.com` should fill on
-   `accounts.google.com` (and any `*.google.com`), not only an exact-host page.
-2. **Multi-step logins** — on a username-first screen (Google/Microsoft style)
-   that has no password field yet, `⌥⌘P` should fill the username; the second
-   press on the password screen fills the password. Stateless — no credential is
-   held across the navigation.
+1. **Subdomain matching** — an item saved for `google.com` fills on
+   `accounts.google.com` (any `*.google.com`), not only an exact-host page.
+2. **Multi-step logins** — on a username-first screen with no password field yet,
+   `⌥⌘P` fills the username; the second press on the password screen fills the
+   password. Stateless — no credential is held across the navigation.
 
-**Scope note:** this improves the **personal dev build**. It is *not* the
-shippable engine and does not depend on the §4.1(e) legal reply
-([`1password-legal-inquiry.md`](../../1password-legal-inquiry.md)) — that gate
-governs public distribution, not local use. The code retains its `SPIKE` framing
-and dev env-gating.
+**Scope note:** improves the **personal dev build**, not the shippable engine;
+does not depend on the §4.1(e) legal reply
+([`1password-legal-inquiry.md`](../../1password-legal-inquiry.md)), which gates
+public distribution, not local use. Retains `SPIKE` framing and dev env-gating.
+This revision pulls **isolated-world injection** forward from the real-engine
+backlog because the two-phase design below only delivers its security value there.
 
 ## Part 1 — Subdomain matching (`src/main/onepassword.js`)
 
-Change matching from exact-host to **registrable-domain (eTLD+1) equality**,
-computed with `tldts-experimental`'s `getDomain` **with `allowPrivateDomains: true`**:
+Match on **registrable domain (eTLD+1)** via `tldts-experimental`'s `getDomain`
+**with `allowPrivateDomains: true`**:
 
-- Each host (page + each stored item URL) reduces to its registrable domain,
-  compared for equality.
-  - `accounts.google.com` and item `google.com` → both `google.com` → **match**.
-  - `www.github.com` ↔ `github.com` → **match** (subsumes the old `www.` strip).
+- Each host (page + each stored item URL) reduces to its registrable domain;
+  compare for equality.
+  - `accounts.google.com` ↔ item `google.com` → both `google.com` → **match**.
+  - `www.github.com` ↔ `github.com` → **match** (subsumes the `www.` strip).
   - `github.com.evil.com` vs `github.com` → `evil.com` ≠ `github.com` → **no match**.
-  - `foo.co.uk` → `foo.co.uk` (ICANN multi-part suffix handled).
-- **`allowPrivateDomains: true` is required, not optional.** With the default
-  (`false`), `getDomain('user.github.io')` returns `github.io`, so
-  `alice.github.io` and `bob.github.io` both collapse to `github.io` and would
-  **cross-match** — a saved item for one tenant would silently fill on another
-  (`github.io`, `vercel.app`, `pages.dev`, `herokuapp.com`, `appspot.com`, …).
-  With the flag, `user.github.io` → `user.github.io`, so per-tenant hosts stay
-  distinct. Verified against the pinned `tldts-experimental@7.4.6`. The flag does
-  not change the ICANN cases above.
-- **Fallback:** `getDomain` returns `null` for hosts with no suffix at all
-  (`localhost`, raw IPs, single-label intranet names). When the key is null, fall
-  back to today's exact normalized-host equality so local/dev logins keep
-  working. Match key: `getDomain(host, { allowPrivateDomains: true }) || host`.
+- **`allowPrivateDomains: true` is required.** With the default, `getDomain`
+  collapses PSL *private* suffixes — `user.github.io` → `github.io` — so
+  `alice.github.io` and `bob.github.io` both become `github.io` and
+  **cross-match** (`github.io`, `vercel.app`, `pages.dev`, `herokuapp.com`,
+  `appspot.com`, …). With the flag, `user.github.io` → `user.github.io`. Verified
+  against the pinned `tldts-experimental@7.4.6`; the flag doesn't change ICANN
+  cases (`google.com`, `co.uk`, the `evil.com` trap).
+- **Fallback:** `getDomain` returns `null` for hosts with no suffix (`localhost`,
+  raw IPs, single-label intranet names) — fall back to exact normalized-host
+  equality. Match key: `getDomain(host, { allowPrivateDomains: true }) || host`.
 
-**Behavior consequence (intended):** an item saved for a bare registrable domain
-now fills across all of its subdomains, symmetric on the registrable domain —
-1Password's default "anywhere on website" behavior, the breadth selected. The
-existing multi-match chooser covers the case where several items now match; note
-it does **not** mitigate a *single* wrong match, which is why the PSL flag above
-matters.
+**Behavior (intended):** an item for a bare registrable domain fills across all
+its subdomains, symmetric — 1Password's default "anywhere on website" breadth.
+The multi-match chooser covers several matches; it does **not** mitigate a single
+wrong match, so the PSL flag is load-bearing.
 
 ```js
 const { getDomain } = require('tldts-experimental');
@@ -72,78 +66,94 @@ function matchesHost(itemUrls, host) {
 }
 ```
 
-`normalizeHost` is unchanged. **Dependency:** promote `tldts-experimental` to a
-**direct** dependency, pinned to the version already resolved via
-`@ghostery/adblocker` (`7.4.6`) so the same physical copy is reused and the
-`require` is owned rather than incidental.
+`normalizeHost` unchanged. **Dependency:** promote `tldts-experimental` to a
+**direct** dependency, pinned to the tree's resolved `7.4.6` (same physical copy).
 
-## Part 2 — Multi-step fill via a two-phase, least-privilege flow
+## Part 2 — Multi-step fill: two-phase, isolated-world, least-privilege
 
-The fill now runs in **two injections** so the password is embedded only into a
-page that actually has a password field:
+The fill runs in **two isolated-world injections** so (a) the password is only
+sent to the renderer when a password field exists, and (b) the credential and the
+selection/setter logic live in a JS realm the page cannot hook or scrape.
 
-1. **Inspect (credential-free).** Inject a script carrying **no credentials**. It
-   runs the identity guard, collects the page's candidate inputs, runs the shared
-   `selectFields` decision, and returns booleans only:
+**Isolated world.** Both injections use
+`wc.executeJavaScriptInIsolatedWorld(FILL_WORLD_ID, [{ code }])` with a dedicated
+constant world id (distinct from the main world `0`), not `executeJavaScript`.
+The page's main-world JS cannot observe or tamper the isolated realm's
+intrinsics (`Object.getOwnPropertyDescriptor`, the `HTMLInputElement` value
+setter) or read the embedded credential.
+
+**Accurate guarantee (not overclaimed).** Isolation protects the credential and
+the decision/setter logic **up to the intended DOM write**. Once Blanc writes the
+value into the field, the page can read that field — inherent to *every* autofill;
+isolation does **not** make a populated field secret from its own page. What it
+does secure: an unused credential (e.g. a password on a username-only step) is
+never written and stays in the isolated realm, and the page cannot hijack the
+selection/setter to redirect or capture the write.
+
+**Flow:**
+
+1. **Inspect (credential-free, isolated world).** Run the identity guard, collect
+   candidate inputs, run the shared `selectFields`, return booleans only:
    `{ originMismatch } | { originMismatch: false, hasPassword, hasUsername }`.
-2. **Decide (main process).** From those booleans choose which credentials to
-   send — `sendPass = hasPassword ? password : null`,
-   `sendUser = hasUsername ? username : null`. On a username-only step
-   `hasPassword` is false, so **the password is never embedded**.
-3. **Re-validate.** The inspection was async, so re-check the full identity set
-   (live+focused window, same active tab, live+focused webContents, unchanged
-   `navEpoch`, exact `wc.getURL() === expectedURL`) **before** the second
-   injection — the same guard the single-phase flow already runs before injecting.
-4. **Fill.** Inject `buildFillScript` with only the non-null credentials. It
-   re-runs the identity guard and the **same** `selectFields` (deterministic on
-   the unchanged DOM), fills the selected fields, and returns
-   `{ originMismatch, filledUser, filledPass }`.
+2. **Decide (main process).** `sendPass = hasPassword ? password : null`,
+   `sendUser = hasUsername ? username : null`. On a username-only step the
+   password is never sent to the renderer at all.
+3. **Re-validate.** Re-check the identity set (live+focused window, same active
+   tab, live+focused webContents, unchanged `navEpoch`, exact
+   `wc.getURL() === expectedURL`) before the second injection.
+4. **Fill (isolated world).** Inject with only the non-null credentials. It
+   re-runs the identity guard, then **synchronously** re-runs `selectFields` and
+   sets the fields in the same execution — page JS gets no window between select
+   and set to mutate the DOM or hook the setter. If the expected field is absent
+   (DOM changed since inspect), the credential is simply not written; it never
+   leaves the isolated realm. Returns `{ originMismatch, filledUser, filledPass }`.
+   Errors keep the **binding-less catch → fixed `fill-error`** (never a message).
 
 ### Shared field logic — pure `selectFields`, embedded by `.toString()`
 
-The security-sensitive decision lives in **one pure function** so it's
-unit-testable and identical in both injections. `isVisible`, `isSearchLike`,
-`collectCandidates` (the thin DOM adapter), and `selectFields` are defined once
-at module scope in `onepassword.js`; both `buildInspectScript` and
-`buildFillScript` embed their source via `Function.prototype.toString()`, so the
-code that runs in the page is exactly the code the unit tests import.
-`selectFields` is also exported for the tests.
+The decision lives in **one pure function**, unit-tested and identical in both
+injections. `isVisible`, `isSearchLike`, `isNewsletterLike`, `loginEvidence`,
+`collectCandidates` (thin DOM adapter), and `selectFields` are defined once at
+module scope; both injected scripts embed their source via
+`Function.prototype.toString()`, so tested code == shipped code. `selectFields`
+is exported for tests.
 
-- `collectCandidates()` (DOM adapter, runs in page): returns an ordered array of
-  descriptors, one per `input`, in document order:
-  `{ i, type, autocomplete, name, id, placeholder, ariaLabel, formId, isVisible, isFocused, inSearchScope }`
-  (`type`/`autocomplete` lowercased; `i` = index into the collected list;
-  `inSearchScope` = inside a `[role="search"]` or `<form role="search">`;
-  `isVisible` = `offsetParent !== null` + non-zero client rect + not
-  `type="hidden"`; `isFocused` = `=== document.activeElement`).
-- `selectFields(cands)` (pure): returns `{ passwordIndex, usernameIndex }`
-  (either may be `null`).
-  - **`isSearchLike(c)`** — excluded from username selection: `c.type === 'search'`,
-    or `c.inSearchScope`, or `/(^|[^a-z])(search|query|q)([^a-z]|$)/i` matches any
-    of `name`/`id`/`autocomplete`/`placeholder`/`ariaLabel`.
-  - **`passwordIndex`** — first visible `type === 'password'` descriptor (never a
-    search field; passwords aren't search-like).
-  - **`usernameIndex`** — a visible text/email/tel descriptor, **never
-    `isSearchLike`**, chosen by:
-    - *When a password field exists* (single-page or password step): the focused
-      text candidate; else the nearest text candidate preceding the password in
-      document order (preferring the same `formId`).
-    - *When no password field exists* (username step), in order — requiring
-      login-positive evidence, no bare guessing:
-      1. the **focused** text candidate;
-      2. `autocomplete === 'username'`;
-      3. `name`/`id`/`autocomplete` matches `/user(name)?|login|account/i`;
-      4. a **sole** `type === 'email'`/`autocomplete === 'email'` candidate
-         (fires only if exactly one such email field exists — so a login email +
-         a footer-newsletter email do **not** trigger a guess);
-      5. if exactly **one** non-search text/email candidate exists on the whole
-         page, use it;
-      6. else `null` — ambiguous, no-op (never fill an unlabeled field among
-         several, never a search box).
+- **`collectCandidates()`** (DOM adapter, in page) — ordered array of `input`
+  descriptors in document order:
+  `{ i, type, autocomplete, name, id, placeholder, ariaLabel, formKey, isVisible, isFocused, inSearchScope }`.
+  `type`/`autocomplete` lowercased; `isVisible` = `offsetParent !== null` +
+  non-zero client rect + not `type="hidden"`; `isFocused` = `=== document.activeElement`;
+  `inSearchScope` = inside a `[role="search"]`. **`formKey`** = a stable index
+  assigned per distinct `input.form` **element identity** via a
+  `Map<HTMLFormElement, number>` (`null` when `input.form` is null) — *not*
+  `form.id`, since forms may lack ids or share them.
+- **`selectFields(cands)`** (pure) → `{ passwordIndex, usernameIndex }` (either
+  may be `null`). Helpers over a lowercased `name+id+autocomplete+placeholder+ariaLabel`
+  blob:
+  - `isSearchLike` — `type==='search'`, `inSearchScope`, blob **contains**
+    `search`/`query` (substring, so camelCase `siteSearch`/`queryInput` are
+    caught), or `name`/`id` exactly `q`/`s`.
+  - `isNewsletterLike` — blob contains `newsletter`/`subscribe`/`marketing`/`promo`.
+  - `loginEvidence` → `strong` if `autocomplete==='username'` or blob matches
+    `/user(name)?|login|account|identifier|loginfmt/`; `medium` if `type==='email'`,
+    `autocomplete==='email'`, or blob contains `email`; else `null`.
+  - `candidate` = visible `text`/`email`/`tel`, **not** search-like, **not**
+    newsletter-like.
+  - **`passwordIndex`** = first visible `type==='password'`.
+  - **`usernameIndex`**:
+    - *Password present* (single-page / password step): the focused candidate,
+      else the nearest candidate preceding the password in document order,
+      preferring the same `formKey`. (Proximity to a password field is the
+      evidence here.)
+    - *No password* (username step): from candidates with `loginEvidence != null`
+      (call them *positives*) — **no lone-field fallback, no bare guessing**:
+      `pool` = the `strong` positives if any, else all positives; if `pool` has
+      exactly one → it; if `pool` has more than one → the focused one **if it is
+      in `pool`**, else `null` (ambiguous → no-op). Focus is only a tie-break
+      among positives.
 
 ### Orchestrator outcome map (`fillActiveTabFrom1Password` in `main.js`)
 
-Reads the two-phase results:
 - inspect `originMismatch` → `origin-or-focus-mismatch`
 - inspect `!hasPassword && !hasUsername` → `no-fillable-field`
 - re-validation fails → the existing `abort-*` line
@@ -153,88 +163,100 @@ Reads the two-phase results:
 - `filledPass && !filledUser` → `filled` `pass-only (username field not found)`
 - otherwise → `nothing-filled`
 
-Unchanged: `revealCredential` decrypts only the chosen item; the fill never
-submits; credentials remain confined to the main process and the verified page,
-are never logged (the phase-2 injection keeps its binding-less catch → `fill-error`),
-and the password is embedded **only** when the page has a password field.
+Unchanged: `revealCredential` decrypts only the chosen item; fill never submits;
+the password is embedded/sent only when a password field exists; credentials are
+never logged.
 
 ## Footprint
 
 - **`src/main/onepassword.js`** — `matchesHost` (registrable-domain key +
-  private-domains flag); `tldts-experimental` require + `registrableKey`; the
-  shared DOM helpers + pure `selectFields`; `buildInspectScript` (new,
-  credential-free); `buildFillScript` (rewritten to use `collectCandidates` +
-  `selectFields`, fill only provided creds); export `selectFields`.
-- **`src/main/main.js`** — `fillActiveTabFrom1Password`: run inspect → decide
-  creds → re-validate → fill; the outcome map above (adds `no-fillable-field`,
-  `filled user-only`; drops the old single `noPasswordField` branch).
-- **`test/unit/onepassword-match.test.js`** — matching cases (subdomain matches;
-  cross-tenant private-domain hosts must NOT match; co.uk; localhost/IP fallback)
-  and **`selectFields` behavioral cases** (below).
-- **`package.json` / `package-lock.json`** — add pinned `tldts-experimental@7.4.6`.
+  private-domains flag); `tldts-experimental` require + `registrableKey`; shared
+  DOM helpers + pure `selectFields` (+ export); `buildInspectScript` (new,
+  credential-free); `buildFillScript` (rewritten: `collectCandidates` +
+  `selectFields`, synchronous select+set, fill only provided creds).
+- **`src/main/main.js`** — `fillActiveTabFrom1Password`: isolated-world inspect →
+  decide → re-validate → isolated-world fill; the outcome map above; a
+  `FILL_WORLD_ID` constant.
+- **`test/unit/onepassword-match.test.js`** — matching + `selectFields`
+  behavioral cases (below).
+- **`package.json` / `package-lock.json`** — pinned `tldts-experimental@7.4.6`.
 
 ## Non-goals (unchanged — real-engine backlog)
 
 Shadow-DOM piercing, cross-origin iframes, auto-advance across the multi-step
-navigation (deliberately stateless — per-press), TOTP, and reading 1Password's
-per-item `AnywhereOnWebsite`/`ExactDomain`/`Never` rules (uniform
-registrable-domain match instead).
+navigation (stateless — per-press), TOTP, and 1Password's per-item
+`AnywhereOnWebsite`/`ExactDomain`/`Never` rules.
 
 ## Testing
 
-**Unit — `test/unit/onepassword-match.test.js`** (`node --test`, pure — no
-Electron/SDK/DOM):
+**Unit — `test/unit/onepassword-match.test.js`** (`node --test`, pure):
 
-- **`matchesHost`:** exact still matches; `www.` both directions; **subdomain now
-  matches** (`accounts.google.com` ↔ item `google.com`); deep-subdomain item ↔
-  parent; substring trap still **fails** (`github.com.evil.com` vs `github.com`);
-  **cross-tenant private domains must NOT match** (`alice.github.io` vs
-  `bob.github.io`; two `*.vercel.app`) — the `allowPrivateDomains` regression
-  guard; **public suffix not collapsed** (`foo.co.uk` vs `bar.co.uk` don't
-  match); **localhost + raw-IP fallback** (exact-only); item with no URLs;
-  malformed stored URL skipped.
-- **`selectFields`** (pure decision over descriptor fixtures — the behavioral
-  core): each fixture is a hand-built candidate array. Cases:
-  - Standard single-page login (visible username + password) → both indices.
-  - Password step, no visible username → `passwordIndex` set, `usernameIndex` null.
-  - **Username step** (email field, no password) → `usernameIndex` set.
-  - **Focused search box** (`type=search` focused) + no login field → username null.
-  - **Newsletter email + login email, no username signal** → username null (rule 4
-    needs a *sole* email; rule 6 no-ops on ambiguity).
-  - **Lone search field** (`name="q"`) → username null (search excluded).
-  - Hidden/honeypot inputs (`isVisible:false`) → ignored.
-  - `autocomplete="username"` chosen over an unrelated visible text input.
-  - Google/Microsoft-style username step (`type=email` + `autocomplete=username`)
+- **`matchesHost`:** exact; `www.` both ways; **subdomain matches**
+  (`accounts.google.com` ↔ `google.com`); deep-subdomain ↔ parent; substring trap
+  still **fails**; **cross-tenant private domains must NOT match**
+  (`alice.github.io` vs `bob.github.io`; two `*.vercel.app`); `foo.co.uk` vs
+  `bar.co.uk` no match; **localhost + raw-IP fallback**; no URLs; malformed URL
+  skipped.
+- **`selectFields`** (pure, descriptor fixtures — the behavioral core):
+  - single-page login (username + password) → both indices.
+  - password step, no username → password only.
+  - username step, `autocomplete="username"` → that field.
+  - Google/Microsoft style (`type=email` + `autocomplete=username` / `name=loginfmt`)
     → that field.
+  - **focused *generic* text field, no login evidence** → username `null` (focus
+    is not evidence).
+  - **camelCase search** (`id="siteSearch"`, `name="queryInput"`) focused → `null`.
+  - **sole newsletter email** (`id="newsletter-email"`) → `null`.
+  - **login email + newsletter email** → login email (newsletter excluded).
+  - **two positive emails, neither strong, none focused** → `null` (ambiguous).
+  - **two anonymous forms** (login form + newsletter form, both no `id`) →
+    password's username resolves within the **same** `formKey`, not the newsletter
+    field.
+  - hidden/honeypot inputs (`isVisible:false`) → ignored.
 - **`buildInspectScript` / `buildFillScript`** (string assertions, secondary):
   inspect source carries **no** credential literal; fill source JSON-embeds only
-  the provided creds and still contains the identity guard + native setter; both
-  embed the same `selectFields` source.
+  provided creds, contains the identity guard + native setter; both embed the same
+  `selectFields`/`collectCandidates` source; both target
+  `executeJavaScriptInIsolatedWorld` (the orchestrator call, asserted in a main.js
+  reference or by the call shape).
 
 **Manual** (fresh `npm start` with `BLANC_1P_ACCOUNT`):
-- `accounts.google.com`, item saved for `google.com` → username fills
-  (`filled user-only`); next screen → `⌥⌘P` → password fills.
+- `accounts.google.com`, item for `google.com` → `filled user-only`; next screen
+  → password fills.
 - Single-page login on a subdomain of a saved item → `filled user+pass`.
-- A page with only a search box → `no-fillable-field` (search not filled).
-- Regression: exact-host single-page login → `filled user+pass`; a `localhost`/IP
-  dev login still matches via fallback.
+- Search-only page → `no-fillable-field`.
+- **React/framework page** (e.g. a React or Vue login) → the native-setter +
+  bubbling `input`/`change` events are observed, the value **sticks** through the
+  framework's controlled-input tracking, and submit uses the filled value.
+- **DOM replacement between phases** — after triggering, script-remove the
+  password form before the fill pass; confirm the password is **not** written and
+  no `[1p-spike]` line leaks a value (isolated-realm containment).
+- Regression: exact-host single-page login → `filled user+pass`; `localhost`/IP
+  dev login still matches.
 
 ## Risks / edge cases
 
-- **Cross-tenant over-match** — closed by `allowPrivateDomains: true` (verified:
-  `user.github.io` → `user.github.io`). A single wrong match would fill silently
-  (no chooser), so this flag is load-bearing, not cosmetic — covered by the
-  cross-tenant unit tests.
-- **`tldts-experimental` currently transitive** — promoting it to a direct pinned
-  dependency removes the risk of an adblocker bump dropping/renaming it.
-- **Inspect→fill TOCTOU** — the credential-free inspection opens a small window;
-  closed by the main-side re-validation (step 3) plus the fill injection's own
-  identity guard, and the DOM-determinism of `selectFields`.
-- **DOM adapter not unit-tested** — `collectCandidates` (visibility/focus/ordering
-  from the live DOM) needs a browser, so it's covered by the manual matrix; the
-  security-critical *decision* (`selectFields`) is fully unit-tested. jsdom is not
-  used — its no-layout `offsetParent`/`getBoundingClientRect` would make visibility
-  fixtures unreliable.
-- **Username heuristic residual** — bounded by search exclusion + login-positive
-  evidence + no-guess-on-ambiguity; worst case is a no-op (`no-fillable-field`),
-  never a wrong-field fill.
+- **Cross-tenant over-match** — **mitigated for PSL-listed private suffixes** by
+  `allowPrivateDomains: true` (verified: `user.github.io` → `user.github.io`). It
+  cannot guarantee every shared-hosting domain is PSL-registered; an unlisted
+  shared host could still collapse. A single wrong match fills silently (no
+  chooser), so this is load-bearing — covered by the cross-tenant unit tests.
+- **`tldts-experimental` currently transitive** — promoting to a direct pinned
+  dependency removes the adblocker-bump risk.
+- **Isolated-world return plumbing** — `executeJavaScriptInIsolatedWorld`'s
+  resolved value can differ from `executeJavaScript` (last-`WebSource` completion
+  value; behavior worth confirming). The flow depends on the status object
+  round-tripping; the plan must verify this in its first isolated-world step and,
+  if it doesn't return cleanly, fall back to a readback (e.g. a sentinel the fill
+  writes and inspect-of-the-next-call reads). Verify before building on it.
+- **Inspect→fill DOM race** — closed for credential exposure by isolated-world +
+  synchronous select-then-set: if the field vanishes, the credential is not
+  written and never leaves the isolated realm. Residual (inherent to all
+  autofill): once written, a populated field is readable by its own page.
+- **DOM adapter not unit-tested** — `collectCandidates` needs a browser; covered
+  by the manual matrix. The security-critical *decision* (`selectFields`) is fully
+  unit-tested. jsdom is not used (its no-layout `offsetParent`/`getBoundingClientRect`
+  make visibility fixtures unreliable).
+- **Username heuristic residual** — search + newsletter exclusion, login-positive
+  evidence required, focus only a tie-break, no lone-field guess; worst case is a
+  no-op, never a wrong-field fill.
