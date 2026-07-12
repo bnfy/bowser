@@ -862,6 +862,147 @@ const TAB_WEB_PREFERENCES = {
   preload: path.join(__dirname, 'tab-preload.js'),
 };
 
+// ─── SPIKE (1Password fill feasibility) — remove before release ───────────
+// Fill the active tab's login form from 1Password behind Touch ID, with no
+// browser extension. Env-gated; credentials live only in main memory + the
+// verified page, and every outcome logs a result line, never a value.
+const ONE_PASSWORD_SPIKE_ENABLED = !app.isPackaged || process.env.BLANC_1P_SPIKE === '1';
+let onePasswordFillInFlight = false;
+
+async function fillActiveTabFrom1Password() {
+  const log = (result, extra) => console.log(`[1p-spike] ${result}${extra ? ' ' + extra : ''}`);
+  const onepassword = require('./onepassword'); // ./onepassword only — the SDK stays lazy inside it
+  let capturedTabId, tab, wc, expectedURL, expectedHost, capturedEpoch, capturedTimeOrigin, chosen;
+
+  // ── PHASE 1 (pre-reveal): NO credential is in memory yet, so err.message is
+  //    safe to log for diagnosis. ──
+  try {
+    if (!hasLiveWindow() || !activeTabId) return log('no-active-tab');
+    capturedTabId = activeTabId;
+    tab = tabs.get(capturedTabId);
+    if (!tab) return log('no-active-tab');
+    wc = tab.view.webContents;
+    expectedURL = wc.getURL();
+    if (!/^https?:\/\//i.test(expectedURL)) return log('non-http-noop');
+    expectedHost = new URL(expectedURL).hostname;
+    capturedEpoch = tab.navEpoch;
+    capturedTimeOrigin = await wc.executeJavaScript('performance.timeOrigin');
+
+    const matches = await onepassword.findLogins(expectedHost);
+    if (matches.length === 0) return log('no-match', expectedHost);
+    chosen = matches[0];
+    if (matches.length > 1) {
+      // The vault search was async — if the window died meanwhile, don't ask
+      // the user to choose a login for a window that no longer exists (the
+      // post-reveal re-validation would abort anyway). Also keeps `win` safe
+      // to pass as the dialog parent (documented overloads only).
+      if (!hasLiveWindow()) return log('abort-window-changed');
+      const buttons = matches.map((m) => m.title || '(untitled)');
+      const cancelId = buttons.length;
+      buttons.push('Cancel');
+      const { response } = await dialog.showMessageBox(win, {
+        type: 'question',
+        title: 'Fill from 1Password',
+        message: `Choose a login for ${expectedHost}`,
+        buttons,
+        cancelId,
+        noLink: true,
+      });
+      if (response < 0 || response >= matches.length) return log('chooser-cancel');
+      chosen = matches[response];
+    }
+  } catch (err) {
+    return log('setup-error', err?.message); // pre-reveal only — credential-free
+  }
+
+  // ── PHASE 2 (reveal + fill): a credential is in memory from revealCredential
+  //    onward. This whole block is a BINDING-LESS try — every failure (a
+  //    page-controlled executeJavaScript rejection, OR any other throw once the
+  //    credential exists) logs a FIXED classification, so no error string can
+  //    ever echo the credential. ──
+  try {
+    const { username, password } = await onepassword.revealCredential(chosen.vaultId, chosen.itemId);
+    if (password == null && username == null) return log('empty-item');
+
+    // Re-validate after the async auth/chooser: same live+focused window, same
+    // active tab, live+focused webContents, unchanged epoch, exact same URL.
+    if (!hasLiveWindow() || !win.isFocused()) return log('abort-window-changed');
+    if (activeTabId !== capturedTabId || !tabs.has(capturedTabId)) return log('abort-tab-changed');
+    if (wc.isDestroyed() || !wc.isFocused()) return log('abort-wc-changed');
+    if (tab.navEpoch !== capturedEpoch) return log('abort-navigated');
+    if (wc.getURL() !== expectedURL) return log('abort-url-changed');
+
+    // Injection runs in the page's MAIN WORLD (a hostile page could override the
+    // value setter to throw an Error echoing the value) — the binding-less catch
+    // below is what makes that message unloggable.
+    const source = onepassword.buildFillScript({ expectedURL, expectedTimeOrigin: capturedTimeOrigin, username, password });
+    const status = await wc.executeJavaScript(source); // single-arg, no userGesture
+    if (status?.originMismatch) return log('origin-or-focus-mismatch');
+    if (status?.noPasswordField) return log('no-password-field');
+    if (status?.filledPass && status?.filledUser) return log('filled', 'user+pass');
+    if (status?.filledPass) return log('filled', 'pass-only (username field not found)');
+    return log('nothing-filled');
+  } catch {
+    return log('fill-error'); // no binding, no message — a credential is in memory
+  }
+}
+
+// SPIKE (1Password fill feasibility) — headless criterion 3(a). Gated on its
+// OWN env var so it can run without a GUI/account: load the SDK package inside
+// packaged Electron (asar resolution + @1password/sdk-core's eager core_bg.wasm
+// compile), log ONE line, set a real exit code, and terminate. app.exit() is
+// used (not app.quit()) so native handles the SDK may open can't stall exit.
+async function runPackageProbeIfRequested() {
+  if (process.env.BLANC_1P_PACKAGE_PROBE !== '1') return false;
+  try {
+    require('./onepassword').probePackageLoad();
+    console.log('[1p-spike] package probe: PASS (require resolved + WASM compiled)');
+    app.exit(0);
+  } catch (err) {
+    console.warn(`[1p-spike] package probe: FAIL — ${err?.message || err}`);
+    app.exit(1);
+  }
+  return true; // unreachable after app.exit; kept for call-site clarity
+}
+
+// SPIKE (1Password fill feasibility) — GUI startup checks. Gated
+// BLANC_1P_SPIKE === '1'. Two independent lines:
+//   3(a) package probe — does the SDK module LOAD in this build?
+//   3(b) core smoke    — does DesktopAuth dlopen + authenticate under a
+//                        notarized/hardened build?
+async function initSpikePackaging() {
+  if (process.env.BLANC_1P_SPIKE !== '1') return;
+
+  // 3(a): load the package (asar loader active, eager core_bg.wasm compile).
+  try {
+    require('./onepassword').probePackageLoad();
+    console.log('[1p-spike] package probe: PASS (require resolved + WASM compiled)');
+  } catch (err) {
+    console.warn(`[1p-spike] package probe: FAIL — ${err?.message || err}`);
+  }
+
+  // 3(b): the native bridge round-trip. Decisive by default — everything is a
+  // FAIL unless it matches the biometric-cancel signature (/cancell?ed/i), a
+  // best-effort INCONCLUSIVE (bridge state then unknowable). "denied"/"not
+  // allowed"/policy/auth errors are real FAILs (the round-trip did not work). A
+  // genuine cancel misread as FAIL isn't worth chasing for throwaway code — just
+  // re-run the smoke without cancelling.
+  try {
+    const client = await require('./onepassword').getClient();
+    await client.vaults.list();
+    console.log('[1p-spike] core smoke: PASS (DesktopAuth + vaults.list)');
+  } catch (err) {
+    const msg = err?.message || String(err);
+    if (/cancell?ed/i.test(msg)) {
+      console.log(`[1p-spike] core smoke: INCONCLUSIVE (biometric cancelled) — ${msg}`);
+    } else {
+      const bridge = /dlopen|libop_sdk_ipc_client|image not found|code ?sign|library/i.test(msg);
+      console.warn(`[1p-spike] core smoke: FAIL${bridge ? ' (native bridge did not load)' : ''} — ${msg}`);
+    }
+  }
+}
+// ─── end SPIKE ────────────────────────────────────────────────────────────
+
 function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = null, view = null, pinned = false, muted = false, restoreHistory = null } = {}) {
   const id = crypto.randomUUID();
   // An adopted view (window.open child, see the window-open handler) arrives
@@ -902,11 +1043,31 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
     // real navigation shouldn't behave differently from before this flag
     // existed.
     historyEligible: true,
+    // SPIKE (1Password fill feasibility) — bumped on any main-frame navigation
+    // start/commit so the async fill can detect a page swap mid-flow.
+    navEpoch: 0,
   };
   tabs.set(id, tab);
   tabOrder.push(id);
 
   const wc = view.webContents;
+  // SPIKE (1Password fill feasibility) — ⌥⌘P on the tab's OWN webContents
+  // (the overlay before-input-event listener never sees page-focused keys).
+  if (ONE_PASSWORD_SPIKE_ENABLED) {
+    wc.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown' || input.isAutoRepeat) return;
+      if (input.code !== 'KeyP') return; // physical key — ⌥ mutates input.key on macOS
+      if (!(input.meta && input.alt && !input.control && !input.shift)) return; // one modifier off ⌘P Print
+      // Consume the chord BEFORE the single-flight check — a recognized second
+      // press must not fall through to the page, it just doesn't start a fill.
+      event.preventDefault();
+      if (onePasswordFillInFlight) return; // single-flight
+      onePasswordFillInFlight = true;
+      fillActiveTabFrom1Password()
+        .catch((err) => console.warn('[1p-spike] fill error:', err?.message))
+        .finally(() => { onePasswordFillInFlight = false; });
+    });
+  }
   // WebRTC IP-handling policy applies per-webContents; this is the single choke
   // point every tab (fresh or adopted window.open child) passes through.
   wc.setWebRTCIPHandlingPolicy(webrtcPolicyFor(settings.getSettings().webrtcPolicy));
@@ -944,6 +1105,7 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
     scheduleBroadcastTabs();
   });
   wc.on('did-navigate', (_e, url, httpResponseCode) => {
+    tab.navEpoch++; // SPIKE (1Password fill feasibility)
     const shouldReclaimChromeFocus = url === tab.url && tabsWantingAddressBarFocus.has(id) && activeTabId === id;
     if (url !== tab.url) tabsWantingAddressBarFocus.delete(id);
     tab.blockedCount = 0;
@@ -972,6 +1134,7 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
     if (shouldReclaimChromeFocus) reclaimAddressBarFocus(id);
   });
   wc.on('did-navigate-in-page', (_e, url, isMainFrame) => {
+    if (isMainFrame) tab.navEpoch++; // SPIKE (1Password fill feasibility) — main frame only
     syncNavState();
     if (isMainFrame && tab.historyEligible) history.addVisit(url, wc.getTitle());
     broadcastTabs();
@@ -980,6 +1143,13 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
     // frequent on SPA-heavy sites (exactly the rebuild-storm case Task 1
     // avoids). The menu may lag slightly behind in-page route changes;
     // it catches up on the next real navigation or tab-lifecycle event.
+  });
+  // SPIKE (1Password fill feasibility) — a main-frame navigation that STARTS
+  // after the orchestrator's main-side URL check would still let
+  // executeJavaScript run in the replacement document; bump the epoch so the
+  // pre-injection re-check aborts. Removed with the rest of the spike.
+  wc.on('did-start-navigation', (_e, _url, _isInPlace, isMainFrame) => {
+    if (isMainFrame) tab.navEpoch++;
   });
   wc.once('did-finish-load', () => {
     if (shouldReclaimAddressBarFocus(id)) {
@@ -1960,6 +2130,7 @@ let lastSecureDns = null;
 let lastSecureDnsTemplate = null;
 
 app.whenReady().then(async () => {
+  if (await runPackageProbeIfRequested()) return; // SPIKE — headless 3(a); app.exit() already fired
   const ses = session.defaultSession;
   const privateSes = getPrivateBrowsingSession();
   const browsingSessions = [ses, privateSes];
@@ -2105,6 +2276,8 @@ app.whenReady().then(async () => {
     await setupAdBlocker(ses, { enabled: settings.getSettings().adblockEnabled });
     attachAdBlockerToSession(privateSes, { enabled: settings.getSettings().adblockEnabled });
   }
+
+  initSpikePackaging(); // SPIKE (1Password fill feasibility) — fire-and-forget, gated on BLANC_1P_SPIKE
 
   // Per-tab blocked-request counter. `request.tabId` is the webContents id
   // of the frame the request came from.
