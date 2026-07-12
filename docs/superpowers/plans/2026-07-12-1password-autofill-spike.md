@@ -586,11 +586,14 @@ op run --env-file=.env.1password --no-masking -- env BLANC_1P_ACCOUNT="<your-acc
 Verify against the spec's manual matrix, reading the `[1p-spike]` log lines in the terminal:
 - `https://github.com/login` (matching login) → `⌥⌘P` → Touch ID (first use per ~10-min SDK session) → **both fields populate and retain their values**; log `filled user+pass`. A second `⌥⌘P` within the session fills with no prompt.
 - Two matching logins → native chooser → pick fills; **Cancel** → `chooser-cancel`, no fill.
-- No match → `no-match`, no-op. `blanc://settings/`, `file://…`, a blank new tab → `non-http-noop`.
-- **Double-press fast** → only one flow runs (keyDown + `!isAutoRepeat` + single-flight).
+- No match → `no-match`, no-op. `blanc://settings/`, `file://…` (page content focused) → `non-http-noop`.
+- A **blank new tab** → safe no-op with **no log line at all**: Blanc parks focus in the address overlay, whose webContents carries no chord listener, so `⌥⌘P` never reaches a tab `wc`. (Clicking into the blank page's content first would surface `non-http-noop`.) Deliberately not "fixed" — the overlay needs no listener for a spike.
+- **Double-press fast** → only one flow runs (keyDown + `!isAutoRepeat` + single-flight); the second press is consumed — no page keystroke, no log.
 - **Reload / cross-doc nav mid-flow** (trigger during the Touch ID prompt, then reload) → `abort-navigated` or `origin-or-focus-mismatch`; nothing written. **SPA `pushState` route change mid-flow** → `abort-url-changed`.
 - **Switch or close the tab/window mid-flow** → `abort-tab-changed` / `abort-window-changed`; nothing written.
 - **Touch ID blur then refocus** → still fills (transient blur alone doesn't abort).
+
+> **Execution record (2026-07-12):** core matrix **passed** — fill+retain (`filled user+pass` on a real login item, values held, no form submission), silent session reuse, single-flight under double-press, `no-match github.com`, blank-tab safe no-op (silent, per above). **Untested** (missing fixtures / un-hittable timing windows): multi-match chooser + Cancel, reload/SPA/tab-switch/window-close mid-auth, Touch ID blur-refocus. Those mid-flow guards stand on code review only — carry them into the spec's Findings (Task 5 Step 6) as untested.
 
 - [ ] **Step 8: Commit**
 
