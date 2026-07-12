@@ -358,3 +358,37 @@ ephemeral, and says so in the private-tab copy.
 opt-out; renderer-side blocking would be bypassable). Revisit if
 [electron/electron#52302](https://github.com/electron/electron/issues/52302)
 lands. Hardware acceptance: F4-6.
+
+## D17 — Encrypted DNS control (F25)
+**Features:** F25
+**Why:** In-app DoH control depends on the platform's network stack.
+
+- **Desktop:** full control via `app.configureHostResolver` (Electron 43,
+  process-wide, applied after `ready`).
+- **Android:** OS-level Private DNS (DoT) exists; per-app DoH control to be
+  assessed at port time.
+- **iOS:** WKWebView exposes no in-app DoH control; encrypted DNS is an OS concern
+  (Settings / configuration profiles). iOS contract: **document and defer to OS**,
+  no in-app control.
+
+**Parity contract:** the *encrypted-DNS control* is desktop-only; the *protection*
+(encrypted DNS when the user configures it) is available on every platform through
+whatever layer that platform provides.
+
+**Status:** Accepted 2026-07-11.
+
+---
+
+## D18 — WebRTC IP-handling control (F26)
+**Features:** F26
+**Why:** WebRTC IP-policy control depends on the engine.
+
+- **Desktop:** `webContents.setWebRTCIPHandlingPolicy` (standard + disable-direct-UDP).
+- **Android:** WebView WebRTC IP-handling support to be assessed at port time.
+- **iOS:** WKWebView exposes no WebRTC IP-handling policy; iOS contract downgrades
+  to **platform default behavior, documented** (no in-app control).
+
+**Parity contract:** the *control* is desktop-first; where a platform can't express
+it, that's a documented capability gap, not a behavioral promise broken.
+
+**Status:** Accepted 2026-07-11.

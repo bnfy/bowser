@@ -4,6 +4,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { pathToFileURL } = require('url');
 const { setupAdBlocker, attachAdBlockerToSession, setAdBlockEnabled, getBlocker } = require('./adblock');
+const { webrtcPolicyFor, hostResolverOptionsFor } = require('./network-privacy');
 const {
   chromeClientHintPlatform,
   chromeClientHintArchitecture,
@@ -904,6 +905,9 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
   tabOrder.push(id);
 
   const wc = view.webContents;
+  // WebRTC IP-handling policy applies per-webContents; this is the single choke
+  // point every tab (fresh or adopted window.open child) passes through.
+  wc.setWebRTCIPHandlingPolicy(webrtcPolicyFor(settings.getSettings().webrtcPolicy));
   if (muted) wc.setAudioMuted(true); // keep the actual audio state in sync with tab.muted
   const syncNavState = () => {
     tab.canGoBack = wc.navigationHistory.canGoBack();
@@ -1939,10 +1943,34 @@ function createMainWindow() {
   });
 }
 
+// Re-apply the current WebRTC policy to every open tab (used when the setting changes).
+function applyWebrtcPolicyToAllTabs() {
+  const policy = webrtcPolicyFor(settings.getSettings().webrtcPolicy);
+  for (const tab of tabs.values()) {
+    tab.view.webContents.setWebRTCIPHandlingPolicy(policy);
+  }
+}
+
+// Last-applied encrypted-DNS values, so onSettingsChanged only reconfigures the
+// resolver + clears its cache when DNS actually changes — the listener fires on
+// every settings write, and clearing the cache mid-session isn't free.
+let lastSecureDns = null;
+let lastSecureDnsTemplate = null;
+
 app.whenReady().then(async () => {
   const ses = session.defaultSession;
   const privateSes = getPrivateBrowsingSession();
   const browsingSessions = [ses, privateSes];
+  // Encrypted DNS (DoH). app.configureHostResolver is process-wide in Electron 43
+  // (an App method) and must run after 'ready'. ONE call covers every session,
+  // including the private-browsing session, so private tabs inherit it by
+  // construction. Deliberately no enableBuiltInResolver — forcing it would move the
+  // Off position off the system resolver on Win/Linux.
+  {
+    lastSecureDns = settings.getSettings().secureDns;
+    lastSecureDnsTemplate = settings.getSettings().secureDnsTemplate;
+    app.configureHostResolver(hostResolverOptionsFor(lastSecureDns, lastSecureDnsTemplate));
+  }
 
   // Enables device-bound Touch ID passkeys in signed macOS builds. Existing
   // iCloud Passwords passkeys remain gated on Apple's browser entitlement.
@@ -2093,6 +2121,18 @@ app.whenReady().then(async () => {
     setAdBlockEnabled(s.adblockEnabled);
     applyTheme();
     applyAppIcon();
+    // WebRTC reapply is unconditional — setWebRTCIPHandlingPolicy is a cheap,
+    // idempotent per-tab call and settings writes are infrequent/user-initiated.
+    applyWebrtcPolicyToAllTabs();
+    if (s.secureDns !== lastSecureDns || s.secureDnsTemplate !== lastSecureDnsTemplate) {
+      lastSecureDns = s.secureDns;
+      lastSecureDnsTemplate = s.secureDnsTemplate;
+      app.configureHostResolver(hostResolverOptionsFor(s.secureDns, s.secureDnsTemplate));
+      // Clear cached lookups on both sessions so the new resolver takes effect without
+      // a restart. clearHostResolverCache returns a promise; Promise.allSettled collects
+      // any rejection so a failed clear can't surface as an unhandled rejection.
+      Promise.allSettled(browsingSessions.map((sess) => sess.clearHostResolverCache()));
+    }
   });
 
   // Profile sync: sync-on-launch if configured, then follow local changes.

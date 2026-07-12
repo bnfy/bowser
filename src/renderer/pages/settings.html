@@ -95,6 +95,41 @@
               </label>
             </div>
 
+            <div class="setting">
+              <div class="label">
+                <span>WebRTC</span>
+                <span class="hint">Limits which network addresses WebRTC may reveal. Standard hides non-default-route and multi-homed addresses.</span>
+              </div>
+              <select id="webrtcPolicy">
+                <option value="standard">Standard — hide non-default addresses</option>
+                <option value="strict">Disable direct UDP — for proxy users; may break or degrade some video calls</option>
+              </select>
+            </div>
+
+            <div class="setting">
+              <div class="label">
+                <span>Encrypted DNS</span>
+                <span class="hint">Encrypts DNS lookups between Blanc and the chosen resolver. It does not hide the sites you visit from your network, and it makes the resolver a party you trust. Automatic does not guarantee encryption. Strict providers may block captive-portal login pages — switch to Automatic to get through.</span>
+              </div>
+              <select id="secureDns">
+                <option value="auto">Automatic — upgrade when available (may fall back to unencrypted)</option>
+                <option value="off">Off — use the system resolver (best with a VPN's own DNS)</option>
+                <option value="cloudflare">Cloudflare — unfiltered</option>
+                <option value="quad9">Quad9 — blocks known-malware domains, validates DNSSEC</option>
+                <option value="mullvad">Mullvad — unfiltered</option>
+                <option value="custom">Custom provider…</option>
+              </select>
+            </div>
+
+            <div class="setting" id="secureDnsCustomRow" hidden>
+              <div class="label">
+                <span>Custom DoH template</span>
+                <span class="hint">An https:// DoH URL (RFC 8484), e.g. https://dns.nextdns.io/&lt;profile&gt;.</span>
+                <span class="hint field-error" id="secureDnsError" hidden>That is not a valid DoH URL — the previous provider is still in use.</span>
+              </div>
+              <input id="secureDnsTemplate" type="url" placeholder="https://your-provider.example/dns-query" />
+            </div>
+
             <div class="group-subsection">
               <h3 class="section-title">Ad-block exceptions</h3>
               <p class="section-hint">

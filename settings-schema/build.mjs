@@ -37,6 +37,12 @@ function genSwift() {
   out += 'public enum BlancThemePreference: String, CaseIterable {\n';
   for (const t of spec.themes) out += `    case ${swiftCase(t)}\n`;
   out += '}\n\n';
+  out += 'public enum BlancWebrtcPolicy: String, CaseIterable {\n';
+  for (const v of spec.webrtcPolicies) out += `    case ${swiftCase(v)}\n`;
+  out += '}\n\n';
+  out += 'public enum BlancSecureDns: String, CaseIterable {\n';
+  for (const v of spec.secureDnsOptions) out += `    case ${swiftCase(v)}\n`;
+  out += '}\n\n';
   out += 'public enum BlancAppIcon: String, CaseIterable {\n';
   for (const i of icons) out += `    case ${swiftCase(i.id)}\n`;
   out += '    public var label: String {\n        switch self {\n';
@@ -50,6 +56,9 @@ function genSwift() {
   out += `    public static let adblockEnabled: Bool = ${spec.defaults.adblockEnabled}\n`;
   out += `    public static let homePage: String = ${JSON.stringify(spec.defaults.homePage)}\n`;
   out += `    public static let theme: BlancThemePreference = .${swiftCase(spec.defaults.theme)}\n`;
+  out += `    public static let webrtcPolicy: BlancWebrtcPolicy = .${swiftCase(spec.defaults.webrtcPolicy)}\n`;
+  out += `    public static let secureDns: BlancSecureDns = .${swiftCase(spec.defaults.secureDns)}\n`;
+  out += `    public static let secureDnsTemplate: String = ${JSON.stringify(spec.defaults.secureDnsTemplate)}\n`;
   out += `    public static let appIcon: BlancAppIcon = .${swiftCase(spec.defaults.appIcon)}\n`;
   out += `    public static let usagePing: Bool = ${spec.defaults.usagePing}\n`;
   out += '    // adblockExceptions defaults to []; supporter defaults to nil (structural).\n}\n';
@@ -65,6 +74,10 @@ function genKotlin() {
   out += spec.searchEngines.map((e) => `    ${upper(e.id)}("${e.id}", ${JSON.stringify(e.label)})`).join(',\n') + ';\n}\n\n';
   out += 'enum class BlancThemePreference(val id: String) {\n';
   out += spec.themes.map((t) => `    ${upper(t)}("${t}")`).join(',\n') + ';\n}\n\n';
+  out += 'enum class BlancWebrtcPolicy(val id: String) {\n';
+  out += spec.webrtcPolicies.map((v) => `    ${upper(v)}("${v}")`).join(',\n') + ';\n}\n\n';
+  out += 'enum class BlancSecureDns(val id: String) {\n';
+  out += spec.secureDnsOptions.map((v) => `    ${upper(v)}("${v}")`).join(',\n') + ';\n}\n\n';
   out += 'enum class BlancAppIcon(val id: String, val label: String, val isSupporterOnly: Boolean) {\n';
   out += icons.map((i) => `    ${upper(i.id)}("${i.id}", ${JSON.stringify(i.label)}, ${i.sup})`).join(',\n') + ';\n}\n\n';
   out += 'object BlancSettingsDefaults {\n';
@@ -72,6 +85,9 @@ function genKotlin() {
   out += `    const val adblockEnabled = ${spec.defaults.adblockEnabled}\n`;
   out += `    const val homePage = ${JSON.stringify(spec.defaults.homePage)}\n`;
   out += `    val theme = BlancThemePreference.${upper(spec.defaults.theme)}\n`;
+  out += `    val webrtcPolicy = BlancWebrtcPolicy.${upper(spec.defaults.webrtcPolicy)}\n`;
+  out += `    val secureDns = BlancSecureDns.${upper(spec.defaults.secureDns)}\n`;
+  out += `    const val secureDnsTemplate = ${JSON.stringify(spec.defaults.secureDnsTemplate)}\n`;
   out += `    val appIcon = BlancAppIcon.${upper(spec.defaults.appIcon)}\n`;
   out += `    const val usagePing = ${spec.defaults.usagePing}\n`;
   out += '    // adblockExceptions defaults to emptyList(); supporter defaults to null (structural).\n}\n';
@@ -95,6 +111,10 @@ function parseSettingsJs() {
   // contain //) so a commented-out entry like `// 'dark'` isn't read as live.
   const themesBlock = (js.match(/const THEMES = \[([^\]]*)\]/)?.[1] ?? '').replace(/\/\/.*$/gm, '');
   const themes = [...themesBlock.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  const webrtcBlock = (js.match(/const WEBRTC_POLICIES = \[([^\]]*)\]/)?.[1] ?? '').replace(/\/\/.*$/gm, '');
+  const webrtcPolicies = [...webrtcBlock.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  const secureDnsBlock = (js.match(/const SECURE_DNS_OPTIONS = \[([^\]]*)\]/)?.[1] ?? '').replace(/\/\/.*$/gm, '');
+  const secureDnsOptions = [...secureDnsBlock.matchAll(/'([^']+)'/g)].map((m) => m[1]);
   const appIcons = pairs(js.match(/const APP_ICON_LABELS = \{([\s\S]*?)\}/)?.[1]);
   const supporterIcons = pairs(js.match(/const SUPPORTER_ICON_LABELS = \{([\s\S]*?)\}/)?.[1]);
   const D = js.match(/const DEFAULTS = \{([\s\S]*?)\n\};/)?.[1] ?? '';
@@ -104,6 +124,9 @@ function parseSettingsJs() {
     adblockEnabled: s(/^\s*adblockEnabled:\s*(true|false)/m),
     homePage: s(/^\s*homePage:\s*'([^']*)'/m),
     theme: s(/^\s*theme:\s*'([^']*)'/m),
+    webrtcPolicy: s(/^\s*webrtcPolicy:\s*'([^']*)'/m),
+    secureDns: s(/^\s*secureDns:\s*'([^']*)'/m),
+    secureDnsTemplate: s(/^\s*secureDnsTemplate:\s*'([^']*)'/m),
     appIcon: s(/^\s*appIcon:\s*'([^']*)'/m),
     usagePing: s(/^\s*usagePing:\s*(true|false)/m),
     adblockExceptionsEmpty: /^\s*adblockExceptions:\s*\[\]/m.test(D),
@@ -112,7 +135,7 @@ function parseSettingsJs() {
   // Every key literally declared in DEFAULTS (line-anchored, so // comments are
   // excluded) — used to catch keys the schema doesn't know about.
   const defaultKeys = [...D.matchAll(/^\s*(\w+):/gm)].map((m) => m[1]);
-  return { engines, themes, appIcons, supporterIcons, defaults, defaultKeys };
+  return { engines, themes, webrtcPolicies, secureDnsOptions, appIcons, supporterIcons, defaults, defaultKeys };
 }
 
 function check() {
@@ -123,6 +146,8 @@ function check() {
 
   cmp('searchEngines', js.engines, spec.searchEngines);
   cmp('themes', js.themes, spec.themes);
+  cmp('webrtcPolicies', js.webrtcPolicies, spec.webrtcPolicies);
+  cmp('secureDnsOptions', js.secureDnsOptions, spec.secureDnsOptions);
   cmp('appIcons', js.appIcons, spec.appIcons);
   cmp('supporterIcons', js.supporterIcons, spec.supporterIcons);
 
@@ -144,6 +169,9 @@ function check() {
   eq('adblockEnabled', jd.adblockEnabled, String(d.adblockEnabled));
   eq('homePage', jd.homePage, d.homePage);
   eq('theme', jd.theme, d.theme);
+  eq('webrtcPolicy', jd.webrtcPolicy, d.webrtcPolicy);
+  eq('secureDns', jd.secureDns, d.secureDns);
+  eq('secureDnsTemplate', jd.secureDnsTemplate, d.secureDnsTemplate);
   eq('appIcon', jd.appIcon, d.appIcon);
   eq('usagePing', jd.usagePing, String(d.usagePing));
   if (!jd.adblockExceptionsEmpty) problems.push('defaults.adblockExceptions: settings.js is not []');

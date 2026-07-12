@@ -143,6 +143,10 @@ function install(refs) {
     searchEngine() { return settings.getSettings().searchEngine; },
     setAppIcon(x) { settings.setSettings({ appIcon: x }); },
     appIcon() { return settings.getSettings().appIcon; },
+    secureDns() { return settings.getSettings().secureDns; },
+    secureDnsTemplate() { return settings.getSettings().secureDnsTemplate; },
+    webrtcPolicy() { return settings.getSettings().webrtcPolicy; },
+    setSecureDns(dns, template = '') { settings.setSettings({ secureDns: dns, secureDnsTemplate: template }); },
     clearSupporter() { settings.setSupporter(null); },
     addException(h) {
       const cur = settings.getSettings().adblockExceptions;

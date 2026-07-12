@@ -24,6 +24,20 @@ public enum BlancThemePreference: String, CaseIterable {
     case dark
 }
 
+public enum BlancWebrtcPolicy: String, CaseIterable {
+    case standard
+    case strict
+}
+
+public enum BlancSecureDns: String, CaseIterable {
+    case auto
+    case off
+    case cloudflare
+    case quad9
+    case mullvad
+    case custom
+}
+
 public enum BlancAppIcon: String, CaseIterable {
     case paper
     case ink
@@ -64,6 +78,9 @@ public struct BlancSettingsDefaults {
     public static let adblockEnabled: Bool = true
     public static let homePage: String = ""
     public static let theme: BlancThemePreference = .system
+    public static let webrtcPolicy: BlancWebrtcPolicy = .standard
+    public static let secureDns: BlancSecureDns = .auto
+    public static let secureDnsTemplate: String = ""
     public static let appIcon: BlancAppIcon = .paper
     public static let usagePing: Bool = true
     // adblockExceptions defaults to []; supporter defaults to nil (structural).

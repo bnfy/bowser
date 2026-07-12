@@ -839,31 +839,42 @@ In `src/renderer/pages/settings.js`, after the existing simple bindings (theme/s
     const secureDnsTemplate = document.getElementById('secureDnsTemplate');
     const secureDnsError = document.getElementById('secureDnsError');
 
-    // Reflect a persisted-settings snapshot back into the controls, and show the
-    // error only when the user asked for custom but the persisted provider is not
-    // custom (i.e. the main-process guard rejected an invalid template).
-    const applyState = (s, attempted) => {
+    // Reflect an ACCEPTED persisted snapshot into the controls (clears any error).
+    const showAccepted = (s) => {
       secureDns.value = s.secureDns ?? 'auto';
       secureDnsTemplate.value = s.secureDnsTemplate ?? '';
       secureDnsRow.hidden = secureDns.value !== 'custom';
-      const rejected = attempted === 'custom' && secureDns.value !== 'custom';
-      secureDnsError.hidden = !rejected;
-      secureDnsTemplate.setAttribute('aria-invalid', rejected ? 'true' : 'false');
+      secureDnsError.hidden = true;
+      secureDnsTemplate.setAttribute('aria-invalid', 'false');
     };
 
-    // Send the change and re-render from the ACTUAL persisted result (set() now
-    // returns the settings). No client-side DoH validation — the main process is
-    // the single validator, so the UI can never disagree with what was stored.
+    // The main process is the sole validator. Send the change, then render from the
+    // ACTUAL persisted result (set() returns the settings). If the user asked for
+    // custom but it wasn't stored, the guard rejected the template: keep their draft
+    // visible — dropdown on custom, row OPEN, typed text intact — and show the error.
+    // Do NOT snap back to the old provider (that would hide the row and the error and
+    // erase what they typed).
     const commit = async (partial, attempted) => {
       const next = await window.bowserPages.settings.set(partial);
-      applyState(next, attempted);
+      if (attempted === 'custom' && next.secureDns !== 'custom') {
+        secureDns.value = 'custom';
+        secureDnsRow.hidden = false;
+        secureDnsError.hidden = false;
+        secureDnsTemplate.setAttribute('aria-invalid', 'true');
+        return; // leaves secureDnsTemplate.value (the rejected text) untouched
+      }
+      showAccepted(next);
     };
 
-    applyState(settings, null); // initial render from the get() payload
+    showAccepted(settings); // initial render from the get() payload
 
     secureDns.addEventListener('change', () => {
       if (secureDns.value === 'custom') {
-        commit({ secureDns: 'custom', secureDnsTemplate: secureDnsTemplate.value.trim() }, 'custom');
+        secureDnsRow.hidden = false; // reveal the field so they can type
+        secureDnsError.hidden = true; // don't error before they've entered anything
+        const t = secureDnsTemplate.value.trim();
+        if (t) commit({ secureDns: 'custom', secureDnsTemplate: t }, 'custom');
+        // else: wait for the template's own change event to commit + validate
       } else {
         commit({ secureDns: secureDns.value }, secureDns.value);
       }
@@ -1048,8 +1059,9 @@ git commit -m "Add WebRTC + encrypted-DNS sections to the security page"
 ### Task 8: Pre-release cross-platform launch smoke (Linux execution path)
 
 **Files:**
-- Modify: `src/main/test-hook.js` (add `secureDns` / `webrtcPolicy` readers to `globalThis.__blanc`)
-- Create: `test/desktop/dns-smoke.mjs` (standalone Playwright-Electron smoke)
+- Modify: `src/main/test-hook.js` (add `secureDns`/`secureDnsTemplate`/`webrtcPolicy` readers + `setSecureDns` to `globalThis.__blanc`)
+- Create: `test/desktop/dns-smoke.mjs` (standalone Playwright-Electron smoke, isolated profile)
+- Modify: `package.json` (`scripts.test:dns-smoke`)
 - Create: `.github/workflows/prerelease-smoke.yml` (windows-latest + ubuntu-latest)
 
 **Interfaces:**
@@ -1059,46 +1071,77 @@ git commit -m "Add WebRTC + encrypted-DNS sections to the security page"
 
 - [ ] **Step 1: Expose the network-privacy settings on the test hook**
 
-In `src/main/test-hook.js`, in the `globalThis.__blanc = { ... }` object (near the other settings readers like `adblockEnabled()` at line 141), add:
+In `src/main/test-hook.js`, in the `globalThis.__blanc = { ... }` object (near the other settings readers like `adblockEnabled()` at line 141), add readers plus a setter so the smoke can drive live DoH transitions (which fire the Task 4 `onSettingsChanged` listener → `app.configureHostResolver` + cache clear):
 
 ```js
     secureDns() { return settings.getSettings().secureDns; },
     secureDnsTemplate() { return settings.getSettings().secureDnsTemplate; },
     webrtcPolicy() { return settings.getSettings().webrtcPolicy; },
+    setSecureDns(dns, template = '') { settings.setSettings({ secureDns: dns, secureDnsTemplate: template }); },
 ```
 
 - [ ] **Step 2: Write the smoke script**
 
-Create `test/desktop/dns-smoke.mjs` (models the harness's `_electron.launch` + `BLANC_TEST=1` from `test/desktop/support/hooks.js`):
+Create `test/desktop/dns-smoke.mjs`. It (a) launches in an **isolated throwaway profile** (`mkdtempSync` + `--user-data-dir`, like `test/desktop/support/hooks.js:21`) so it never reads the developer's real settings, and (b) actually exercises DoH via `session.resolveHost()` — proving secure mode *works* on this platform (the core Linux question) and that a strict unreachable resolver *fails closed*, not just that a default value is stored:
 
 ```js
-// Headless launch smoke: proves the app starts and app.configureHostResolver ran
-// without throwing on this platform, and that the network-privacy defaults are live.
-// Run by .github/workflows/prerelease-smoke.yml on windows-latest + ubuntu-latest.
+// Cross-platform DoH launch smoke. Proves: the app starts (no configureHostResolver
+// throw), defaults are live, Cloudflare secure DoH resolves, and an unreachable strict
+// custom resolver fails closed (no plaintext fallback). Isolated profile — never reads
+// the developer's real settings. Run by .github/workflows/prerelease-smoke.yml.
 import { _electron } from 'playwright';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 
+const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'blanc-dns-smoke-'));
 const app = await _electron.launch({
-  args: [path.resolve('.')],
+  args: [path.resolve('.'), `--user-data-dir=${userDataDir}`],
   env: { ...process.env, BLANC_TEST: '1' },
 });
+
+// Resolve a host through the default session's Chromium resolver, which honors the
+// process-wide app.configureHostResolver config. Playwright passes the Electron module
+// as the FIRST callback arg and the supplied value SECOND (so no require() needed).
+// true = resolved, false = failed.
+const canResolve = (host) => app.evaluate(async ({ session }, h) => {
+  try { await session.defaultSession.resolveHost(h); return true; } catch { return false; }
+}, host);
+// After a DNS setting change, app.configureHostResolver has already run synchronously
+// inside the settings listener; await a cache clear (deterministic — not a fixed sleep)
+// so the next probe uses the new resolver.
+const clearDnsCache = () => app.evaluate(async ({ session }) => {
+  await session.defaultSession.clearHostResolverCache();
+});
+
 try {
-  // Wait for the main window (proves startup didn't crash — a configureHostResolver
-  // throw in the ready handler would prevent this).
-  await app.firstWindow();
-  const dns = await app.evaluate(() => globalThis.__blanc.secureDns());
-  const webrtc = await app.evaluate(() => globalThis.__blanc.webrtcPolicy());
-  assert.equal(dns, 'auto', `expected default secureDns=auto, got ${dns}`);
-  assert.equal(webrtc, 'standard', `expected default webrtcPolicy=standard, got ${webrtc}`);
-  console.log(`dns-smoke OK on ${process.platform}: secureDns=${dns} webrtcPolicy=${webrtc}`);
+  await app.firstWindow(); // startup didn't crash (a ready-handler throw would prevent this)
+
+  assert.equal(await app.evaluate(() => globalThis.__blanc.secureDns()), 'auto', 'default secureDns should be auto');
+  assert.equal(await app.evaluate(() => globalThis.__blanc.webrtcPolicy()), 'standard', 'default webrtcPolicy should be standard');
+
+  // Secure mode WORKS here without enableBuiltInResolver (the Linux question).
+  await app.evaluate(() => globalThis.__blanc.setSecureDns('cloudflare'));
+  await clearDnsCache();
+  assert.ok(await canResolve('example.com'), 'Cloudflare secure DoH should resolve example.com');
+
+  // Strict custom FAILS CLOSED — unreachable resolver, distinct host to dodge any cache.
+  await app.evaluate(() => globalThis.__blanc.setSecureDns('custom', 'https://127.0.0.1:9/dns-query'));
+  await clearDnsCache();
+  assert.ok(!(await canResolve('cloudflare.com')), 'unreachable strict custom DoH must fail closed');
+
+  console.log(`dns-smoke OK on ${process.platform}`);
 } finally {
   await app.close();
+  fs.rmSync(userDataDir, { recursive: true, force: true });
 }
 ```
 
 Add an npm script to `package.json` (`scripts`): `"test:dns-smoke": "node test/desktop/dns-smoke.mjs"`.
+
+Note: the positive Cloudflare assertion needs outbound HTTPS to `cloudflare-dns.com` (GitHub runners have it). If it proves flaky in a restricted network, gate it on reachability rather than deleting it — the fail-closed assertion (which needs no network) is the one that must never be dropped.
 
 - [ ] **Step 3: Add the CI workflow**
 
@@ -1112,10 +1155,13 @@ name: Pre-release smoke
 # cross-platform execution path for the network-privacy DoH config (see the M2+M3 plan).
 on:
   workflow_dispatch:
-  pull_request:
+  push:
+    branches: [main]
     paths:
       - 'src/main/**'
       - 'test/desktop/**'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/prerelease-smoke.yml'
 
 permissions:
@@ -1135,10 +1181,10 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: DNS/WebRTC launch smoke (Linux, headless)
+      - name: DNS launch smoke (Linux, headless)
         if: runner.os == 'Linux'
         run: xvfb-run -a npm run test:dns-smoke
-      - name: DNS/WebRTC launch smoke (Windows)
+      - name: DNS launch smoke (Windows)
         if: runner.os == 'Windows'
         run: npm run test:dns-smoke
 ```
@@ -1150,23 +1196,34 @@ Locally the smoke runs headed but still passes:
 ```bash
 npm run test:dns-smoke
 ```
-Expected: `dns-smoke OK on darwin: secureDns=auto webrtcPolicy=standard`, exit 0.
+Expected: `dns-smoke OK on darwin`, exit 0.
 
 ```bash
 git status --short   # expect test-hook.js, dns-smoke.mjs, prerelease-smoke.yml, package.json
 git add src/main/test-hook.js test/desktop/dns-smoke.mjs .github/workflows/prerelease-smoke.yml package.json
-git commit -m "Add pre-release DNS/WebRTC launch smoke (Linux + Windows CI)"
+git commit -m "Add pre-release DNS launch smoke (Linux + Windows CI)"
 ```
 
-- [ ] **Step 5: Confirm the workflow runs green on both runners**
+- [ ] **Step 5: Push, run the workflow on both runners, and require green**
 
-Because `workflow_dispatch` only works once the workflow file is on the default branch (same constraint as `release-windows-linux.yml`, per CLAUDE.md), the first run happens via the `pull_request` trigger (the commit touches `src/main/**` and the workflow file) or after this lands on `main`. Confirm both the `ubuntu-latest` and `windows-latest` jobs pass before treating Task 4's Linux path as satisfied. A red smoke blocks the release (Task 9 Step 5).
+This checkout commits directly to `main` (no PRs), so the workflow can only run once it's on the default branch — `workflow_dispatch` and the `push`-to-`main` trigger both require that (same constraint as `release-windows-linux.yml`, per CLAUDE.md). Push, then dispatch and watch explicitly:
+
+```bash
+git push origin main   # lands the workflow (the push-on-paths trigger also fires a run)
+REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+gh workflow run prerelease-smoke.yml --repo "$REPO"
+sleep 6
+RUN_ID=$(gh run list --repo "$REPO" --workflow=prerelease-smoke.yml --limit 1 --json databaseId --jq '.[0].databaseId')
+gh run watch "$RUN_ID" --repo "$REPO" --exit-status
+```
+`--exit-status` makes `gh run watch` return non-zero if either matrix job fails. **Both** `ubuntu-latest` and `windows-latest` must pass before Task 9's release. If the Linux job fails on the *Cloudflare-resolves* assertion, secure DoH needs `enableBuiltInResolver` on Linux — apply the Task 4 Step 4 testing-gated change, commit, and re-run. If it fails on *fail-closed*, the strict wiring is wrong — fix before proceeding. A red smoke blocks the release (Task 9 Step 7).
 
 ---
 
 ### Task 9: Version bump, full verification, and release (user-gated)
 
 **Files:**
+- Modify: `scripts/release.sh` (require `HEAD == origin/main`; bind the tag to the built commit)
 - Modify: `package.json` **and** `package-lock.json` (`version` 0.16.0 → 0.17.0 in both — the lockfile records it at its top level and at `packages[""]`)
 
 **Interfaces:** none. This task cuts a real public release — its final step is gated on explicit user go-ahead, like M1's deploy.
@@ -1175,7 +1232,65 @@ Because `workflow_dispatch` only works once the workflow file is on the default 
 
 Per CLAUDE.md, releasing is the moment to consider bumping `electron` (it tracks Chromium stable, which can't be swapped out of a running app). Check whether a newer 43.x/stable is available and worth taking. If bumping, do it as its own commit and re-run the full suite (the verified API facts in this plan are for 43.1.0 — re-verify `configureHostResolver`/`setWebRTCIPHandlingPolicy` still match if you move a major version). If not bumping, note that explicitly and proceed. Do not bump silently.
 
-- [ ] **Step 2: Bump the app version (both manifest files)**
+**If you bump Electron, the Task 8 smoke must be re-validated on the new version.** The smoke (Task 8) runs before this step, so a later Electron bump would otherwise ship untested. The workflow's `push` paths now include `package.json`/`package-lock.json`, so pushing the bump commit re-triggers the smoke automatically — require it green again (re-run Task 8 Step 5) before release. Because a bump changes what the smoke validates, the cleanest option is to make the Electron decision *before* Task 8 whenever a bump is likely.
+
+- [ ] **Step 2: Harden `release.sh` to tag the exact built commit**
+
+`gh release create <tag>` creates a *missing* tag from the **remote** default-branch HEAD, not local `HEAD` — so an unpushed local release commit would build macOS assets from new code while the tag (and the Windows/Linux CI that checks it out) uses older remote code. Close this in `scripts/release.sh`. After the dirty-source check (the `Release sources are dirty` block ending ~line 57), add:
+
+```bash
+# The tag must point at exactly the commit we build. gh release create makes a
+# missing tag from the REMOTE default-branch HEAD, so require local HEAD to be
+# pushed and bind the tag to it explicitly (see --target below).
+git fetch origin --quiet
+LOCAL_HEAD="$(git rev-parse HEAD)"
+if [ "$LOCAL_HEAD" != "$(git rev-parse origin/main)" ]; then
+  echo "HEAD is not on origin/main. Push the release commit first: git push origin main" >&2
+  exit 1
+fi
+```
+
+Then change the release-create line (currently line 113) to bind the tag to that commit **and lead with an explicit privacy-boundary disclosure**. `--generate-notes` alone lists commit/PR titles, not the DoH boundary the spec requires in release notes (F25: destination IPs stay visible, provider choice is a trust decision, Automatic can fall back to plaintext). Compose notes = boundary paragraph + generated changelog, and pass them via `--notes-file` (do **not** combine `--notes*` with `--generate-notes` — gh ignores the generated notes when explicit notes are given, so generate them into the file first):
+
+```bash
+# Explicit privacy-boundary disclosure required by the F25 spec, prepended to the
+# auto-generated changelog. Fails CLOSED: if the changelog can't be generated we
+# abort BEFORE publishing an immutable release with incomplete notes.
+NOTES_FILE="$(mktemp)"
+trap 'rm -f "$NOTES_FILE"' EXIT
+# gh api returns the same changelog --generate-notes would. Require it to succeed
+# AND be non-empty — no `|| true`, so a transient API failure stops the release.
+if ! GENERATED="$(gh api "repos/$REPO/releases/generate-notes" -f tag_name="$TAG" -f target_commitish="$LOCAL_HEAD" --jq .body)" || [ -z "$GENERATED" ]; then
+  echo "Failed to generate the release changelog — aborting before publish." >&2
+  exit 1
+fi
+{
+  echo "### Network privacy (v$VERSION)"
+  echo
+  echo "This release adds WebRTC leak protection and optional encrypted DNS (DoH)."
+  echo "Encrypted DNS hides your DNS lookups from the network *in transit* to the"
+  echo "resolver you choose — it does **not** hide the sites you visit (destination"
+  echo "IPs remain visible to your network), and choosing a provider is a trust"
+  echo "decision. Automatic mode upgrades opportunistically and can fall back to"
+  echo "unencrypted DNS; only the named-provider and custom positions are strict."
+  echo
+  echo "---"
+  echo
+  printf '%s\n' "$GENERATED"
+} > "$NOTES_FILE"
+gh release create "$TAG" "${ASSETS[@]}" --repo "$REPO" --title "$VERSION" --target "$LOCAL_HEAD" --notes-file "$NOTES_FILE"
+```
+
+(The `trap ... EXIT` removes `NOTES_FILE` on any exit — success, the abort above, or a later failure. Note this assignment-in-`if` pattern catches the failure even under `set -e`, where a plain `X="$(failing-cmd)"` would not abort.)
+
+Then syntax-check the edited script before relying on it at release time (a slip here wouldn't surface until `npm run release`):
+
+```bash
+bash -n scripts/release.sh && echo "release.sh syntax OK"
+```
+Expected: `release.sh syntax OK`, exit 0.
+
+- [ ] **Step 3: Bump the app version (both manifest files)**
 
 Use npm so `package.json` and `package-lock.json` are updated together (a hand-edit of `package.json` alone leaves the lockfile at 0.16.0, and `release.sh` treats both as release-source metadata):
 
@@ -1188,7 +1303,7 @@ Expected: prints `v0.17.0`; `git status --short` now shows both `package.json` a
 grep -c '"version": "0.17.0"' package-lock.json   # expect >= 2 (top-level + packages[""])
 ```
 
-- [ ] **Step 3: Full pre-release verification**
+- [ ] **Step 4: Full pre-release verification**
 
 ```bash
 npm run test:unit
@@ -1197,45 +1312,60 @@ npm run test:acceptance:dry
 ```
 Expected: all three exit 0. If any fails, stop and fix before releasing.
 
-Also confirm the **cross-platform release prerequisites** are met (these gate the release, not just the bump):
-- macOS DoH verification (Task 4 Step 4) done on this machine.
-- Windows DoH verification (Task 4 Step 4) done on Parallels/hardware.
-- The Task 8 pre-release smoke is **green on both `ubuntu-latest` and `windows-latest`**.
-
-If any is missing, do not release — complete it first (or, for a red smoke, fix the regression it caught).
-
-- [ ] **Step 4: Commit the bump**
+- [ ] **Step 5: Commit the release-source changes**
 
 ```bash
-git status --short   # expect package.json AND package-lock.json
-git add package.json package-lock.json
+git status --short   # expect scripts/release.sh, package.json, package-lock.json
+git add scripts/release.sh package.json package-lock.json
 git commit -m "Release v0.17.0: WebRTC leak protection + encrypted DNS"
 ```
 
-- [ ] **Step 5: Ask the user for the release go-ahead**
+- [ ] **Step 6: Push and verify remote parity (release-critical)**
 
-`npm run release` builds, signs, notarizes, publishes a GitHub release, and dispatches the Windows/Linux CI — a public, irreversible, immutable release. Confirm with the user before running it. Do not proceed on silence. If the user defers, still run the tag cleanup in Step 8 and stop.
+The release tags the remote HEAD, so every implementation commit from Tasks 1–8 **and** this bump must be on `origin/main` before releasing. Re-fetch first (shared checkout), reconcile if another session pushed, then push and confirm parity:
 
-- [ ] **Step 6: Cut the release (only after go-ahead)**
+```bash
+git fetch origin
+git rev-list --count HEAD..origin/main   # if > 0, another session pushed — rebase onto origin/main, do NOT force-push
+git push origin main
+if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ]; then echo "PARITY OK"; else echo "NOT IN SYNC — stop" >&2; exit 1; fi
+```
+Expected: `PARITY OK` (the guard `exit 1`s on mismatch, so automation can't continue past a divergence). The hardened `release.sh` (Step 2) will independently refuse to release if this doesn't hold — this step makes it pass rather than fail at release time.
+
+- [ ] **Step 7: Confirm the cross-platform release prerequisites**
+
+These gate the release (not just the bump):
+- macOS DoH verification (Task 4 Step 4) done on this machine.
+- Windows DoH verification (Task 4 Step 4) done on Parallels/hardware.
+- The Task 8 pre-release smoke is **green on both `ubuntu-latest` and `windows-latest`** (see Task 8 Step 5).
+
+If any is missing, do not release — complete it first (or, for a red smoke, fix the regression it caught).
+
+- [ ] **Step 8: Ask the user for the release go-ahead**
+
+`npm run release` builds, signs, notarizes, publishes a GitHub release, and dispatches the Windows/Linux CI — a public, irreversible, immutable release. Confirm with the user before running it. Do not proceed on silence. If the user defers, still run the tag cleanup in Step 11 and stop.
+
+- [ ] **Step 9: Cut the release (only after go-ahead)**
 
 ```bash
 npm run release
 ```
-Expected: `scripts/release.sh` runs clean (dirty-tree refusal won't trigger — all work is committed), builds the signed+notarized macOS artifacts, creates the GitHub release, and dispatches `release-windows-linux.yml`. Watch it to completion.
+Expected: `scripts/release.sh` runs clean (dirty-tree and HEAD-parity guards both pass — all work is committed and pushed), builds the signed+notarized macOS artifacts, creates the GitHub release bound to the pushed commit, and dispatches `release-windows-linux.yml`. Watch it to completion.
 
-- [ ] **Step 7: Sync and deploy the site (security-page sections + regenerated changelog)**
+- [ ] **Step 10: Sync and deploy the site (security-page sections + regenerated changelog)**
 
-`release.sh` seds the site version metadata and regenerates the changelog. Commit those, then deploy the site (which now carries the Task 7 security-page sections):
+`release.sh` seds the site version metadata and regenerates the changelog. Commit + push those, then deploy the site (which now carries the Task 7 security-page sections):
 
 ```bash
 git status --short
 git add site/index.html site/sitemap.xml site/changelog.html site/changelog.xml
 git commit -m "Sync site changelog + version metadata for v0.17.0"
+git push origin main
 npx wrangler pages deploy site --project-name=blancbrowser
 ```
 Verify live (cache-busted): `curl -s "https://blancbrowser.com/features/security?cb=$RANDOM" | grep -c "on the network"` → ≥1.
 
-- [ ] **Step 8: Remove the base tag**
+- [ ] **Step 11: Remove the base tag**
 
 ```bash
 git tag -d m2m3-base
@@ -1249,8 +1379,9 @@ git tag -d m2m3-base
 - **Electron API (verified against `electron.d.ts`):** `app.configureHostResolver` is process-wide (App method, line 1044), called once after `ready`; `clearHostResolverCache` is per-Session (line 12902) and its promises are collected with `Promise.allSettled`. `enableBuiltInResolver` is deliberately NOT forced (it would break the Off/system-resolver contract on Win/Linux) — its addition is a testing-gated, per-mode decision in Task 4 Step 4.
 - **Strict DNS never falls back:** enforced in the settings layer (setSettings reject + getSettings coerce, Task 2 Step 2), so `hostResolverOptionsFor`'s `custom` branch is unconditionally strict-secure — verified by unit test (Task 1) and manual test (Task 5 Step 3).
 - **Capability guards:** both new controls are wrapped in `supports(...)` with `.remove()` fallbacks (Task 5 Step 2), matching `homePage`/`appIcon`, so D17/D18's "no iOS controls" holds by construction.
-- **Lockfile:** the version bump uses `npm version --no-git-tag-version` and stages `package.json` + `package-lock.json` together (Task 9 Steps 2, 4).
-- **Cross-platform verification is achievable, not hand-waved:** macOS (dev machine) + Windows (Parallels/hardware) manual DoH checks, Linux via the Task 8 launch smoke on `ubuntu-latest` + a CI-AppImage spot-check — all release prerequisites (Task 9 Step 5).
+- **Lockfile:** the version bump uses `npm version --no-git-tag-version` and stages `package.json` + `package-lock.json` together (Task 9 Steps 3, 5).
+- **Cross-platform verification is achievable, not hand-waved:** macOS (dev machine) + Windows (Parallels/hardware) manual DoH checks, Linux via the Task 8 launch smoke on `ubuntu-latest` + a CI-AppImage spot-check — all release prerequisites (Task 9 Step 7). The smoke tests real DoH **behavior** (isolated profile; Cloudflare secure-resolves + unreachable-custom fails-closed via `session.resolveHost`), not just a stored default.
+- **Release tags the built commit:** `release.sh` is hardened to require `HEAD == origin/main` and pass `--target "$LOCAL_HEAD"` to `gh release create` (Task 9 Step 2), and the plan pushes + verifies parity before releasing (Task 9 Step 6) — so macOS assets, the tag, and the Windows/Linux CI can never diverge in source.
 - **Validator hardened:** `isValidDohTemplate` rejects unmatched raw braces (Task 1), and the strict-custom state machine (`reconcileSecureDnsWrite`/`coerceSecureDnsRead`) is unit-tested for valid/invalid/atomic/clearing/corrupted cases (Task 1); the renderer holds no duplicate validator — it round-trips through the main process (Task 5).
 - **Honesty rules** are enforced with a strengthened grep gate (Task 7 Step 3, now catching "closes a … leak") and baked into every label/copy string; "strict" is only an internal enum id, never a user-facing word; the WebRTC claim is "reduces one proxy-bypass risk", never "closes the leak".
 - **Type/name consistency:** `webrtcPolicyFor`, `hostResolverOptionsFor`, `isValidDohTemplate`, `applyWebrtcPolicyToAllTabs`, `lastSecureDns`/`lastSecureDnsTemplate`, and the setting keys `webrtcPolicy`/`secureDns`/`secureDnsTemplate` are used identically across Tasks 1–5.

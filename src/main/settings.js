@@ -1,4 +1,5 @@
 const { JsonStore } = require('./store');
+const { isValidDohTemplate, reconcileSecureDnsWrite, coerceSecureDnsRead } = require('./network-privacy');
 
 const SEARCH_ENGINES = {
   duckduckgo: { label: 'DuckDuckGo', url: (q) => `https://duckduckgo.com/?q=${encodeURIComponent(q)}` },
@@ -8,6 +9,10 @@ const SEARCH_ENGINES = {
 };
 
 const THEMES = ['system', 'light', 'dark'];
+
+// Network-privacy enums (bare arrays, like THEMES — build.mjs parses them by name).
+const WEBRTC_POLICIES = ['standard', 'strict'];
+const SECURE_DNS_OPTIONS = ['auto', 'off', 'cloudflare', 'quad9', 'mullvad', 'custom'];
 
 // Keys that sync across devices (see the profile-sync spec). Deliberately
 // excludes appIcon (device-local), usagePing (per-install consent), and
@@ -57,6 +62,10 @@ const DEFAULTS = {
   appIcon: 'paper',
   // Lowercased hostnames, no protocol/path/www. prefix.
   adblockExceptions: [],
+  // Network privacy (device-local — deliberately NOT in SYNCED_KEYS).
+  webrtcPolicy: 'standard',
+  secureDns: 'auto',
+  secureDnsTemplate: '',
   // Anonymous "app launched" ping — see main/telemetry.js. On by default
   // (opt-out in Settings); no browsing data, only version/OS plus a random
   // per-install id used solely to count distinct active users.
@@ -84,6 +93,10 @@ function ensureStore() {
 function getSettings() {
   const data = { ...ensureStore().data };
   if (!isAppIconAllowed(data.appIcon)) data.appIcon = DEFAULTS.appIcon;
+  // Read coercion for a corrupted stored state (hand-edited settings.json): custom
+  // without a valid template reads back as the default, never as plaintext-capable
+  // custom. The setSettings guard prevents a valid user action from producing this.
+  data.secureDns = coerceSecureDnsRead(data.secureDns, data.secureDnsTemplate, DEFAULTS.secureDns);
   return data;
 }
 
@@ -103,6 +116,15 @@ function sanitize(partial) {
   if (typeof partial.usagePing === 'boolean') clean.usagePing = partial.usagePing;
   if (typeof partial.homePage === 'string') clean.homePage = partial.homePage.trim();
   if (THEMES.includes(partial.theme)) clean.theme = partial.theme;
+  if (WEBRTC_POLICIES.includes(partial.webrtcPolicy)) clean.webrtcPolicy = partial.webrtcPolicy;
+  if (SECURE_DNS_OPTIONS.includes(partial.secureDns)) clean.secureDns = partial.secureDns;
+  if (typeof partial.secureDnsTemplate === 'string') {
+    // Accept only an empty string or a valid template. An invalid value is DROPPED
+    // (key omitted from clean) so it can never overwrite a good stored template; the
+    // cross-field guard in setSettings then decides the secureDns transition.
+    const t = partial.secureDnsTemplate.trim();
+    if (t === '' || isValidDohTemplate(t)) clean.secureDnsTemplate = t;
+  }
   if (isAppIconAllowed(partial.appIcon)) clean.appIcon = partial.appIcon;
   if (Array.isArray(partial.adblockExceptions)) {
     clean.adblockExceptions = [
@@ -119,6 +141,17 @@ function sanitize(partial) {
 function setSettings(partial) {
   const s = ensureStore();
   const clean = sanitize(partial);
+  // Strict-custom invariant (F25): an invalid custom transition must not degrade to
+  // plaintext-capable Automatic. reconcileSecureDnsWrite (unit-tested) rejects such a
+  // change, preserving the last valid configuration.
+  if ('secureDns' in clean || 'secureDnsTemplate' in clean) {
+    const dns = reconcileSecureDnsWrite(
+      { secureDns: s.data.secureDns, secureDnsTemplate: s.data.secureDnsTemplate },
+      clean,
+    );
+    clean.secureDns = dns.secureDns;
+    clean.secureDnsTemplate = dns.secureDnsTemplate;
+  }
   const now = Date.now();
   s.update((data) => {
     Object.assign(data, clean);

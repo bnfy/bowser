@@ -348,3 +348,26 @@ From the desktop `DEFAULTS`:
   group, not iCloud-synced), with private-tab passkeys ephemeral per D16.
 - **Acceptance:** On a login form in a Blanc tab, the OS AutoFill affordance offers
   saved credentials; a passkey sign-in invokes the platform authenticator.
+
+## F25 — Encrypted DNS (DoH)
+
+- A Settings → Privacy control chooses how DNS is resolved: **Automatic**
+  (opportunistic upgrade, may fall back to plaintext — no guarantee), **Off**
+  (system resolver — the right choice under a VPN that runs its own DNS), a
+  **named provider** (Cloudflare/Quad9/Mullvad — strict, hard-fail, no plaintext
+  fallback), or a **Custom** RFC8484 template. DoH encrypts lookups between the
+  browser and the chosen resolver; it does not hide destination IPs, and it makes
+  the resolver a trusted party. Applies to normal and private sessions alike.
+- **Acceptance:** With a named provider selected, `one.one.one.one/help` (or the
+  provider's equivalent) reports DoH active; a deliberately-unreachable custom
+  template fails closed rather than silently resolving over plaintext.
+
+## F26 — WebRTC leak protection
+
+- A Settings → Privacy control sets the WebRTC IP-handling policy: **Standard**
+  exposes no addresses beyond the default route's public interface; **Disable
+  direct UDP** additionally stops WebRTC from opening direct UDP paths that bypass
+  an application-level proxy (not relay-only enforcement). Applied to every tab.
+- **Acceptance:** On a WebRTC test page, Standard reveals no local/multi-homed
+  private addresses; with an application proxy configured, Disable-direct-UDP
+  removes direct UDP candidates.

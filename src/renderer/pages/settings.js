@@ -45,6 +45,73 @@
     document.getElementById('homePage')?.closest('.setting')?.remove();
   }
 
+  // --- WebRTC IP-handling policy ---
+  if (supports('webrtcPolicy')) {
+    const webrtcPolicy = document.getElementById('webrtcPolicy');
+    webrtcPolicy.value = settings.webrtcPolicy ?? 'standard';
+    webrtcPolicy.addEventListener('change', () =>
+      window.bowserPages.settings.set({ webrtcPolicy: webrtcPolicy.value }));
+  } else {
+    document.getElementById('webrtcPolicy')?.closest('.setting')?.remove();
+  }
+
+  // --- Encrypted DNS (DoH) ---
+  if (supports('secureDns')) {
+    const secureDns = document.getElementById('secureDns');
+    const secureDnsRow = document.getElementById('secureDnsCustomRow');
+    const secureDnsTemplate = document.getElementById('secureDnsTemplate');
+    const secureDnsError = document.getElementById('secureDnsError');
+
+    // Reflect an ACCEPTED persisted snapshot into the controls (clears any error).
+    const showAccepted = (s) => {
+      secureDns.value = s.secureDns ?? 'auto';
+      secureDnsTemplate.value = s.secureDnsTemplate ?? '';
+      secureDnsRow.hidden = secureDns.value !== 'custom';
+      secureDnsError.hidden = true;
+      secureDnsTemplate.setAttribute('aria-invalid', 'false');
+    };
+
+    // The main process is the sole validator. Send the change, then render from the
+    // ACTUAL persisted result (set() returns the settings). A custom write is REJECTED
+    // when the store didn't take it — either the provider isn't custom, OR (Custom
+    // already active) the submitted template wasn't stored because it was invalid and
+    // sanitize dropped it, leaving the previous valid template in place. Comparing only
+    // the provider would miss that second case: keep the draft visible (dropdown on
+    // custom, row OPEN, typed text intact) and show the error — never snap back.
+    const commit = async (partial, attempted) => {
+      const next = await window.bowserPages.settings.set(partial);
+      const rejected = attempted === 'custom' &&
+        (next.secureDns !== 'custom' || next.secureDnsTemplate !== partial.secureDnsTemplate);
+      if (rejected) {
+        secureDns.value = 'custom';
+        secureDnsRow.hidden = false;
+        secureDnsError.hidden = false;
+        secureDnsTemplate.setAttribute('aria-invalid', 'true');
+        return; // leaves secureDnsTemplate.value (the rejected text) untouched
+      }
+      showAccepted(next);
+    };
+
+    showAccepted(settings); // initial render from the get() payload
+
+    secureDns.addEventListener('change', () => {
+      if (secureDns.value === 'custom') {
+        secureDnsRow.hidden = false; // reveal the field so they can type
+        secureDnsError.hidden = true; // don't error before they've entered anything
+        const t = secureDnsTemplate.value.trim();
+        if (t) commit({ secureDns: 'custom', secureDnsTemplate: t }, 'custom');
+        // else: wait for the template's own change event to commit + validate
+      } else {
+        commit({ secureDns: secureDns.value }, secureDns.value);
+      }
+    });
+    secureDnsTemplate.addEventListener('change', () =>
+      commit({ secureDns: 'custom', secureDnsTemplate: secureDnsTemplate.value.trim() }, 'custom'));
+  } else {
+    document.getElementById('secureDns')?.closest('.setting')?.remove();
+    document.getElementById('secureDnsCustomRow')?.remove();
+  }
+
   // --- Usage ping ---
   if (supports('usagePing')) {
     const usagePing = document.getElementById('usagePing');

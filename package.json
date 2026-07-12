@@ -19,6 +19,7 @@
     "test:oauth:live": "node scripts/oauth-canary.js",
     "test:acceptance:dry": "cucumber-js -c test/desktop/cucumber.mjs -p dry",
     "test:acceptance:desktop": "cucumber-js -c test/desktop/cucumber.mjs -p runnable",
+    "test:dns-smoke": "node test/desktop/dns-smoke.mjs",
     "adblock:build": "node adblock/build.mjs",
     "adblock:check": "node adblock/build.mjs --check",
     "tokens:build": "node tokens/build.mjs",

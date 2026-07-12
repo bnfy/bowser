@@ -8,6 +8,8 @@
     { "id": "brave", "label": "Brave Search" }
   ],
   "themes": ["system", "light", "dark"],
+  "webrtcPolicies": ["standard", "strict"],
+  "secureDnsOptions": ["auto", "off", "cloudflare", "quad9", "mullvad", "custom"],
   "appIcons": [
     { "id": "paper", "label": "Paper" },
     { "id": "ink", "label": "Ink" },
@@ -30,6 +32,9 @@
     "theme": "system",
     "appIcon": "paper",
     "adblockExceptions": [],
+    "webrtcPolicy": "standard",
+    "secureDns": "auto",
+    "secureDnsTemplate": "",
     "usagePing": true,
     "supporter": null
   },
@@ -40,6 +45,9 @@
     { "key": "adblockEnabled", "type": "boolean", "default": true },
     { "key": "homePage", "type": "string", "default": "", "note": "trimmed on write; empty = blanc://newtab" },
     { "key": "theme", "type": "enum", "enum": "themes", "default": "system", "note": "drives nativeTheme.themeSource" },
+    { "key": "webrtcPolicy", "type": "enum", "enum": "webrtcPolicies", "default": "standard", "note": "maps to webContents.setWebRTCIPHandlingPolicy; strict = disable_non_proxied_udp" },
+    { "key": "secureDns", "type": "enum", "enum": "secureDnsOptions", "default": "auto", "note": "app.configureHostResolver secureDnsMode; strict positions hard-fail" },
+    { "key": "secureDnsTemplate", "type": "string", "default": "", "note": "custom DoH RFC8484 template; validated raw (not URL-normalized)" },
     { "key": "appIcon", "type": "enum", "enum": "appIcons+supporterIcons", "default": "paper", "note": "supporter ids allowed only when supporter active; sanitize-on-read == validate-on-write" },
     { "key": "adblockExceptions", "type": "string[]", "default": [], "normalize": "trim, lowercase, strip leading www., dedupe" },
     { "key": "usagePing", "type": "boolean", "default": true },

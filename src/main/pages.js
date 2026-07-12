@@ -144,6 +144,10 @@ function setupPages(hooks = {}) {
   }));
   handle('pages:settings:set', (partial) => {
     settings.setSettings(partial ?? {});
+    // Echo the persisted non-secret projection so the renderer can reflect the
+    // actual stored state (e.g. a rejected strict-custom DNS transition). Never
+    // raw getSettings() — that includes the supporter key.
+    return clientSettings();
   });
   handle('pages:settings:supporter-activate', (key) => supporter.activateSupporter(key));
 

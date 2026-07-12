@@ -16,6 +16,20 @@ enum class BlancThemePreference(val id: String) {
     DARK("dark");
 }
 
+enum class BlancWebrtcPolicy(val id: String) {
+    STANDARD("standard"),
+    STRICT("strict");
+}
+
+enum class BlancSecureDns(val id: String) {
+    AUTO("auto"),
+    OFF("off"),
+    CLOUDFLARE("cloudflare"),
+    QUAD9("quad9"),
+    MULLVAD("mullvad"),
+    CUSTOM("custom");
+}
+
 enum class BlancAppIcon(val id: String, val label: String, val isSupporterOnly: Boolean) {
     PAPER("paper", "Paper", false),
     INK("ink", "Ink", false),
@@ -35,6 +49,9 @@ object BlancSettingsDefaults {
     const val adblockEnabled = true
     const val homePage = ""
     val theme = BlancThemePreference.SYSTEM
+    val webrtcPolicy = BlancWebrtcPolicy.STANDARD
+    val secureDns = BlancSecureDns.AUTO
+    const val secureDnsTemplate = ""
     val appIcon = BlancAppIcon.PAPER
     const val usagePing = true
     // adblockExceptions defaults to emptyList(); supporter defaults to null (structural).

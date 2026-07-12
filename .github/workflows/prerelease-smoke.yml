@@ -1,0 +1,39 @@
+name: Pre-release smoke
+
+# Launches the real app headlessly on Linux and Windows with BLANC_TEST=1 and asserts
+# it starts and app.configureHostResolver ran without throwing — the pre-release
+# cross-platform execution path for the network-privacy DoH config (see the M2+M3 plan).
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/main/**'
+      - 'test/desktop/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/prerelease-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: DNS launch smoke (Linux, headless)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:dns-smoke
+      - name: DNS launch smoke (Windows)
+        if: runner.os == 'Windows'
+        run: npm run test:dns-smoke

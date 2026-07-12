@@ -161,6 +161,8 @@ button {
 button:hover { color: var(--text); border-color: var(--text-dim); }
 button.danger:hover { color: var(--on-danger); background: var(--danger); border-color: var(--danger); }
 
+.hint.field-error { color: var(--danger); }
+
 .spacer { flex: 1 1 auto; }
 
 .row-list { display: flex; flex-direction: column; }

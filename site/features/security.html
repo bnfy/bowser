@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Blanc Browser Security — Private by Architecture</title>
-<meta name="description" content="How Blanc is built for privacy: sandboxed pages, network-level ad and tracker blocking, no extension runtime, encrypted sync, and a usage ping you can switch off.">
+<meta name="description" content="How Blanc is built for privacy: sandboxed pages, network-level ad and tracker blocking, no extension runtime, encrypted sync, WebRTC leak protection, optional encrypted DNS, and a usage ping you can switch off.">
 <meta name="robots" content="index,follow,max-image-preview:large">
 <meta name="theme-color" content="#ffffff">
 <meta name="application-name" content="Blanc Browser">
@@ -68,6 +68,13 @@
       <article><h3>Passkeys live in the Secure Enclave.</h3><p>On a Mac with Touch ID, Blanc creates device-bound passkeys inside Apple&rsquo;s Secure Enclave. The private key never leaves the chip, and Blanc is signed with an Apple-issued Developer ID and provisioned to hold its own keychain access group. macOS only for now.</p></article>
       <article><h3>Permissions ask first.</h3><p>Camera, microphone, location, notifications — each request raises a Blanc prompt, and each decision is remembered for that site. Decisions made in a private tab are never written to disk.</p></article>
       <article><h3>A ping per launch, and you can turn it off.</h3><p>When the packaged app launches, it sends a small pseudonymous usage ping; the <a href="../privacy.html">privacy policy</a> lists every field. None of them include browsing data, and the random install ID identifies the installation, not you. Settings turns it off with one switch.</p></article>
+    </div>
+  </section>
+  <section class="feature-copy-grid" aria-labelledby="security-network-title">
+    <div><p class="section-kicker">on the network</p><h2 id="security-network-title">Respecting the VPN you already chose.</h2></div>
+    <div class="feature-copy-list">
+      <article><h3>WebRTC stays in its lane.</h3><p>WebRTC can reveal network addresses that sidestep a proxy. Blanc limits it to your default connection by default, and an optional &ldquo;disable direct UDP&rdquo; mode blocks a specific direct-UDP path around an application proxy. It is not a promise of anonymity — it reduces one well-known proxy-bypass risk.</p></article>
+      <article><h3>DNS you can encrypt — or hand to your VPN.</h3><p>Blanc can send DNS lookups over an encrypted connection (DoH) to Cloudflare, Quad9, Mullvad, or a provider you name — or stay out of the way and leave DNS to your system or VPN. Encryption hides your lookups from the network in transit; it does not hide the sites themselves, and it makes the resolver a party you choose to trust. Automatic mode upgrades opportunistically and is not a guarantee.</p></article>
     </div>
   </section>
   <aside class="truth-note" aria-labelledby="security-note-title"><p class="section-kicker">good to know</p><h2 id="security-note-title">Private by architecture, not by magic.</h2><p>No browser can make you anonymous on its own. Blanc reduces what runs inside the browser and what leaves your device; it does not hide your traffic from your network, your employer, or your internet provider. If you use a VPN you trust, Blanc runs quietly underneath it.</p><a class="text-link" href="../privacy.html" data-track="feature_cta_click" data-feature="security" data-cta-position="truth-note">Read the full privacy policy <span aria-hidden="true">↗</span></a></aside>
