@@ -78,4 +78,75 @@ function buildFillScript({ expectedURL, expectedTimeOrigin, username, password }
   })();`;
 }
 
-module.exports = { matchesHost, buildFillScript };
+const { app } = require('electron');
+
+let cachedClient = null;
+
+/** Lazily construct + cache the SDK client via the native desktop-app bridge
+ * (DesktopAuth → SharedLibCore → dlopen of 1Password's libop_sdk_ipc_client).
+ * BLANC_1P_ACCOUNT is required and never committed. The cache is discarded
+ * only on an unrecoverable failure — the SDK re-authorizes an ordinary
+ * ~10-min session expiry itself. */
+async function getClient() {
+  if (cachedClient) return cachedClient;
+  const account = process.env.BLANC_1P_ACCOUNT;
+  if (!account) throw new Error('BLANC_1P_ACCOUNT is not set');
+  const { createClient, DesktopAuth } = require('@1password/sdk'); // lazy — never at module scope
+  cachedClient = await createClient({
+    auth: new DesktopAuth(account),
+    integrationName: 'Blanc',
+    integrationVersion: app.getVersion(),
+  });
+  return cachedClient;
+}
+
+/** Match Login items against `expectedHost` on OVERVIEWS only — no secret is
+ * decrypted here. Skips a vault that can't be listed (logged by caller). */
+async function findLogins(expectedHost) {
+  const client = await getClient();
+  const matches = [];
+  const vaults = await client.vaults.list();
+  for (const vault of vaults) {
+    let overviews;
+    try {
+      overviews = await client.items.list(vault.id);
+    } catch {
+      continue; // inaccessible vault — skip, don't abort the whole search
+    }
+    for (const ov of overviews) {
+      if (ov.category !== 'Login') continue;
+      const urls = Array.isArray(ov.websites) ? ov.websites.map((w) => w.url) : [];
+      if (matchesHost(urls, expectedHost)) {
+        matches.push({ vaultId: vault.id, itemId: ov.id, title: ov.title });
+      }
+    }
+  }
+  return matches;
+}
+
+/** Decrypt exactly the one chosen item and read its BUILT-IN username +
+ * password fields (by id — no "first Concealed field" fallback, which could
+ * return a custom PIN/recovery secret). A missing built-in field returns null
+ * (a defined outcome), never a guess. */
+async function revealCredential(vaultId, itemId) {
+  const client = await getClient();
+  const item = await client.items.get(vaultId, itemId);
+  const fields = Array.isArray(item.fields) ? item.fields : [];
+  const read = (id) => {
+    const f = fields.find((x) => x.id === id);
+    return f && typeof f.value === 'string' ? f.value : null;
+  };
+  return { username: read('username'), password: read('password') };
+}
+
+/** Criterion 3(a) probe: force-load the SDK package — module resolution +
+ * @1password/sdk-core's eager core_bg.wasm compile — WITHOUT authenticating.
+ * Throws if the package can't load. Lives here (not in main.js) so the
+ * `require('@1password/sdk')` stays confined to this module, alongside
+ * getClient — preserving the lazy-require boundary. Never authenticates, so it
+ * does not dlopen the native 1Password bridge (that's getClient/criterion 3b). */
+function probePackageLoad() {
+  require('@1password/sdk'); // lazy — the only other place this is required
+}
+
+module.exports = { matchesHost, buildFillScript, getClient, findLogins, revealCredential, probePackageLoad };

@@ -63,3 +63,13 @@ test('buildFillScript: null username still embeds a null literal (fills password
   const s = buildFillScript({ expectedURL: 'https://x.test/', expectedTimeOrigin: 0, username: null, password: 'p' });
   assert.ok(s.includes('null !== null'));  // the USER !== null guard resolves to false at runtime
 });
+
+test('requiring onepassword.js does NOT eagerly load the 1Password SDK', () => {
+  // The module must stay import-light: `@1password/sdk` is loaded only inside
+  // the SDK functions, so a normal packaged startup never pays for it.
+  const resolved = require.resolve('../../src/main/onepassword');
+  delete require.cache[resolved];
+  require('../../src/main/onepassword');
+  const sdkLoaded = Object.keys(require.cache).some((p) => p.includes('@1password' + require('path').sep + 'sdk'));
+  assert.equal(sdkLoaded, false);
+});
