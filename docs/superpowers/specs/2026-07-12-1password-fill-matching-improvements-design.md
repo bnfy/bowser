@@ -14,10 +14,13 @@ Two improvements to Blanc's 1Password fill so it works on more real logins:
    `⌥⌘P` fills the username; the second press on the password screen fills the
    password. Stateless — no credential is held across the navigation.
 
-**Scope note:** improves the **personal dev build**, not the shippable engine;
-does not depend on the §4.1(e) legal reply
-([`1password-legal-inquiry.md`](../../1password-legal-inquiry.md)), which gates
-public distribution, not local use. Retains `SPIKE` framing and dev env-gating.
+**Scope note:** improves the **personal dev build**, not the shippable engine.
+Unaffected by the §4.1(e) question
+([`1password-legal-inquiry.md`](../../1password-legal-inquiry.md)): 1Password
+replied 2026-07-12 that they don't pre-approve compliance (no prohibition stated,
+no ruling either way), and **distribution is shelved — personal-only**. Local use
+against one's own vault was never in question. Retains `SPIKE` framing and dev
+env-gating.
 This revision pulls **isolated-world injection** forward from the real-engine
 backlog because the two-phase design below only delivers its security value there.
 

@@ -2,9 +2,11 @@
 
 **Purpose:** Blanc's built-in 1Password fill (branch `feature/1password-fill`) is technically proven feasible (see `docs/superpowers/specs/2026-07-12-1password-autofill-spike-design.md` → Findings). Before building the *shippable* engine, one clause in 1Password's [API and SDK Terms of Service](https://1password.com/legal/api-sdk-terms-of-service) — **§4.1(e)**, the competitive/replication restriction — needs written confirmation from 1Password. This file holds the inquiry and (later) their reply, so the answer lives beside the code that depends on it.
 
-**Status:** ☐ drafted · ☐ sent (date: ____) · ☐ reply received (date: ____) · ☐ resolved
+**Status:** ☑ drafted · ☑ sent (2026-07-12) · ☑ reply received (2026-07-12) · ☑ **resolved — but not answered**
 
-> **Do not build the shippable engine until this is resolved.** Personal/dev use of the current spike code is fine (a user running a local integration against their own vault); the open question is distribution to end users.
+> **Outcome: 1Password does not pre-approve compliance, as a matter of policy** (reply below). They did **not** say the use is prohibited, and did not assert §4.1(e) applies — they declined to rule either way and pointed to our own counsel. **The original gate ("get written confirmation before building the shippable engine") is therefore unachievable and is retired.** See *Revised gate* below.
+>
+> **Personal/dev use is unaffected and was never in question** — a user running a local integration against their own vault is the documented intended use of desktop-app integrations. The current dev build on this branch is fine to keep using. The open question was only ever **distribution to end users**.
 
 ---
 
@@ -74,4 +76,45 @@ Paperwork/policy layer — *not code blockers*, and the spike already satisfies 
 
 ## 1Password's reply
 
-*(paste verbatim when received — date, contact, and their answer to each question)*
+**Received:** 2026-07-12, 7:19 AM · **From:** `support@1password.com` ·
+**Contact:** Brendan Rodgers, Sr Technical Representative — 1Password Support ·
+**Re:** "API/SDK Terms question — independent browser using DesktopAuth for opt-in autofill (§4.1(e))"
+
+> Hello Anthony,
+>
+> Thank you for reaching out. We appreciate you taking the time to share the details of your project.
+>
+> We aren't able to pre-approve compliance under our API and SDK Terms of Service. If you have questions about whether your intended use is permitted, we'd recommend having your own legal counsel review the terms directly.
+>
+> Thanks again for your interest in 1Password.
+
+### What this does and doesn't say
+
+- **Does not** state the use is prohibited, and **does not** assert §4.1(e) applies. No compliance determination was made either way.
+- **Does** establish that pre-approval is unavailable as a matter of policy — support is not authorized to issue legal rulings on their own terms. This is the standing answer to this class of question, not a signal about the merits.
+- **Consequence:** waiting for 1Password's written confirmation is not a viable plan. The question routes to our own counsel or to an explicit risk decision.
+
+## Revised gate (replaces "wait for 1Password")
+
+**Distribution to end users** is now a judgment call, not a blocked-on-vendor item. Options:
+
+| Option | Cost | Risk |
+|---|---|---|
+| **Counsel review** — what 1Password recommended | A few hours of a software-licensing attorney on one focused question (§4.1(e) vs. the behavior described above) | Resolves it properly; the actual answer to the question asked |
+| **Risk-accept and ship** | None upfront | Realistic worst case is a request to stop → run the spike-teardown procedure (plan Task 6). Not existential, but real |
+| **Personal-only** *(current state)* | None | Zero terms risk; feature stays local to the developer |
+| **Shelve distribution, keep the work** | None | Branch + specs stay intact if the picture changes (clearer guidance, a partner program, or counsel later) |
+
+**Current decision (2026-07-12): personal-only / distribution shelved.** The dev
+build stays in use; the shippable engine is not being built. Revisit if/when
+counsel review is worth the cost or 1Password's published guidance changes.
+
+**Standing arguments for the record** (if this is revisited — *product/legal
+reasoning, not legal advice*): the API/SDK Terms grant "incorporate and distribute
+the SDK… as part of an Application, on an integrated (not standalone) basis";
+autofill is a **documented** SDK use case (the concepts page defines website-matching
+rules + credential field IDs); the desktop-integration security model explicitly
+anticipates third-party binaries it cannot code-verify and leaves the trust decision
+to the user; and Blanc requires an active 1Password installation + subscription and
+adds no vault, sync, or password management of its own — complementary rather than
+competitive. The open ambiguity is the breadth of "indirectly" in §4.1(e).
