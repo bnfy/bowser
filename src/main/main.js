@@ -24,6 +24,7 @@ const bookmarks = require('./bookmarks');
 const { groupFavoritesForMenu } = require('./bookmark-data');
 const history = require('./history');
 const { JsonStore } = require('./store');
+const { persistableEntries } = require('./session-snapshot');
 const { shouldClearFaviconOnNavigate } = require('./favicon-policy');
 const { setupWebAuthn } = require('./webauthn');
 const { HANDOFF_PROTOCOLS, classifyExternalNavigation } = require('./external-protocols');
@@ -520,27 +521,11 @@ function persistSession() {
   // Teardown closes tabs one by one; saving then would erode the session
   // file down to whatever closed last before the process exits.
   if (isQuitting || tabs.size === 0) return;
-  // Private tabs leave no trail — they never enter the session file.
-  const persistable = tabOrder.filter((id) => !tabs.get(id)?.private);
   ensureSessionStore().update((d) => {
-    // Build url/groupId pairs before filtering so the two arrays can't
-    // fall out of alignment when a tab has no persistable url.
-    const entries = persistable
-      .map((id) => {
-        const tab = tabs.get(id);
-        let url = tab?.url;
-        // Persist the address that failed, not the error page wrapping it,
-        // so the next launch retries the real destination.
-        if (url?.startsWith('blanc://error')) {
-          try {
-            url = new URL(url).searchParams.get('url') || url;
-          } catch {
-            /* keep the error url */
-          }
-        }
-        return url ? { id, url, groupId: tab.groupId ?? null, pinned: !!tab.pinned } : null;
-      })
-      .filter(Boolean);
+    // Private tabs leave no trail, error pages persist their real
+    // destination, url-less tabs drop — all in session-snapshot.js so tab
+    // sync shares the exact same filter.
+    const entries = persistableEntries(tabOrder.map((id) => tabs.get(id)));
     d.urls = entries.map((e) => e.url);
     d.groupIds = entries.map((e) => e.groupId);
     d.pinned = entries.map((e) => e.pinned);
