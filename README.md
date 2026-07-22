@@ -232,11 +232,10 @@ and visual assets are done, but a few infra steps are deliberately not yet
 live:
 
 - The marketing site (`site/`) is live on the Cloudflare Pages project
-  `blancbrowser` (direct upload: `npx wrangler pages deploy site
-  --project-name=blancbrowser`), which serves `blancbrowser.com` and
-  `getbowser.com` from the same deployment. The page's canonical tag points
-  search engines at `blancbrowser.com`; an actual 301 redirect from
-  `getbowser.com` hasn't been set up.
+  `blancbrowser` (direct upload: `npm run site:deploy`, which builds the
+  Astro site and uploads `site/dist`), served at the canonical domain
+  `blancbrowser.com`. `getbowser.com` 301-redirects there path-for-path
+  (live since 2026-07-11), so search consolidates onto the canonical domain.
 - This file's still-old-name architecture references were updated, but a
   fuller pass to make sure nothing else in the repo (scripts, docs, comments)
   assumes "Bowser" would be worth a final sweep before the first real

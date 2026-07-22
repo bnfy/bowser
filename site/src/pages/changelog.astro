@@ -1,0 +1,66 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import releases from '../data/releases.json';
+---
+<BaseLayout
+  title="Blanc Browser Changelog — What’s new"
+  description="See what changed in each Blanc Browser release, from new features to security, privacy, and platform fixes."
+  path="/changelog"
+  page="changelog"
+  current="changelog"
+>
+  <link slot="head" rel="alternate" type="application/rss+xml" title="Blanc Browser Changelog" href="/changelog.xml">
+<main class="changelog-page">
+  <header class="changelog-hero">
+    <p class="section-kicker">shipping in public</p>
+    <h1>Every Blanc release, in one place.</h1>
+    <p>This page mirrors Blanc’s published GitHub releases, newest first. <a href="/changelog.xml">Subscribe via RSS</a>.</p>
+  </header>
+  {releases.length > 0 && (
+    <div class="changelog-search">
+      <input type="search" id="changelog-search" class="changelog-search-input" placeholder={`Search ${releases.length} releases…`} aria-label="Search releases" autocomplete="off" spellcheck="false">
+    </div>
+  )}
+  <section class="release-list" aria-label="Blanc releases">
+    {releases.length === 0 && <p>No published releases yet.</p>}
+    {releases.map((release) => (
+      <article class="release" id={release.anchor}>
+        <div class="release-meta"><time datetime={release.machineDate}>{release.humanDate}</time></div>
+        <div class="release-body">
+          <h2><a href={'#' + release.anchor}>Blanc {release.version}</a></h2>
+          {release.changes.length > 0 && (
+            <ul class="release-changes">
+              {release.changes.map((change) => (
+                <li>{change.url ? <a href={change.url} target="_blank" rel="noopener">{change.text}</a> : change.text}</li>
+              ))}
+            </ul>
+          )}
+          {release.extraParagraphs.map((paragraph) => <p>{paragraph}</p>)}
+          <p class="release-links">{release.compareUrl && <><a href={release.compareUrl} target="_blank" rel="noopener">full changelog</a><span aria-hidden="true"> · </span></>}<a href={release.url} target="_blank" rel="noopener">GitHub release</a></p>
+        </div>
+      </article>
+    ))}
+    <p class="release-empty" hidden>No releases match your search.</p>
+  </section>
+</main>
+<script is:inline>
+(function () {
+  var input = document.getElementById('changelog-search');
+  if (!input) return;
+  var releases = Array.prototype.slice.call(document.querySelectorAll('.release-list .release'));
+  var empty = document.querySelector('.release-empty');
+  var haystack = releases.map(function (el) { return el.textContent.toLowerCase(); });
+  function apply() {
+    var query = input.value.trim().toLowerCase();
+    var visible = 0;
+    for (var i = 0; i < releases.length; i++) {
+      var match = !query || haystack[i].indexOf(query) !== -1;
+      releases[i].hidden = !match;
+      if (match) visible++;
+    }
+    if (empty) empty.hidden = visible !== 0;
+  }
+  input.addEventListener('input', apply);
+})();
+</script>
+</BaseLayout>

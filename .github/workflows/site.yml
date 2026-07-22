@@ -1,0 +1,36 @@
+name: Site
+
+# Builds the Astro marketing site so a PR can't break it. Root package.json is
+# a build input (JSON-LD softwareVersion); the changelog generator is part of
+# the releases.json contract.
+on:
+  push:
+    paths:
+      - 'site/**'
+      - 'package.json'
+      - 'scripts/generate-site-changelog.mjs'
+      - '.github/workflows/site.yml'
+  pull_request:
+    paths:
+      - 'site/**'
+      - 'package.json'
+      - 'scripts/generate-site-changelog.mjs'
+      - '.github/workflows/site.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - run: npm ci
+        working-directory: site
+      - run: npm run build
+        working-directory: site

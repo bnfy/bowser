@@ -1,5 +1,65 @@
 # Marketing site (`site/`)
 
-Static, no build step: `index.html`, `download.html`, `features.html`, `features/{island,ad-blocking,private-tabs,command-palette,tab-groups}.html`, `about.html`, `changelog.html`, `styles.css`, `site.js` (shared current-release resolution and consent-gated analytics), and `demo.js` (a data-driven, self-playing Island demo — each scene declares the full workspace state so pinning/grouping read as real state changes) plus SEO assets (`og-image.png`, `logo.png`, `apple-touch-icon.png`, `robots.txt`, `sitemap.xml`) and `changelog.xml` (RSS 2.0). Deployed by direct upload — `npx wrangler pages deploy site --project-name=blancbrowser` — to the Cloudflare Pages project `blancbrowser` (BNFY account), served at the canonical domain `blancbrowser.com` — the page's canonical/OG/sitemap URLs all point there. `getbowser.com` now 301-redirects to `blancbrowser.com` (as of 2026-07-11 — e.g. `getbowser.com/features/security` → `301` → the matching blancbrowser.com URL; it is no longer a live content duplicate), so search consolidates onto the canonical domain through the redirect.
+A self-contained **Astro** project (own `package.json` — the Electron app's root
+dependency tree is untouched). Pages live in `src/pages/` (`index`, `download`,
+`features`, `about`, `privacy`, `terms`, `changelog`, and
+`features/{island,ad-blocking,private-tabs,command-palette,tab-groups,sync,security}`),
+sharing `src/layouts/BaseLayout.astro` with three explicit page profiles —
+island (index: non-solid header, full social footer, rich OG), standard (solid
+header, compact footer), legal (privacy/terms: `legal-top` header, full footer,
+**no** analytics/consent, **no** OG/Twitter meta). Don't flatten these
+differences — they're deliberate. `src/styles/site.css` is the one stylesheet
+(bundled + hashed; fonts self-hosted via fontsource — the UI family is `"Inter
+Variable"`, and this file is NOT under the root `tokens/` substrate guard).
+`src/scripts/site.js` (release-link resolution + consent-gated GA, all pages
+except legal) and `src/scripts/demo.js` (the self-playing Island demo, index
+only) are Astro-processed. Anything needing a **stable URL** — favicons,
+`og-image.png`, `logo.png`, `feature-*.png` (OG images), `robots.txt`,
+`shots/**` (fetched at runtime by demo.js) — lives in `public/`; never hash or
+rename these.
 
-Releases don't deploy the site, but `release.sh` seds the JSON-LD `softwareVersion` in `site/index.html` and the `<lastmod>` in `site/sitemap.xml` to the version being released, then runs `npm run site:changelog` to regenerate `site/changelog.html` and `site/changelog.xml` from the newly published GitHub release (non-fatal — a failure here won't block the Windows/Linux CI dispatch). Commit and redeploy the site after a release. `npm run site:changelog` requires an authenticated `gh` CLI; `npm run site:changelog:check` is the freshness guard (run by CI via `substrate:check`). Never patch `site/changelog.html` or `site/changelog.xml` by hand — fix the release source or generator and rerun. The Windows download page notes that the installer is not yet code-signed; update this copy only when Azure Trusted Signing actually ships a signed build, not merely when configuration is added. Download links point at `/releases/latest` and never need per-release edits. The JSON-LD deliberately has **no `aggregateRating`** — there are no real user ratings yet, and fabricating one violates Google's structured-data policy; Search Console's "missing aggregateRating" warning is accepted until genuine ratings exist. `logo.png` (1024², mark at 80% height) and `apple-touch-icon.png` (180², mark at 66%) are composed from `brand/4x/B@4x.png` onto solid white (Google's Organization-logo guidelines and iOS touch icons both want raster on opaque backgrounds) — regenerate at the same geometry if the mark changes.
+**Build contract:** `astro.config.mjs` pins `build.format: 'file'` (dist emits
+`about.html`, `features/island.html` … — the exact pre-Astro URL layout; never
+switch to directory format) and disables asset inlining
+(`assetsInlineLimit: 0`, `inlineStylesheets: 'never'`) so CSS/JS are always
+external hashed files. Internal links are root-relative extensionless
+(`/features/island`) matching the canonicals Cloudflare Pages serves.
+
+Commands (root proxies): `npm run site:dev`, `npm run site:build`, and
+`npm run site:deploy` (build + `npx wrangler pages deploy site/dist
+--project-name=blancbrowser` to the Cloudflare Pages project `blancbrowser`,
+BNFY account, canonical domain `blancbrowser.com`; `getbowser.com` 301s there).
+**Deploy `site/dist`, never `site/`.** CI (`.github/workflows/site.yml`) builds
+the site on any change to `site/**`, root `package.json` (a build input — the
+JSON-LD `softwareVersion` imports its `version`), or the changelog generator.
+
+**Changelog pipeline:** `scripts/generate-site-changelog.mjs` (root, needs an
+authenticated `gh`) fetches GitHub releases, scrubs the legacy "Bowser" name,
+and writes **`site/src/data/releases.json`** (committed). `src/pages/changelog.astro`
+renders it; `src/pages/changelog.xml.js` emits the RSS via `src/lib/rss.mjs`.
+`npm run site:changelog` regenerates; `npm run site:changelog:check` is the
+freshness guard (release-time/manual — not in CI; needs `gh`). Never hand-edit
+`releases.json`. `release.sh` runs the regenerate step (non-fatal) but no
+longer seds any site file — the JSON-LD version and sitemap `lastmod` both
+resolve at build time, so the routine post-release redeploy picks them up.
+
+**Sitemap:** `src/pages/sitemap.xml.js` — an explicit route manifest with
+per-route `changefreq`/`priority`, asserted at build time against the real
+page list (adding/removing a page without updating the manifest fails the
+build; that's the point). Served at `/sitemap.xml` (URL unchanged for Search
+Console).
+
+Releases don't deploy the site. After a release: `npm run site:changelog`,
+commit `releases.json`, then `npm run site:deploy`. The Windows download page
+notes the installer is not yet code-signed; update that copy only when Azure
+Trusted Signing actually ships a signed build. The JSON-LD deliberately has
+**no `aggregateRating`** — no real user ratings exist yet; fabricating one
+violates Google's structured-data policy. `logo.png` (1024², mark at 80%
+height) and `apple-touch-icon.png` (180², mark at 66%) are composed from
+`brand/4x/B@4x.png` onto solid white — regenerate at the same geometry if the
+mark changes. Utility scripts in `site/scripts/`: `verify-parity.mjs` +
+`shoot-pages.mjs` (conversion-era comparators against the `site-pre-astro` git
+tag) and `compress-images.mjs` (re-runnable lossless image optimization —
+jpegtran + oxipng via Homebrew, with a pixel/ICC/cICP-equality gate; several
+PNGs are cICP Display P3, so never optimize them with a tool that drops
+ancillary chunks).

@@ -1,0 +1,783 @@
+/* The site is always light, regardless of system theme — white canvas,
+   black accent, quiet gray surfaces. */
+:root {
+  --font-ui: "Inter Variable", "Inter", -apple-system, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  --radius: 6px;
+
+  --bg: #ffffff;
+  --surface: #f7f7f7;
+  --surface-raised: #ffffff;
+  --border: #dedede;
+  --text: #0e0e0e;
+  --text-dim: #6b6b6b;
+  --accent: #111111;
+  --accent-dim: rgba(17, 17, 17, 0.08);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-ui); font-size: 16px; }
+a { color: inherit; }
+.mono { font-family: var(--font-mono); }
+
+/* Consent banner */
+.consent {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  z-index: 100; display: flex; align-items: center; gap: 14px;
+  max-width: calc(100vw - 32px); flex-wrap: wrap; justify-content: center;
+  padding: 12px 16px; background: var(--surface-raised);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  font-family: var(--font-mono); font-size: 12.5px; color: var(--text-dim);
+  box-shadow: 0 14px 30px rgba(14, 14, 14, 0.12);
+}
+.consent[hidden] { display: none; }
+body.has-consent .hero { padding-bottom: 154px; }
+.consent button {
+  font-family: var(--font-mono); font-size: 12px; padding: 6px 12px;
+  border-radius: var(--radius); border: 1px solid var(--accent);
+  background: var(--accent); color: var(--bg); cursor: pointer;
+}
+.consent button.ghost { background: transparent; color: var(--text-dim); border-color: var(--border); }
+
+/* ---------- hero (the live island demo IS the hero) ---------- */
+.hero { position: relative; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 70px 24px 84px; }
+.hero .mark { height: 38px; width: 28px; color: var(--accent); margin-bottom: 20px; }
+.hero .eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--text-dim); margin: 0 0 22px; }
+.hero .eyebrow .k { color: var(--accent); }
+.hero-message { width: 100%; display: grid; transition: opacity 180ms ease, transform 180ms ease; }
+.hero-message.is-changing { opacity: 0; transform: translateY(4px); }
+.hero-message-slide { grid-area: 1 / 1; width: 100%; opacity: 0; visibility: hidden; }
+.hero-message-slide.is-active { opacity: 1; visibility: visible; }
+.hero h1 { margin: 0 auto; font-size: clamp(28px, 3.2vw, 40px); font-weight: 500; letter-spacing: -0.01em; line-height: 1.15; max-width: 20ch; text-wrap: balance; }
+.hero .hero-copy { margin: 14px auto 0; max-width: 52ch; font-size: 15px; line-height: 1.55; color: var(--text-dim); text-wrap: balance; }
+/* Primary button, shared by the hero, home-close, and feature-close CTAs. */
+.cta { display: inline-flex; align-items: center; justify-content: center; height: 44px; padding: 0 26px; border-radius: var(--radius); background: var(--accent); color: var(--bg); text-decoration: none; font-family: var(--font-mono); font-size: 14px; white-space: nowrap; transition: opacity 0.15s ease; }
+.cta:hover { opacity: 0.88; }
+.hero .cta { margin-top: 40px; }
+.hero .platforms { margin-top: 16px; font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); opacity: 0.7; white-space: nowrap; }
+.hero .platforms a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--border); padding-bottom: 1px; transition: color 0.15s, border-color 0.15s; }
+.hero .platforms a:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ---------- live island demo (large, self-animating, non-interactive) ---------- */
+/* [data-theme="private"] overrides the token variables in-scope, so every
+   descendant rule below (all written against var(--surface) etc.) shifts
+   into the demo's dark monochrome private state. */
+.demo-stage {
+  position: relative; width: 100%; max-width: 900px; margin: 26px auto 0; aspect-ratio: 16 / 9;
+  border-radius: 14px; overflow: hidden; background: var(--surface); border: 1px solid var(--border);
+  box-shadow: 0 30px 70px rgba(14,14,14,0.08);
+  transition: background 220ms ease, border-color 220ms ease;
+}
+.demo-stage[data-theme="private"] {
+  --bg: #0a0a0a; --surface: #131313; --surface-raised: #191919; --border: #333333;
+  --text: #f5f5f5; --text-dim: #9c9c9c; --accent: #f5f5f5; --accent-dim: rgba(245,245,245,0.12);
+  background: var(--bg); border-color: var(--border);
+}
+.demo-page { position: absolute; inset: 0; padding: 100px 64px 0; }
+.demo-page .bar { height: 13px; border-radius: 4px; background: var(--border); margin-bottom: 14px; opacity: 0.7; transition: background 220ms ease; }
+.demo-page .bar.w1 { width: 62%; } .demo-page .bar.w2 { width: 88%; } .demo-page .bar.w3 { width: 45%; } .demo-page .bar.w4 { width: 71%; }
+.demo-stage.scrolling .demo-page { animation: demo-page-scroll 4200ms cubic-bezier(0.2, 0.7, 0.16, 1) forwards; }
+
+/* real page render behind the island (bundled per-breakpoint capture); the
+   skeleton bars above stay visible as the loading/fallback state and the
+   shot crossfades in over them once its real image has arrived. */
+.demo-shot { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top center; opacity: 0; transition: opacity 360ms ease; pointer-events: none; }
+/* Website renders read best anchored to their top edge; the private scene's
+   photo is framed on its subject, so center it instead. */
+.demo-stage[data-theme="private"] .demo-shot { object-position: center center; }
+.demo-shot.show { opacity: 1; }
+.demo-stage.scrolling .demo-shot.show { animation: demo-shot-scroll 4200ms cubic-bezier(0.2, 0.7, 0.16, 1) forwards; }
+@keyframes demo-shot-scroll {
+  0%, 12% { object-position: top center; }
+  78%, 100% { object-position: center 72%; }
+}
+@keyframes demo-page-scroll {
+  0%, 12% { transform: translateY(0); }
+  78%, 100% { transform: translateY(-116px); }
+}
+
+/* Hero demo models the real Blanc window, same as the static figures (see the
+   .island-figure block near the end of this file): the resting Island lives in
+   a slim top strip and the page render begins BELOW it, so the Island is fixed
+   above the content area rather than sitting on top of the site. The strip is
+   color-matched to the current scene's page top edge (--demo-strip-bg, set per
+   scene by demo.js) so it reads as the page's own top margin, not a browser
+   bar. Only the resting pill is parked in the strip and scaled to true size;
+   the open panel is exempt because it genuinely floats over the page. */
+#demoStage { --demo-strip-h: 48px; background: var(--demo-strip-bg, var(--surface)); }
+#demoStage .demo-page,
+#demoStage .demo-shot { top: var(--demo-strip-h); height: auto; }
+#demoStage .demo-island { top: 6px; }
+#demoStage .demo-island:not(.open) .pill { transform: scale(0.8); transform-origin: top center; }
+/* The skeleton bars are only a pre-load fallback. Once a real page shot is up,
+   hide them — otherwise the scrolling scene animates a bar up into the top
+   strip (which the shot doesn't cover) and it peeks out over the strip color. */
+#demoStage:has(.demo-shot.show) .demo-page { display: none; }
+
+/* Scrub bar: a floating control pill over the stage bottom (echoes the Island),
+   legible over any page behind it. A progress fill tracks playback; the circle
+   markers jump to each topic. */
+.demo-scrub { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; width: min(76%, 520px); padding: 12px 20px; background: rgba(18, 18, 20, 0.5); backdrop-filter: blur(12px) saturate(1.3); -webkit-backdrop-filter: blur(12px) saturate(1.3); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 999px; box-shadow: 0 8px 26px rgba(0, 0, 0, 0.24); }
+.demo-scrub-track { position: relative; flex: 1; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.24); }
+.demo-scrub-fill { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 2px; background: #fff; }
+.demo-scrub-marker { position: absolute; top: 50%; left: 0; width: 11px; height: 11px; padding: 0; transform: translate(-50%, -50%); border-radius: 50%; background: rgba(255, 255, 255, 0.32); border: 1.5px solid rgba(255, 255, 255, 0.9); cursor: pointer; transition: transform 0.15s ease, background 0.15s ease; }
+.demo-scrub-marker:hover, .demo-scrub-marker:focus-visible { transform: translate(-50%, -50%) scale(1.3); background: #fff; outline: none; }
+.demo-scrub-marker.active { background: #fff; }
+.demo-scrub-label { position: absolute; bottom: 190%; left: 50%; transform: translateX(-50%); white-space: nowrap; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.02em; color: #fff; background: rgba(18, 18, 20, 0.88); padding: 3px 7px; border-radius: 5px; opacity: 0; pointer-events: none; transition: opacity 0.15s ease; }
+.demo-scrub-marker:hover .demo-scrub-label, .demo-scrub-marker:focus-visible .demo-scrub-label { opacity: 1; }
+.demo-island.open ~ .demo-scrub { visibility: hidden; pointer-events: none; }
+
+.demo-island { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 5; white-space: nowrap; }
+.demo-island .pill { display: flex; align-items: center; gap: 12px; padding: 9px 16px; background: var(--surface-raised); border: 1px solid var(--border); border-radius: 999px; box-shadow: 0 12px 28px rgba(14,14,14,0.1); transition: opacity 160ms ease, transform 160ms ease, background 220ms ease, border-color 220ms ease; }
+.demo-stage[data-theme="private"] .demo-island .pill { border-style: dashed; }
+.demo-island.open .pill { opacity: 0; transform: translateY(-6px) scale(0.97); pointer-events: none; }
+
+/* pill clusters: a bordered pinned-shelf capsule, then one dot cluster per
+   group, then the loose cluster — mirroring the real Blanc Island pill. */
+/* Pill dots: the active tab's group only (pins + other groups live in the
+   panel), each a plain dot with the current tab accented, then a quiet +N. */
+.demo-island .dots { display: flex; align-items: center; gap: 6px; }
+.demo-island .dots > span { width: 7px; height: 7px; border-radius: 50%; background: var(--border); transition: background 160ms ease; }
+.demo-island .dots > span.cur { background: var(--accent); }
+.demo-island .dot-more { font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); margin-left: 2px; }
+
+/* Leading nav (back/forward) + trailing actions (reload/favorite) — quiet
+   ghost icon buttons, matching the app's island. */
+.demo-island .pnav, .demo-island .pacts { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+.demo-island .pbtn { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: none; border-radius: 50%; background: transparent; color: var(--text-dim); cursor: pointer; }
+.demo-island .pbtn:disabled { color: var(--border); cursor: default; }
+.demo-island .pbtn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.demo-island .pbtn.heart.on { color: var(--accent); }
+.demo-island .pbtn.heart.on svg { fill: var(--accent); stroke: var(--accent); }
+.demo-island .psep { width: 1px; height: 18px; background: var(--border); flex: 0 0 auto; margin: 0 2px; }
+
+/* Private mode: hollow dots. */
+.demo-stage[data-theme="private"] .demo-island .dots > span { background: transparent; border: 1px solid var(--text-dim); opacity: 0.85; }
+.demo-stage[data-theme="private"] .demo-island .dots > span.cur { border-color: var(--accent); background: var(--accent-dim); opacity: 1; }
+
+.demo-island .pill-fav { width: 16px; height: 16px; border-radius: 4px; background-color: var(--border); background-size: cover; background-position: center; flex: 0 0 auto; }
+.demo-island .group-name { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-dim); display: inline-flex; align-items: center; }
+.demo-island .group-name[hidden] { display: none; }
+.demo-island .domain { font-family: var(--font-mono); font-size: 15px; }
+.demo-island .shield { font-family: var(--font-mono); font-size: 12.5px; padding: 2px 9px; border-radius: 999px; background: var(--accent-dim); color: var(--accent); transition: background 220ms ease, color 220ms ease; }
+.demo-island .shield[hidden] { display: none; }
+.demo-island .priv-chip { display: none; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 11.5px; padding: 2px 5px 2px 9px; border-radius: 999px; border: 1px dashed var(--accent); color: var(--accent); }
+.demo-island .priv-chip svg { display: block; }
+.demo-island.private .priv-chip { display: flex; }
+.demo-island.private .domain, .demo-island.private .shield, .demo-island.private .pill-fav, .demo-island.private .group-name, .demo-island.private .pnav, .demo-island.private .psep, .demo-island.private .pacts { display: none; }
+
+.demo-island .panel {
+  position: absolute; top: 0; left: 50%; transform: translateX(-50%) translateY(-6px) scale(0.97);
+  width: 640px; max-height: 436px; overflow-y: auto;
+  background: var(--surface-raised); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 24px 50px rgba(14,14,14,0.14); padding: 13px 16px 8px; text-align: left;
+  opacity: 0; pointer-events: none; transition: opacity 160ms ease, transform 160ms ease, background 220ms ease, border-color 220ms ease;
+}
+.demo-stage[data-theme="private"] .demo-island .panel { border-style: dashed; }
+.demo-island.open .panel { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); pointer-events: auto; }
+
+.demo-island .panel-row { display: flex; align-items: center; gap: 8px; }
+.demo-island .field { flex: 1 1 auto; min-width: 0; height: 34px; border-radius: var(--radius); border: 1px solid var(--accent); background: var(--surface); display: flex; align-items: center; padding: 0 12px; font-family: var(--font-mono); font-size: 14.5px; gap: 1px; transition: background 220ms ease; }
+.demo-island .typed { color: var(--text); }
+.demo-island .field .caret { width: 7px; height: 18px; background: var(--accent); opacity: 0.65; margin-left: 1px; animation: demo-blink 1s step-end infinite; }
+@keyframes demo-blink { 50% { opacity: 0; } }
+
+/* Expanded-panel input-row actions (back/forward/reload/heart/dismiss) — quiet
+   rounded-square ghost buttons trailing the field, mirroring the app's panel. */
+.demo-island .abtn { width: 32px; height: 32px; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: none; border-radius: var(--radius); background: transparent; color: var(--text-dim); cursor: pointer; }
+.demo-island .abtn:disabled { color: var(--border); cursor: default; }
+.demo-island .abtn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.demo-island .abtn.heart.on { color: var(--accent); }
+.demo-island .abtn.heart.on svg { fill: var(--accent); stroke: var(--accent); }
+
+/* Panel footer action bar: new-tab / private launchers on the left, quiet
+   quick-access icons (favorites/history/downloads/settings) on the right —
+   mirrors the app's #islandFooter (launchers moved out of the tab list). */
+.demo-island .foot-bar { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--border); }
+.demo-island .foot-new { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 14px; flex: 0 0 auto; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text-dim); font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+.demo-island .foot-new svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.demo-island .foot-new.private { margin-left: 4px; border-style: dashed; border-color: var(--text-dim); }
+.demo-island .foot-kbd { font-size: 11px; opacity: 0.55; margin-left: 2px; }
+.demo-island .foot-spacer { flex: 1 1 auto; }
+.demo-island .foot-act { width: 32px; height: 32px; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: none; border-radius: var(--radius); background: transparent; color: var(--text-dim); }
+.demo-island .foot-act svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
+.demo-island .list { margin-top: 6px; display: flex; flex-direction: column; max-height: 300px; overflow-y: auto; scrollbar-width: none; }
+.demo-island .list::-webkit-scrollbar { display: none; }
+
+/* section header (pinned / group name / no group) */
+.demo-island .sec-head { display: flex; align-items: center; gap: 8px; padding: 6px 12px 2px; font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
+.demo-island .sec-head .ico { width: 11px; height: 11px; flex: 0 0 auto; color: var(--text-dim); }
+.demo-island .sec-head .caret { width: 9px; height: 9px; flex: 0 0 auto; transform: rotate(90deg); transition: transform 160ms ease; }
+.demo-island .sec-head.collapsed .caret { transform: rotate(0deg); }
+.demo-island .sec-head .rule { flex: 1 1 auto; height: 1px; background: var(--border); }
+.demo-island .sec-head .count { flex: 0 0 auto; }
+.demo-island .sec-head.just { animation: rowpulse 1000ms ease; border-radius: var(--radius); }
+
+.demo-island .trow { display: flex; align-items: center; gap: 11px; padding: 4px 12px; border-radius: var(--radius); font-size: 13.5px; transition: background 140ms ease; }
+.demo-island .trow.hl { background: var(--accent-dim); }
+.demo-island .trow.just { animation: rowpulse 1000ms ease; }
+@keyframes rowpulse { 0%, 55% { background: var(--accent-dim); } 100% { background: transparent; } }
+.demo-island .trow .fav { width: 17px; height: 17px; border-radius: 4px; flex: 0 0 auto; background-color: var(--border); background-size: cover; background-position: center; box-shadow: inset 0 0 0 1px rgba(14,14,14,0.05); }
+.demo-island .trow .title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-ui); }
+.demo-island .trow .dom { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.demo-island .trow .tag,
+.demo-island .trow .kbd,
+.demo-island .trow .enter { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-dim); opacity: 0.7; flex: 0 0 auto; }
+.demo-island .trow .kbd { margin-left: auto; }
+.demo-island .trow.command .cmd { flex: 0 0 auto; font-family: var(--font-mono); font-size: 12.5px; color: var(--accent); white-space: nowrap; }
+.demo-island .trow.command .hint { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
+.demo-island .trow.folded { color: var(--text-dim); font-family: var(--font-mono); }
+.demo-island .row-dots { display: flex; gap: 4px; flex: 0 0 auto; }
+.demo-island .row-dots span { width: 5px; height: 5px; border-radius: 50%; background: var(--border); }
+.demo-island .row-dots.accent span { background: var(--accent); opacity: 0.5; }
+.demo-island .trow .empty { color: var(--text-dim); font-family: var(--font-mono); font-size: 13px; }
+
+.demo-island .foot { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); opacity: 0.7; padding: 8px 12px 2px; white-space: nowrap; }
+
+/* synced caption under the demo — tells the viewer what each beat shows */
+.demo-caption {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  max-width: min(56ch, calc(100vw - 48px));
+  margin: 20px auto 0;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  box-shadow: 0 14px 32px rgba(14,14,14,0.09);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text);
+  text-wrap: balance;
+  opacity: 1;
+}
+.demo-caption::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  transform: translateX(-50%) rotate(45deg);
+  background: inherit;
+  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+}
+.demo-caption.show { animation: capfade 500ms ease forwards; }
+@keyframes capfade { from { opacity: 0; transform: translateY(5px) scale(0.98); } to { opacity: 1; transform: none; } }
+
+@media (max-width: 720px) {
+  .demo-island .panel { width: 86vw; }
+  .demo-island .trow .dom { display: none; }
+}
+
+/* Phones: the full resting pill (~434px) is wider than the stage below
+   ~530px, so it clips at both ends and stops reading as a floating pill.
+   Shed the flanking chrome — back/forward nav, the reload/favorite action
+   cluster, the group name — and keep the core identity (dots, favicon,
+   domain, shield) centered, the way a narrow island sheds chrome. */
+@media (max-width: 560px) {
+  .demo-island .pnav,
+  .demo-island .pacts,
+  .demo-island .psep,
+  .demo-island .group-name { display: none; }
+  .demo-island .pill { gap: 9px; padding: 8px 14px; }
+  .demo-island .domain { font-size: 13.5px; }
+  /* The panel footer hint is a single nowrap line that overruns the narrow
+     panel — let it wrap and center instead of overflowing off the edge. */
+  .demo-island .foot { white-space: normal; text-align: center; }
+}
+
+/* Short viewports: shrink the demo so mark + line + demo + caption + CTA
+   still fit one screen, keeping the CTA clear of the fixed consent banner. */
+@media (max-height: 860px) and (min-width: 721px) {
+  /* Short viewports keep the hero above the fold. Cap the stage's WIDTH (not its
+     height) so it stays a true 16:9 while never exceeding ~344px tall. */
+  .demo-stage { max-width: 612px; margin-top: 20px; }
+  /* The stage is narrower here, so the expanded panel shrinks to sit inside it. */
+  .demo-island .panel { width: 520px; max-height: 292px; }
+  .hero { padding: 52px 24px 66px; }
+  body.has-consent .hero { padding-bottom: 146px; }
+  .hero .mark { margin-bottom: 14px; }
+  .hero .hero-copy { margin-top: 10px; font-size: 14px; line-height: 1.45; }
+  .demo-caption { margin-top: 14px; }
+  .hero .cta { margin-top: 30px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-message { transition: none; }
+}
+
+/* ---------- shared marketing navigation ---------- */
+.site-header { position: absolute; inset: 0 0 auto; z-index: 30; padding: 18px 24px; }
+.site-header--solid { position: relative; border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.9); }
+.site-nav { width: min(1120px, 100%); min-height: 42px; margin: 0 auto; display: flex; align-items: center; gap: 22px; }
+.site-brand { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; color: var(--text); font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.01em; }
+.site-brand-mark { width: 15px; height: 21px; display: block; }
+.site-nav-links { display: inline-flex; align-items: center; gap: 18px; margin-left: auto; }
+.site-nav-links a { color: var(--text-dim); text-decoration: none; font-family: var(--font-mono); font-size: 12px; transition: color 0.15s ease; }
+.site-nav-links a:hover { color: var(--accent); }
+.site-nav-cta { display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 0 13px; border: 1px solid var(--accent); border-radius: var(--radius); background: var(--accent); color: var(--bg); text-decoration: none; font-family: var(--font-mono); font-size: 12px; white-space: nowrap; transition: opacity 0.15s ease; }
+.site-nav-cta:hover { opacity: 0.84; }
+.site-nav-cta.is-current { pointer-events: none; }
+/* Secondary nav links (about) yield to features/changelog on narrow headers;
+   every page's footer keeps the full link set. */
+@media (max-width: 640px) {
+  .site-nav-links a.nav-secondary { display: none; }
+}
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* ---------- home: product proof ---------- */
+.home-main { overflow: hidden; }
+.proof-rail { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px 20px; padding: 17px 24px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.04em; text-transform: uppercase; }
+.proof-rail a { color: var(--text-dim); text-decoration: none; transition: color 0.15s ease; }
+.proof-rail a:hover { color: var(--accent); }
+.proof-rail a::before { content: ""; display: inline-block; width: 5px; height: 5px; margin: 0 7px 1px 0; border-radius: 50%; background: var(--accent); vertical-align: middle; }
+.section-kicker { margin: 0 0 14px; font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.17em; text-transform: uppercase; color: var(--text-dim); }
+.home-intro { max-width: 720px; margin: 0 auto; padding: 120px 24px 84px; text-align: center; }
+.home-intro h2, .home-story h2, .home-feature h2, .home-faq h2, .home-close h2, .download-hero h1, .download-details h2 { margin: 0; font-size: clamp(31px, 4.1vw, 52px); font-weight: 500; letter-spacing: -0.035em; line-height: 1.06; text-wrap: balance; }
+.home-intro > p:last-child { max-width: 55ch; margin: 22px auto 0; color: var(--text-dim); font-size: 16px; line-height: 1.65; text-wrap: balance; }
+.home-story { max-width: 1180px; margin: 0 auto; padding: 0 24px 120px; display: grid; grid-template-columns: minmax(240px, 0.74fr) minmax(430px, 1.26fr); align-items: center; gap: clamp(34px, 7vw, 112px); }
+.home-story-copy p:not(.section-kicker) { max-width: 38ch; margin: 22px 0 0; color: var(--text-dim); font-size: 15.5px; line-height: 1.68; }
+.text-link { display: inline-flex; gap: 8px; margin-top: 22px; color: var(--text); text-decoration: none; border-bottom: 1px solid var(--border); padding-bottom: 3px; font-family: var(--font-mono); font-size: 12.5px; transition: border-color 0.15s ease, color 0.15s ease; }
+.text-link:hover { border-color: var(--accent); color: var(--accent); }
+.product-capture { margin: 0; padding: 10px; border: 1px solid var(--border); border-radius: 13px; background: var(--surface); box-shadow: 0 28px 60px rgba(14,14,14,0.09); }
+.product-capture img { display: block; width: 100%; height: auto; border-radius: 8px; background: #000; }
+.product-capture figcaption { padding: 11px 5px 2px; font-family: var(--font-mono); font-size: 11.5px; line-height: 1.5; color: var(--text-dim); }
+.home-feature-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 1180px; margin: 0 auto; border-top: 1px solid var(--border); border-left: 1px solid var(--border); }
+.home-feature { min-height: 350px; padding: 34px clamp(24px, 3.2vw, 48px) 40px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); scroll-margin-top: 82px; }
+.feature-index { margin: 0 0 78px; color: var(--text-dim); font-family: var(--font-mono); font-size: 12px; }
+.home-feature h2 { max-width: 13ch; font-size: clamp(23px, 2.5vw, 31px); }
+.home-feature > p:not(.feature-index) { margin: 18px 0 0; color: var(--text-dim); font-size: 14px; line-height: 1.65; }
+.home-feature .text-link { margin-top: 18px; }
+.home-faq { display: grid; grid-template-columns: minmax(230px, 0.78fr) minmax(0, 1.22fr); max-width: 1180px; margin: 0 auto; padding: 120px 24px; gap: clamp(42px, 9vw, 150px); }
+.home-faq h2 { max-width: 10ch; }
+.faq-list { border-top: 1px solid var(--border); }
+.faq-list article { padding: 21px 0 23px; border-bottom: 1px solid var(--border); }
+.faq-list h3 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.faq-list p { max-width: 57ch; margin: 8px 0 0; color: var(--text-dim); font-size: 14px; line-height: 1.6; }
+.home-close { margin: 0 24px 96px; padding: 76px 24px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); text-align: center; }
+.home-close h2 { max-width: 13ch; margin: 0 auto; }
+.home-close > p:not(.section-kicker) { margin: 16px 0 0; color: var(--text-dim); font-size: 15px; }
+.home-close .cta { margin-top: 28px; }
+
+/* ---------- download ---------- */
+.download-page { max-width: 1180px; margin: 0 auto; padding: 112px 24px 88px; }
+.download-hero { max-width: 740px; margin: 0 auto; text-align: center; }
+.download-hero > p:last-child { max-width: 48ch; margin: 20px auto 0; color: var(--text-dim); font-size: 16px; line-height: 1.65; text-wrap: balance; }
+.download-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 70px 0 120px; border-top: 1px solid var(--border); border-left: 1px solid var(--border); }
+.platform-card { display: flex; min-height: 235px; flex-direction: column; justify-content: flex-end; padding: 28px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); color: var(--text); text-decoration: none; transition: background 0.18s ease, color 0.18s ease; }
+.platform-card:hover { background: var(--accent); color: var(--bg); }
+.platform-label { margin-bottom: auto; color: var(--text-dim); font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; transition: color 0.18s ease; }
+.platform-card:hover .platform-label { color: rgba(255,255,255,0.65); }
+.platform-card strong { font-size: 21px; font-weight: 500; letter-spacing: -0.02em; }
+.platform-card span:last-child { margin-top: 8px; font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); transition: color 0.18s ease; }
+.platform-card:hover span:last-child { color: rgba(255,255,255,0.72); }
+.download-details { display: grid; grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.2fr); gap: clamp(42px, 9vw, 150px); padding: 0 0 96px; }
+.download-details h2 { max-width: 12ch; font-size: clamp(28px, 3.5vw, 43px); }
+.download-detail-list { border-top: 1px solid var(--border); }
+.download-detail-list article { padding: 21px 0 23px; border-bottom: 1px solid var(--border); }
+.download-detail-list h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.download-detail-list p { margin: 8px 0 0; color: var(--text-dim); font-size: 14px; line-height: 1.6; }
+.download-footnote { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 48px; padding: 26px 0 0; border-top: 1px solid var(--border); color: var(--text-dim); }
+.download-footnote p { margin: 0; font-family: var(--font-mono); font-size: 12px; line-height: 1.65; }
+.download-footnote a, .compact-footer a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--border); padding-bottom: 1px; transition: color 0.15s, border-color 0.15s; }
+.download-footnote a:hover, .compact-footer a:hover { color: var(--accent); border-color: var(--accent); }
+/* "See what changed" sits in the download-options gap, so it pulls up into
+   the options' 120px bottom margin and restores the section rhythm below. */
+.download-whatsnew { margin: -96px 0 96px; text-align: center; font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); }
+.download-whatsnew a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--border); padding-bottom: 1px; transition: color 0.15s, border-color 0.15s; }
+.download-whatsnew a:hover { color: var(--accent); border-color: var(--accent); }
+.download-note { margin: 0 auto; }
+.download-note + .download-details { margin-top: 128px; }
+.download-note > p:not(.section-kicker) a { color: inherit; border-bottom: 1px solid var(--border); padding-bottom: 1px; text-decoration: none; transition: color 0.15s, border-color 0.15s; }
+.download-note > p:not(.section-kicker) a:hover { color: var(--accent); border-color: var(--accent); }
+.compact-footer { display: flex; flex-direction: row; justify-content: space-between; gap: 14px 30px; padding: 22px max(24px, calc((100vw - 1132px) / 2)); border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); opacity: 0.8; }
+.compact-footer b { color: var(--accent); font-weight: 400; }
+
+/* ---------- changelog ---------- */
+.changelog-page { max-width: 880px; margin: 0 auto; padding: 112px 24px 96px; }
+.changelog-hero { max-width: 740px; margin: 0 auto 72px; text-align: center; }
+.changelog-hero h1 { margin: 0; font-size: clamp(31px, 4.1vw, 52px); font-weight: 500; letter-spacing: -0.035em; line-height: 1.06; text-wrap: balance; }
+.changelog-hero > p:last-child { max-width: 52ch; margin: 20px auto 0; color: var(--text-dim); font-size: 16px; line-height: 1.65; text-wrap: balance; }
+.changelog-hero a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--border); padding-bottom: 1px; transition: color 0.15s, border-color 0.15s; }
+.changelog-hero a:hover { color: var(--accent); border-color: var(--accent); }
+.changelog-search { margin: 0 0 32px; }
+.changelog-search-input { width: 100%; padding: 13px 16px; font-family: var(--font-mono); font-size: 13px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); transition: border-color 0.15s, background 0.15s; }
+.changelog-search-input::placeholder { color: var(--text-dim); }
+.changelog-search-input:focus { outline: none; border-color: var(--accent); background: var(--bg); }
+.release-list { border-top: 1px solid var(--border); }
+.release[hidden] { display: none; }
+.release-empty { padding: 44px 0; color: var(--text-dim); font-family: var(--font-mono); font-size: 13px; text-align: center; }
+.release { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 28px; padding: 34px 0 38px; border-bottom: 1px solid var(--border); scroll-margin-top: 82px; }
+.release-meta time { font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); }
+.release-body h2 { margin: -4px 0 0; font-size: 21px; font-weight: 500; letter-spacing: -0.02em; }
+.release-body h2 a { color: inherit; text-decoration: none; border-bottom: 1px solid transparent; transition: border-color 0.15s ease; }
+.release-body h2 a:hover { border-color: var(--accent); }
+.release-changes { margin: 14px 0 0; padding: 0 0 0 18px; }
+.release-changes li { margin: 7px 0; color: var(--text-dim); font-size: 14.5px; line-height: 1.6; overflow-wrap: anywhere; }
+.release-body > p { margin: 12px 0 0; color: var(--text-dim); font-size: 14.5px; line-height: 1.6; overflow-wrap: anywhere; }
+.release-body .release-links { margin-top: 16px; font-family: var(--font-mono); font-size: 12px; }
+.release-changes a, .release-links a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--border); padding-bottom: 1px; transition: color 0.15s, border-color 0.15s; }
+.release-changes a:hover, .release-links a:hover { color: var(--accent); border-color: var(--accent); }
+@media (max-width: 640px) {
+  .changelog-page { padding: 78px 18px 68px; }
+  .changelog-hero { margin-bottom: 52px; }
+  .release { grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 28px 0 30px; }
+}
+
+/* ---------- about / independence ---------- */
+.about-page { max-width: 1040px; margin: 0 auto; padding: 112px 24px 96px; }
+.about-hero { max-width: 790px; margin: 0 auto 96px; text-align: center; }
+.about-hero h1 { margin: 0; font-size: clamp(34px, 4.8vw, 60px); font-weight: 500; letter-spacing: -0.042em; line-height: 1.04; text-wrap: balance; }
+.about-hero > p:last-child { max-width: 58ch; margin: 22px auto 0; color: var(--text-dim); font-size: 16px; line-height: 1.68; text-wrap: balance; }
+.about-proof-list { border-top: 1px solid var(--border); }
+.about-proof-row { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 42px; padding: 46px 0 50px; border-bottom: 1px solid var(--border); }
+.about-label { margin: 3px 0 0; font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); }
+.about-proof-row h2 { max-width: 19ch; margin: 0; font-size: clamp(25px, 3vw, 38px); font-weight: 500; letter-spacing: -0.032em; line-height: 1.08; text-wrap: balance; }
+.about-proof-row div > p { max-width: 58ch; margin: 18px 0 0; color: var(--text-dim); font-size: 15px; line-height: 1.7; }
+.about-supporter { margin: 0 -24px; padding-right: 24px; padding-left: 24px; background: var(--surface); }
+.about-close { margin-top: 96px; padding: 70px 24px; border: 1px solid var(--border); border-radius: 14px; text-align: center; }
+.about-close h2 { margin: 0; font-size: clamp(29px, 3.8vw, 46px); font-weight: 500; letter-spacing: -0.035em; line-height: 1.06; }
+.about-close > p:last-child { max-width: 58ch; margin: 18px auto 0; color: var(--text-dim); font-size: 15px; line-height: 1.7; }
+.about-close a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--border); padding-bottom: 1px; transition: color 0.15s, border-color 0.15s; }
+.about-close a:hover { color: var(--accent); border-color: var(--accent); }
+@media (max-width: 640px) {
+  .about-page { padding: 78px 18px 68px; }
+  .about-hero { margin-bottom: 68px; }
+  .about-proof-row { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 34px 0 38px; }
+  .about-supporter { margin: 0 -18px; padding-right: 18px; padding-left: 18px; }
+  .about-close { margin-top: 72px; padding: 56px 20px; }
+}
+
+/* ---------- feature discovery ---------- */
+.site-nav-links a.is-current { color: var(--text); }
+.feature-page { max-width: 1180px; margin: 0 auto; padding: 0 24px 96px; }
+.breadcrumb { display: flex; align-items: center; gap: 8px; padding: 32px 0 0; color: var(--text-dim); font-family: var(--font-mono); font-size: 11.5px; }
+.breadcrumb a { color: inherit; text-decoration: none; border-bottom: 1px solid transparent; transition: color 0.15s ease, border-color 0.15s ease; }
+.breadcrumb a:hover { color: var(--accent); border-color: var(--accent); }
+.feature-hero { max-width: 780px; margin: 0 auto; text-align: center; }
+.feature-hero--hub { padding: 112px 0 88px; }
+.feature-hero--detail { padding: 84px 0 62px; }
+.feature-hero h1 { margin: 0; font-size: clamp(37px, 5vw, 64px); font-weight: 500; letter-spacing: -0.045em; line-height: 1.02; text-wrap: balance; }
+.feature-hero > p:last-child { max-width: 54ch; margin: 22px auto 0; color: var(--text-dim); font-size: 16px; line-height: 1.65; text-wrap: balance; }
+.feature-hub-list { border-top: 1px solid var(--border); }
+.feature-hub-row { display: grid; grid-template-columns: 64px minmax(260px, 0.98fr) minmax(250px, 0.78fr); gap: 32px; align-items: start; padding: 42px 0; border-bottom: 1px solid var(--border); scroll-margin-top: 82px; }
+.feature-hub-row--featured { background: var(--surface); margin: 0 -24px; padding-right: 24px; padding-left: 24px; }
+.feature-number, .feature-label { margin: 0; font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-dim); }
+.feature-label { margin-bottom: 13px; }
+.feature-hub-row h2 { max-width: 16ch; margin: 0; font-size: clamp(25px, 3.1vw, 38px); font-weight: 500; letter-spacing: -0.032em; line-height: 1.08; text-wrap: balance; }
+.feature-row-end { padding-top: 26px; }
+.feature-row-end p { max-width: 38ch; margin: 0; color: var(--text-dim); font-size: 14px; line-height: 1.65; }
+.feature-row-end .text-link { margin-top: 18px; }
+.feature-close { margin: 96px 0 0; padding: 76px 24px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); text-align: center; }
+.feature-close h2 { max-width: 15ch; margin: 0 auto; font-size: clamp(30px, 4vw, 49px); font-weight: 500; letter-spacing: -0.04em; line-height: 1.05; text-wrap: balance; }
+.feature-close .cta { margin-top: 28px; }
+.feature-capture { max-width: 960px; margin: 0 auto 120px; }
+.feature-copy-grid { display: grid; grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.2fr); gap: clamp(42px, 9vw, 150px); max-width: 1060px; margin: 0 auto; padding-bottom: 104px; }
+.feature-copy-grid h2, .truth-note h2 { max-width: 12ch; margin: 0; font-size: clamp(29px, 3.7vw, 46px); font-weight: 500; letter-spacing: -0.04em; line-height: 1.06; text-wrap: balance; }
+.feature-copy-list { border-top: 1px solid var(--border); }
+.feature-copy-list article { padding: 22px 0 24px; border-bottom: 1px solid var(--border); }
+.feature-copy-list h3 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.feature-copy-list p { margin: 8px 0 0; color: var(--text-dim); font-size: 14px; line-height: 1.65; }
+.feature-copy-list code { padding: 2px 5px; border: 1px solid var(--border); border-radius: 3px; background: var(--surface); color: var(--text); font-family: var(--font-mono); font-size: 0.9em; }
+.truth-note { max-width: 1060px; margin: 0 auto; padding: 40px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.truth-note h2 { max-width: 17ch; }
+.truth-note > p:not(.section-kicker) { max-width: 68ch; margin: 20px 0 0; color: var(--text-dim); font-size: 15px; line-height: 1.68; }
+
+/* ---------- tablet containment ----------
+   Between phone and desktop widths, the Island capture's intrinsic dimensions
+   could keep the two-column story wider than the viewport. Let it yield before
+   the phone breakpoint takes over. The proof rail stays centered here — it
+   wraps, so it can't overflow; only the ≤640px scroller needs flex-start. */
+@media (max-width: 1080px) {
+  .home-story { grid-template-columns: minmax(0, 0.84fr) minmax(0, 1.16fr); gap: clamp(30px, 5vw, 56px); }
+  .home-story > * { min-width: 0; }
+  .home-story .product-capture { max-width: 100%; }
+}
+
+@media (max-width: 760px) {
+  .home-story { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+  .home-feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0 24px; }
+}
+
+/* Two quiet lines: copyright/attribution up top, legal + social below. */
+footer { border-top: 1px solid var(--border); padding: 22px 40px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); opacity: 0.75; }
+footer .foot-copy { white-space: nowrap; }
+footer .foot-copy b { color: var(--accent); font-weight: 400; }
+footer .foot-links { display: inline-flex; align-items: center; gap: 8px; }
+footer .foot-sep { opacity: 0.5; }
+/* Text links (Bananify, Privacy, Terms) keep the hairline-underline → accent. */
+footer .foot-copy a, footer .foot-links a:not(.foot-ic) { color: inherit; text-decoration: none; border-bottom: 1px solid var(--border); padding-bottom: 1px; transition: color 0.15s, border-color 0.15s; }
+footer .foot-copy a:hover, footer .foot-links a:not(.foot-ic):hover { color: var(--accent); border-color: var(--accent); }
+/* Social glyphs: monochrome, muted with the footer, brightening to accent. */
+footer .foot-social { display: inline-flex; align-items: center; gap: 13px; margin-left: 4px; }
+footer .foot-ic { display: inline-flex; color: inherit; transition: color 0.15s; }
+footer .foot-ic:hover { color: var(--accent); }
+footer .foot-ic svg { width: 14px; height: 14px; display: block; fill: currentColor; }
+/* Instagram's official glyph is drawn as hairline shapes and reads thinner
+   than Threads' solid mark at the same size — add a slight stroke on top
+   of the fill (path geometry untouched) so the two brand marks sit closer
+   in visual weight without turning bold. */
+footer .foot-ic.ig svg path { stroke: currentColor; stroke-width: 0.35; stroke-linejoin: round; stroke-linecap: round; }
+
+@media (max-width: 480px) {
+  html { scroll-padding-top: 64px; }
+  footer { padding: 20px 16px; }
+  footer .foot-copy { white-space: normal; }
+  .consent {
+    width: min(340px, calc(100vw - 32px));
+    flex-direction: row;
+    align-items: center;
+    justify-content: stretch;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+  .consent span { flex: 1 0 100%; text-align: center; }
+  body.has-consent .hero { padding-bottom: 144px; }
+  .consent button {
+    width: auto;
+    flex: 1 1 0;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  .site-header { padding: 10px 16px; }
+  .site-nav { min-height: 44px; gap: 10px; }
+  .site-brand, .site-nav-links a { min-height: 40px; display: inline-flex; align-items: center; }
+  .site-nav-links { gap: 8px; }
+  .site-nav-cta { min-height: 40px; padding: 0 12px; font-size: 11.5px; }
+  .hero { min-height: auto; padding: 78px 18px 56px; }
+  .hero .mark { width: 24px; height: 32px; margin-bottom: 14px; }
+  .hero .eyebrow { margin-bottom: 15px; font-size: 10.5px; letter-spacing: 0.19em; }
+  .hero h1 { font-size: 31px; line-height: 1.1; }
+  .hero .hero-copy { margin-top: 11px; font-size: 14px; line-height: 1.5; }
+  .demo-stage { height: 348px; margin-top: 22px; border-radius: 11px; }
+  .demo-page { padding: 78px 28px 0; }
+  .demo-caption { min-height: 0; margin-top: 15px; padding: 8px 12px; font-size: 11.5px; }
+  .demo-scrub { width: min(88%, 420px); bottom: 12px; padding: 10px 16px; }
+  .demo-scrub-marker { width: 13px; height: 13px; }
+  .hero .cta { min-height: 46px; margin-top: 24px; padding: 0 22px; }
+  .hero .platforms { margin-top: 12px; white-space: normal; line-height: 1.7; }
+  .proof-rail { justify-content: flex-start; gap: 8px 14px; padding: 15px 18px; font-size: 10.5px; }
+  .home-intro { padding: 82px 18px 62px; }
+  .home-story { grid-template-columns: 1fr; gap: 32px; padding: 0 18px 80px; }
+  .home-feature-grid { grid-template-columns: 1fr; margin: 0 18px; }
+  .home-feature { min-height: auto; padding: 28px 24px 32px; }
+  .feature-index { margin-bottom: 48px; }
+  .home-faq { grid-template-columns: 1fr; gap: 36px; padding: 80px 18px; }
+  .home-close { margin: 0 18px 72px; padding: 58px 20px; }
+  .download-page { padding: 78px 18px 68px; }
+  .download-options { grid-template-columns: 1fr; margin: 52px 0 80px; }
+  .download-whatsnew { margin: -56px 0 64px; }
+  .download-note { padding: 28px 20px; }
+  .download-note + .download-details { margin-top: 96px; }
+  /* Stacked on one column, the tall bottom-aligned cards become mostly-empty
+     boxes — make them compact and top-aligned so each is a tight tap target. */
+  .platform-card { min-height: auto; justify-content: flex-start; padding: 22px 24px; }
+  .platform-label { margin-bottom: 10px; }
+  .download-details { grid-template-columns: 1fr; gap: 36px; padding-bottom: 72px; }
+  .download-footnote { grid-template-columns: 1fr; gap: 14px; }
+  .compact-footer { flex-direction: column; padding: 20px 18px; text-align: center; }
+  .feature-page { padding: 0 18px 72px; }
+  .breadcrumb { padding-top: 24px; }
+  .feature-hero--hub { padding: 78px 0 58px; }
+  .feature-hero--detail { padding: 66px 0 46px; }
+  .feature-hub-row { grid-template-columns: 1fr; gap: 16px; padding: 30px 0 34px; }
+  .feature-hub-row--featured { margin: 0 -18px; padding-right: 18px; padding-left: 18px; }
+  .feature-row-end { padding-top: 0; }
+  .feature-close { margin-top: 72px; padding: 58px 20px; }
+  .feature-capture { margin-bottom: 80px; }
+  .feature-copy-grid { grid-template-columns: 1fr; gap: 36px; padding-bottom: 72px; }
+  .truth-note { padding: 28px 24px; }
+}
+
+/* ---------- phone-first refinements ----------
+   The desktop shell deliberately disappears into the page. On a phone, the
+   download action and feature path need to remain available while someone is
+   reading, and every text control needs a comfortably tappable target. */
+@media (max-width: 640px) {
+  html { scroll-padding-top: 72px; }
+
+  .site-header,
+  .site-header--solid {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    padding: max(10px, env(safe-area-inset-top)) 16px 10px;
+    border-bottom: 1px solid rgba(222, 222, 222, 0.9);
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: 0 4px 16px rgba(14, 14, 14, 0.035);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  .site-nav { min-height: 44px; gap: 10px; }
+  .site-brand,
+  .site-nav-links a { min-height: 44px; display: inline-flex; align-items: center; }
+  .site-nav-links { gap: 4px; margin-left: auto; }
+  .site-nav-links a { padding: 0 4px; }
+  .site-nav-cta { min-height: 44px; padding: 0 14px; font-size: 11.5px; }
+
+  .hero {
+    min-height: calc(100svh - 64px);
+    padding: 32px 18px 58px;
+  }
+  .hero .mark { width: 24px; height: 32px; margin-bottom: 14px; }
+  .hero .eyebrow { margin-bottom: 15px; font-size: 10.5px; letter-spacing: 0.19em; }
+  .hero h1 { font-size: clamp(30px, 8.4vw, 35px); line-height: 1.08; }
+  .hero .hero-copy { margin-top: 12px; font-size: 15px; line-height: 1.5; }
+  .demo-stage { height: 330px; margin-top: 24px; border-radius: 11px; }
+  .demo-page { padding: 78px 28px 0; }
+  .demo-caption { min-height: 42px; margin-top: 16px; padding: 8px 12px; font-size: 11.5px; }
+  .hero .cta { min-height: 48px; margin-top: 24px; padding: 0 24px; }
+  .hero .platforms { margin-top: 10px; line-height: 1.7; }
+  .hero .platforms a { display: inline-flex; align-items: center; min-height: 32px; }
+
+  .proof-rail {
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    gap: 0;
+    padding: 4px 18px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    /* Fade the trailing edge so the row reads as scrollable rather than
+       clipping the last highlight without any affordance. */
+    -webkit-mask-image: linear-gradient(90deg, #000 84%, transparent);
+    mask-image: linear-gradient(90deg, #000 84%, transparent);
+  }
+  .proof-rail::-webkit-scrollbar { display: none; }
+  .proof-rail a {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    min-height: 42px;
+    padding-right: 18px;
+    scroll-snap-align: start;
+  }
+
+  .text-link {
+    min-height: 44px;
+    align-items: center;
+    padding-bottom: 3px;
+  }
+  .home-feature > p:not(.feature-index),
+  .feature-row-end p,
+  .feature-copy-list p { font-size: 14.5px; }
+  .home-feature .text-link,
+  .feature-row-end .text-link { margin-top: 14px; }
+
+  footer { padding: 24px 18px; line-height: 1.55; }
+  footer .foot-links { flex-wrap: wrap; justify-content: center; row-gap: 6px; }
+
+  .consent {
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: min(360px, calc(100vw - 24px));
+  }
+}
+
+@media (max-width: 360px) {
+  .site-brand span { display: none; }
+  .site-nav-links { margin-left: auto; }
+  .site-nav-cta { padding: 0 10px; }
+}
+
+/* Supporter + custom-builds lines — footer-adjacent, footer-quiet. */
+.more { border-top: 1px solid var(--border); padding: 28px 40px; text-align: center; }
+.more-line { margin: 6px auto; max-width: 640px; font-family: var(--font-mono); font-size: 12.5px; color: var(--text-dim); }
+.more-line a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--border); padding-bottom: 1px; transition: color 0.15s, border-color 0.15s; }
+.more-line a:hover { color: var(--accent); border-color: var(--accent); }
+
+@media (max-width: 640px) {
+  .more { padding: 28px 20px; }
+  .more-line { margin: 9px auto; line-height: 1.65; }
+}
+
+/* ---------- legal / document pages (privacy, terms) ---------- */
+.legal-top { display: flex; justify-content: center; padding: 30px 24px 4px; }
+.legal-home { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; color: var(--text); transition: opacity 0.15s; }
+.legal-home:hover { opacity: 0.7; }
+.legal-home .mark { height: 24px; width: auto; color: var(--accent); }
+.legal-home .wordmark { font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.02em; }
+
+.legal-doc { max-width: 680px; margin: 0 auto; padding: 44px 24px 76px; }
+.legal-doc .eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--text-dim); margin: 0 0 16px; }
+.legal-doc h1 { font-size: clamp(30px, 3.4vw, 40px); font-weight: 500; letter-spacing: -0.015em; line-height: 1.12; margin: 0; }
+.legal-updated { font-family: var(--font-mono); font-size: 12.5px; color: var(--text-dim); margin: 12px 0 0; }
+.legal-lead { font-size: 15.5px; line-height: 1.6; color: var(--text-dim); margin: 16px 0 0; max-width: 60ch; }
+
+.legal-tldr { margin: 30px 0 4px; padding: 18px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.legal-tldr p { margin: 0; font-size: 15px; line-height: 1.62; color: var(--text); }
+
+.legal-doc h2 { font-size: 19px; font-weight: 600; letter-spacing: -0.01em; margin: 42px 0 12px; }
+.legal-doc h3 { font-size: 15.5px; font-weight: 600; margin: 24px 0 8px; }
+.legal-doc p { font-size: 15px; line-height: 1.66; color: var(--text); margin: 0 0 14px; }
+.legal-doc ul { margin: 0 0 16px; padding-left: 20px; }
+.legal-doc li { font-size: 15px; line-height: 1.6; color: var(--text); margin: 0 0 9px; }
+.legal-doc strong { font-weight: 600; }
+.legal-doc a { color: var(--text); text-decoration: none; border-bottom: 1px solid var(--border); padding-bottom: 1px; transition: color 0.15s, border-color 0.15s; }
+.legal-doc a:hover { color: var(--accent); border-color: var(--accent); }
+
+@media (max-width: 480px) {
+  .legal-top { padding: 22px 18px 4px; }
+  .legal-doc { padding: 32px 18px 56px; }
+}
+
+/* ---------- live-island figures (static product proof) ----------
+   Each figure reuses the hero demo's island chrome + private theming (the
+   .demo-stage / .demo-island rules above) frozen at one authored state, over a
+   real page shot that swaps to the 390px mobile crop under 560px via <picture>.
+   Because the pill is CSS rather than a raster, the island stays sharp and
+   legible at every width, and the ≤560px chrome-shedding applies for free.
+   These rules live at the end of the file so they win over the hero-only
+   .demo-stage breakpoints by source order. */
+.island-figure { width: 100%; height: 300px; max-width: none; margin: 0; border: 0; border-radius: 8px; box-shadow: none; }
+.island-figure--panel { height: 456px; }
+/* Panel figures carry no resting pill, so give the (absolutely positioned)
+   island a full-width box for the centered panel to size against — otherwise
+   it shrink-to-fits to zero and the panel collapses to a sliver. */
+.island-figure--panel .demo-island { width: 100%; }
+/* Size the open panel to the figure, not the viewport, so it never clips. */
+.island-figure .demo-island .panel { width: min(560px, 90%); max-height: 420px; }
+/* Figures are decorative: a <span> stands in for the demo's <button>s, so
+   mirror the disabled-arrow dimming with a class instead of :disabled. */
+.demo-island .pbtn.off { color: var(--border); }
+
+/* ---------- resting-pill figures: model the real Blanc window ----------
+   In the app the resting pill lives in a slim top strip and the web page
+   begins BELOW it (page never sits behind the pill); the strip is color-
+   matched to the page's top edge so it reads as the page's own top margin,
+   not a browser bar. So here: push the page shot down by the strip height,
+   fill the strip band with the page's top-edge color (--fig-strip-bg, keyed
+   per figure via data-page-tone), and scale the pill to the same ratio the
+   shot itself is reduced to, so the Island reads at true size rather than
+   oversized. Panel figures are exempt — their expanded panel genuinely
+   floats over the page (overlay view), so they stay full-bleed. */
+.island-figure { --fig-strip-h: 36px; --fig-strip-bg: var(--bg); }
+.island-figure[data-page-tone="light"]   { --fig-strip-bg: #ffffff; }
+.island-figure[data-page-tone="github"]  { --fig-strip-bg: #030442; }
+.island-figure[data-page-tone="netflix"] { --fig-strip-bg: #080706; }
+
+.island-figure:not(.island-figure--panel) { background: var(--fig-strip-bg); }
+.island-figure:not(.island-figure--panel) .demo-page,
+.island-figure:not(.island-figure--panel) .demo-shot { top: var(--fig-strip-h); height: auto; }
+.island-figure:not(.island-figure--panel) .demo-island {
+  top: calc(var(--fig-strip-h) / 2);
+  transform: translateX(-50%) translateY(-50%) scale(0.56);
+  transform-origin: center center;
+}
+
+@media (max-width: 640px) {
+  .island-figure { height: 244px; --fig-strip-h: 30px; }
+  .island-figure--panel { height: 360px; }
+  .island-figure .demo-island .panel { width: 94%; max-height: 316px; }
+  /* The narrow pill has already shed its flanking chrome (≤560px), so it is
+     much smaller — scale it less so it doesn't shrink into illegibility. */
+  .island-figure:not(.island-figure--panel) .demo-island {
+    transform: translateX(-50%) translateY(-50%) scale(0.72);
+  }
+}
