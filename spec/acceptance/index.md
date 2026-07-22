@@ -9,7 +9,7 @@ feature's row in [`../parity-matrix.md`](../parity-matrix.md) shouldn't reach
 
 > Desktop is the shipped reference, so its `@all` cells are ✅ (behaviour verified
 > in the shipping app; automated step-defs are a separate track). iOS/Android are
-> greenfield → ⬜. Scenario count: **50** across 12 `.feature` files.
+> greenfield → ⬜. Scenario count: **53** across 13 `.feature` files.
 
 ## Files
 
@@ -27,6 +27,7 @@ feature's row in [`../parity-matrix.md`](../parity-matrix.md) shouldn't reach
 | Internal pages | `internal-pages.feature` | F16 |
 | Supporter & session | `supporter-and-session.feature` | F17, F18 |
 | Platform services | `platform-services.feature` | F21, F22, F23, F24 |
+| Tab sync | `sync.feature` | F27 |
 
 ## Grid
 
@@ -83,6 +84,9 @@ feature's row in [`../parity-matrix.md`](../parity-matrix.md) shouldn't reach
 | F22-2 | Mobile ships no self-updater | D9 | ➖ | ⬜ | ⬜ |
 | F23-1 | Page scales + resets | D10 | ✅ | ⬜ | ⬜ |
 | F24-1 | AutoFill + passkeys in a tab | D12 | ➖ | ⬜ | ⬜ |
+| F27-1 | Sharing open tabs off by default | — | ✅ | ⬜ | ⬜ |
+| F27-2 | Remote tab opens locally as new ungrouped tab | — | ✅ | ⬜ | ⬜ |
+| F27-3 | Sharing-off retracts this device | — | ✅ | ⬜ | ⬜ |
 
 > **M0–M1 note (2026-07-08):** F5 (address/search + OS hand-off) and F1 (minimal
 > address surface) are implemented and unit-tested on iOS, but the iOS acceptance

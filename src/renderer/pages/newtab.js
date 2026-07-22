@@ -75,28 +75,63 @@ window.bowserPages?.bookmarks.list().then((items) => {
   }
 });
 
-window.bowserPages?.start.data().then(({ groups, blockedThisWeek }) => {
+// Tab sync: other devices' tabs, read-only — clicking navigates the current
+// tab, same as favorites above. Renders only when snapshots exist so the
+// ledger stays quiet otherwise. Re-rendered in place when a pull completes
+// after first paint (pages:start:remote-tabs).
+function renderRemote(remoteDevices) {
+  const section = document.getElementById('remoteSection');
+  const list = document.getElementById('remoteList');
+  list.replaceChildren();
+  section.hidden = !remoteDevices?.length;
+  if (section.hidden) return;
+  for (const device of remoteDevices) {
+    for (const t of device.tabs.slice(0, 4)) {
+      const row = document.createElement('a');
+      row.className = 'fav';
+      row.href = t.url;
+      const host = hostOf(t.url);
+      const tile = document.createElement('span');
+      tile.className = 'tile';
+      tile.textContent = (host || t.title || '').trim().charAt(0).toLowerCase() || '·';
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = t.title || t.url;
+      const hostEl = document.createElement('span');
+      hostEl.className = 'host';
+      hostEl.textContent = `${host} · ${device.name}`;
+      row.append(tile, name, hostEl);
+      list.appendChild(row);
+    }
+  }
+}
+
+window.bowserPages?.start.data().then(({ groups, blockedThisWeek, remoteDevices }) => {
   if (!isPrivate) {
     document.getElementById('footerLeft').textContent =
       `${blockedThisWeek.toLocaleString()} ads blocked this week`;
   }
-  if (!groups.length) return;
-  document.getElementById('groupsSection').hidden = false;
-  const list = document.getElementById('groupsList');
-  for (const g of groups) {
-    const row = document.createElement('button');
-    row.className = 'fav group-row';
-    const cluster = document.createElement('span');
-    cluster.className = 'cluster';
-    for (let i = 0; i < Math.min(g.count, 5); i++) cluster.appendChild(document.createElement('i'));
-    const name = document.createElement('span');
-    name.className = 'gname';
-    name.textContent = g.name;
-    const count = document.createElement('span');
-    count.className = 'gcount';
-    count.textContent = g.count === 1 ? '1 tab' : `${g.count} tabs`;
-    row.append(cluster, name, count);
-    row.addEventListener('click', () => window.bowserPages.start.focusGroup(g.id));
-    list.appendChild(row);
+  if (groups.length) {
+    document.getElementById('groupsSection').hidden = false;
+    const list = document.getElementById('groupsList');
+    for (const g of groups) {
+      const row = document.createElement('button');
+      row.className = 'fav group-row';
+      const cluster = document.createElement('span');
+      cluster.className = 'cluster';
+      for (let i = 0; i < Math.min(g.count, 5); i++) cluster.appendChild(document.createElement('i'));
+      const name = document.createElement('span');
+      name.className = 'gname';
+      name.textContent = g.name;
+      const count = document.createElement('span');
+      count.className = 'gcount';
+      count.textContent = g.count === 1 ? '1 tab' : `${g.count} tabs`;
+      row.append(cluster, name, count);
+      row.addEventListener('click', () => window.bowserPages.start.focusGroup(g.id));
+      list.appendChild(row);
+    }
   }
+  renderRemote(remoteDevices);
 });
+
+window.bowserPages?.start.onRemoteTabs(renderRemote);

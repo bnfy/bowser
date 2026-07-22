@@ -664,6 +664,9 @@ body[data-mode="palette"] #panelAnchor { top: 120px; }
 .row-pin:hover,
 .row-mute:hover { background: var(--border); color: var(--text); }
 .row-pin.on { opacity: 1; } /* a pinned tab shows its pin icon at rest, not just on hover */
+/* Remote tab rows (tab sync): non-interactive pin marker. */
+.row-remote-pin { display: inline-flex; opacity: 0.5; flex: none; color: var(--text-dim); }
+.row-remote-pin svg { width: 12px; height: 12px; stroke: currentColor; stroke-width: 1.25; fill: none; }
 .row-pin.on,
 .row-mute.on { color: var(--accent); background: var(--accent-dim); }
 

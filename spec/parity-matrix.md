@@ -37,6 +37,7 @@ See [`README.md`](./README.md#status-legend) for meanings.
 | F22 | Distribution & updates | SHIPPED | N/A | N/A | User gets updates; no in-app updater fighting the OS store. | D9 |
 | F23 | Zoom / page scaling | SHIPPED | DIVERGENT (D10) | DIVERGENT (D10) | Page can be scaled; desktop discrete zoom vs mobile pinch/native reflow. | D10 |
 | F24 | Password AutoFill / passkeys | N/A | PLANNED | PLANNED | On mobile, native credential provider + platform passkeys work in-webview. | D12 |
+| F27 | Tab Sync (other-device tab list) | SHIPPED | PLANNED | PLANNED | Per-device opt-in, off by default, publish-only gating; read-only browsing in panel/switcher/start page; http(s)-only bounded snapshots; retraction + 30-day prune + 24 h heartbeat; rides the E2EE sync store. | — |
 
 ## Notes on the "mobile-only wins"
 

@@ -42,6 +42,12 @@ contextBridge.exposeInMainWorld('browserAPI', {
 
   listHistory: (opts) => ipcRenderer.invoke('chrome:history-list', opts),
   listFavorites: () => ipcRenderer.invoke('chrome:favorites-list'),
+  listRemoteTabs: () => ipcRenderer.invoke('chrome:remote-tabs-list'),
+  onRemoteTabsUpdated: (callback) => {
+    const listener = (_event, devices) => callback(devices);
+    ipcRenderer.on('chrome:remote-tabs-updated', listener);
+    return () => ipcRenderer.removeListener('chrome:remote-tabs-updated', listener);
+  },
   clearHistory: () => ipcRenderer.invoke('chrome:history-clear'),
   toggleAdblock: () => ipcRenderer.invoke('chrome:adblock-toggle'),
   allowAdsOnActiveSite: () => ipcRenderer.invoke('chrome:adblock-exempt-active'),

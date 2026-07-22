@@ -51,6 +51,10 @@
   // Quick Switcher corpora, refreshed each time the panel opens.
   let favorites = [];
   let historyEntries = [];
+  // Other devices' tab snapshots (tab sync). Renderer-local fold state —
+  // devices start folded so the panel stays quiet (spec §2).
+  let remoteDevices = [];
+  const unfoldedDevices = new Set();
   // What Enter acts on — rebuilt on every list render.
   let visibleCommands = [];
   let visibleResults = [];
@@ -383,6 +387,89 @@
     return row;
   }
 
+  // --- Remote devices (tab sync) ---
+
+  const hostOfUrl = (url) => {
+    try { return new URL(url).host; } catch { return url; }
+  };
+
+  function timeAgo(ts) {
+    const mins = Math.max(1, Math.round((Date.now() - ts) / 60000));
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.round(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.round(hours / 24)}d ago`;
+  }
+
+  /** Remote presentation mirrors clusterList() (main.js): each group in
+   * group order with its pins leading, then loose tabs (pins first) —
+   * snapshot order preserved within each cluster (spec §2). */
+  function clusterRemoteTabs(device) {
+    const rows = [];
+    for (const g of device.groups) {
+      const members = device.tabs.filter((t) => t.groupId === g.id);
+      rows.push(...members.filter((t) => t.pinned), ...members.filter((t) => !t.pinned));
+    }
+    const loose = device.tabs.filter((t) => !device.groups.some((g) => g.id === t.groupId));
+    rows.push(...loose.filter((t) => t.pinned), ...loose.filter((t) => !t.pinned));
+    return rows;
+  }
+
+  /** "blanc on MacBook Air · 5 ——— 2h ago": click folds/unfolds. */
+  function remoteHeaderRow(device) {
+    const row = document.createElement('div');
+    row.className = 'island-ghead';
+    const open = unfoldedDevices.has(device.deviceId);
+    row.innerHTML = `${CARET}<span class="ghead-name"></span><span class="ghead-n"></span><span class="ghead-rule"></span><span class="ghead-n"></span>`;
+    row.querySelector('.caret').classList.toggle('open', open);
+    row.querySelector('.ghead-name').textContent = `blanc on ${device.name}`;
+    const ns = row.querySelectorAll('.ghead-n');
+    ns[0].textContent = String(device.tabs.length);
+    ns[1].textContent = timeAgo(device.updatedAt);
+    row.title = open ? 'Fold device' : 'Unfold device';
+    row.addEventListener('click', () => {
+      if (open) unfoldedDevices.delete(device.deviceId);
+      else unfoldedDevices.add(device.deviceId);
+      renderList();
+    });
+    return row;
+  }
+
+  /** A remote tab row: opens the url as a plain new local tab (ungrouped —
+   * no group reconstruction in v1, spec §2). */
+  function remoteTabRow(tab, device) {
+    const row = document.createElement('div');
+    row.className = 'island-row';
+    const favicon = document.createElement('span');
+    setFavicon(favicon, null); // snapshots carry no favicon — default glyph
+    const title = document.createElement('span');
+    title.className = 'row-title';
+    title.textContent = tab.title || tab.url;
+    if (tab.title) title.title = tab.title;
+    const sub = document.createElement('span');
+    sub.className = 'row-sub';
+    sub.textContent = hostOfUrl(tab.url);
+    row.append(favicon, title, sub);
+    if (tab.pinned) {
+      const pin = document.createElement('span');
+      pin.className = 'row-remote-pin';
+      pin.innerHTML = ICONS.pin;
+      row.append(pin);
+    }
+    const g = device.groups.find((x) => x.id === tab.groupId);
+    if (g) {
+      const tag = document.createElement('span');
+      tag.className = 'row-tag';
+      tag.textContent = g.name;
+      row.append(tag);
+    }
+    row.addEventListener('click', () => {
+      window.browserAPI.createTab(tab.url, { focusAddress: false });
+      window.browserAPI.closeOverlay();
+    });
+    return row;
+  }
+
   // --- Slash commands ---
 
   const COMMANDS = [
@@ -539,6 +626,15 @@
       const s = matchScore(query, matchableText(f.title, f.url));
       if (s) results.push({ kind: 'favorite', title: f.title, sub: stripUrl(f.url), url: f.url, score: s + 0.1 });
     }
+    // Remote tabs rank below local tabs (+0.2) and favorites (+0.1), above
+    // history (+0) — spec §2. The url-keyed dedup below keeps the
+    // higher-ranked favorite row when both match.
+    for (const device of remoteDevices) {
+      for (const t of device.tabs) {
+        const s = matchScore(query, matchableText(t.title, t.url));
+        if (s) results.push({ kind: 'remote', title: t.title || t.url, sub: `${hostOfUrl(t.url)} · ${device.name}`, url: t.url, score: s + 0.05 });
+      }
+    }
     for (const h of historyEntries) {
       const s = matchScore(query, matchableText(h.title, h.url));
       if (s) results.push({ kind: 'history', title: h.title, sub: stripUrl(h.url), url: h.url, score: s });
@@ -558,6 +654,7 @@
   function pickResult(result) {
     if (result.kind === 'group') window.browserAPI.focusGroup(result.group.id);
     else if (result.kind === 'tab') window.browserAPI.switchTab(result.tab.id);
+    else if (result.kind === 'remote') window.browserAPI.createTab(result.url, { focusAddress: false });
     else if (state.activeTabId) window.browserAPI.navigate(state.activeTabId, result.url);
     window.browserAPI.closeOverlay();
   }
@@ -642,6 +739,12 @@
         else if (clusters.length > 1) rows.push(looseHeaderRow());
         if (group?.collapsed) rows.push(foldedGroupRow(group, gtabs));
         else rows.push(...gtabs.map(tabRow));
+      }
+      for (const device of remoteDevices) {
+        rows.push(remoteHeaderRow(device));
+        if (unfoldedDevices.has(device.deviceId)) {
+          rows.push(...clusterRemoteTabs(device).map((t) => remoteTabRow(t, device)));
+        }
       }
       islandList.replaceChildren(...rows);
 
@@ -843,10 +946,13 @@
   // --- State sync ---
 
   async function refreshSwitcherData() {
-    [favorites, historyEntries] = await Promise.all([
+    [favorites, historyEntries, remoteDevices] = await Promise.all([
       window.browserAPI.listFavorites(),
       window.browserAPI.listHistory({ limit: 300 }),
+      window.browserAPI.listRemoteTabs(),
     ]);
+    // Data lands after the panel already rendered — refresh it.
+    if (mode === 'panel' || mode === 'palette') renderList();
   }
 
   window.browserAPI.onTabsUpdated((payload) => {
@@ -855,6 +961,12 @@
       renderPanel();
       if (!inputTouched) addressInput.value = addressDisplayValue(activeTab());
     }
+  });
+  // Cached-first: the panel renders the cache instantly, and this repaints
+  // when the panel-open refresh's pull lands (tab sync).
+  window.browserAPI.onRemoteTabsUpdated((devices) => {
+    remoteDevices = devices;
+    if (mode === 'panel' || mode === 'palette') renderList();
   });
   window.browserAPI.getAllTabs().then((payload) => {
     state = payload;

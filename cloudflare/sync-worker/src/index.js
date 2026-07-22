@@ -4,7 +4,7 @@
 // cloudflare/ping-worker: no IPs, no ids, no browsing data. See the design
 // spec in the main repo (docs/superpowers/specs/2026-07-07-profile-sync-design.md).
 
-const STORES = new Set(['bookmarks', 'settings']); // history/session added in a later phase
+const STORES = new Set(['bookmarks', 'settings', 'session']); // history may follow later
 const MAX_BLOB_BYTES = 512 * 1024;                 // favorites+settings are tiny; raise for history
 const RATE_LIMIT = 30;                             // GETs per accountId per minute — anti-hammering of one account
 const IP_RATE_LIMIT = 120;                         // requests per client IP per minute — the anti-guessing throttle

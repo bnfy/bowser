@@ -372,3 +372,20 @@ From the desktop `DEFAULTS`:
 - **Acceptance:** On a WebRTC test page, Standard reveals no local/multi-homed
   private addresses; with an application proxy configured, Disable-direct-UDP
   removes direct UDP candidates.
+
+## F27 — Tab Sync (open tabs from your other devices)
+
+- With Profile Sync enabled and the per-device **"share this device's open
+  tabs"** toggle on (**off by default** — a device's tabs never upload without
+  an explicit act on that device), each device publishes an E2EE snapshot of
+  its open tabs (url, title, group, pinned; http(s) only, bounded) under the
+  sync account. Other devices browse it **read-only** — ⌘L panel (folded
+  per-device sections), Quick Switcher (ranked below local tabs and
+  favorites), start page — and open individual tabs locally. Never a merged
+  live session: nothing force-opens or closes remotely. Private tabs never
+  enter the snapshot. Toggle-off publishes a retraction; entries prune after
+  30 days; a 24 h heartbeat keeps live devices present. Design:
+  `docs/superpowers/specs/2026-07-21-tab-sync-design.md`.
+- **Acceptance:** With sharing on on device A, device B lists A's tabs after a
+  focus refresh and opens one as a new ungrouped local tab; toggling sharing
+  off on A removes A's section from B after the next sync.

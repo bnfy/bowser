@@ -33,8 +33,8 @@ But sync is also the feature most able to **betray Blanc's core promise.** The p
 | `bookmarks.json` (Favorites) | **v1 — flagship** | Set keyed by `url`; per-item `updatedAt` + **delete tombstones** (removed items resurrect otherwise). |
 | `settings.json` | **v1, selectively** | Per-key last-writer-wins via a `_meta` timestamp map. **Excludes `supporter`** (syncing it is a license-sharing vector) and `appIcon` (supporter colorways need the license present on *that* device). |
 | `history.json` | **v2** | Union by `(url, visitedAt)`, re-sort desc, re-cap 5000. Clear-all carried as a `clearedBefore` watermark. |
-| `session.json` (tab groups) | **v2+** | Durable "reopen my workspace" only — the group/pinned structure. |
-| Live "tabs from my other device" | **out** | A real-time presence feature, not blob sync. Separate future spec. |
+| Open tabs (per-device snapshots) | **Shipped 2026-07** | Device-keyed map in the `session` store; per-device LWW; publish gated by a per-device opt-in. See `2026-07-21-tab-sync-design.md`. |
+| Live "tabs from my other device" | **superseded** | Shipped as the non-real-time other-device tab list — `2026-07-21-tab-sync-design.md`. |
 | `downloads.json` | **out** | Entries point at files absent on the other machine. At most a read-only "download log" later. |
 | `site-permissions.json` | **later** | Sensitive, low value. |
 | `adblock-stats.json` | **never** | Local rolling counter; nothing to merge. |
@@ -123,7 +123,8 @@ Blob sync is **pull → decrypt → merge → encrypt → push**, per store, nev
 
 ## 13. Out of scope (deliberate)
 
-- Live "open tabs from another device," downloads sync, cookie/password/session sync.
+- Downloads sync, cookie/password/session sync. (Open tabs from another
+  device shipped 2026-07 as non-real-time snapshots — `2026-07-21-tab-sync-design.md`.)
 - Accounts, email, device management dashboards, server-side merge or search.
 - Any paid gating (free forever, per §2).
 - Conflict UI — merges are automatic and non-destructive; there is nothing to resolve by hand.
