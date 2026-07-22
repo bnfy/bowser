@@ -147,6 +147,10 @@ function bodyText(html, { fromFeatures, isNew }) {
   // missing demo.js or a stray site.js on a legal page still fails.
   body = body.replace(/<script\b[^>]*\bsrc="[^"]*"[^>]*><\/script>\s*/g, '');
   if (!isNew) body = rewriteLinks(body, fromFeatures);
+  // XML-style self-closing (<path .../> in inline SVG) and explicit
+  // open/close (<path ...></path>, Astro's serialization) parse to the same
+  // DOM — normalize to the explicit form on both sides.
+  body = body.replace(/<([\w-]+)([^>]*?)\s*\/>/g, '<$1$2></$1>');
   return body.replace(/>\s+</g, '><').replace(/\s+/g, ' ').trim();
 }
 
