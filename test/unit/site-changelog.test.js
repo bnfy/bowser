@@ -34,7 +34,7 @@ test('generated GitHub notes become clean labels and validated links', () => {
   assert.deepEqual(notes.extraParagraphs, []);
 });
 
-test('non-Blanc links are rendered as escaped text, never active links', () => {
+test('non-Blanc links never become link URLs in the release data', () => {
   const notes = changelog.parseGeneratedNotes([
     '## What\'s Changed',
     '* fix: <script>alert(1)</script> by @attacker in https://example.com/bnfy/blanc/pull/9',
@@ -52,10 +52,11 @@ test('non-Blanc links are rendered as escaped text, never active links', () => {
     published_at: '2026-07-11T00:00:00Z',
     body: '* fix: <script>alert(1)</script> by @attacker in https://example.com/bnfy/blanc/pull/9',
   }]);
-  const html = changelog.renderChangelog(release);
-  assert.ok(!html.includes('<script>alert(1)</script>'));
-  assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
-  assert.ok(!html.includes('href="https://example.com'));
+  const json = changelog.renderReleasesJson(release);
+  const parsed = JSON.parse(json);
+  assert.equal(parsed[0].changes[0].url, null);
+  assert.equal(parsed[0].changes[0].text, 'fix: <script>alert(1)</script>');
+  // HTML-escaping is Astro's job at render time; the data keeps raw text.
 });
 
 test('pre-rename bnfy/bowser release links are rewritten to the current repo name', () => {
@@ -81,7 +82,7 @@ test('the legacy Bowser name is scrubbed from visitor-facing release text', () =
   ].join('\n'));
   assert.equal(notes.changes[0].text, 'Rename Blanc to Blanc');
   assert.deepEqual(notes.extraParagraphs, ['Blanc rebrand release: identity rebrand.']);
-  assert.ok(!changelog.renderChangelog(changelog.normalizeReleases([{
+  assert.ok(!changelog.renderReleasesJson(changelog.normalizeReleases([{
     html_url: 'https://github.com/bnfy/bowser/releases/tag/v0.2.0',
     tag_name: 'v0.2.0', name: '0.2.0', draft: false, prerelease: false,
     published_at: '2026-07-04T00:00:00Z',
@@ -117,7 +118,8 @@ test('GitHub-looking URLs with embedded credentials are not trusted', () => {
   assert.deepEqual(notes.changes, [{ text: 'fix: misleading host', url: null }]);
 });
 
-test('rendering is deterministic and RSS is capped at twenty newest releases', () => {
+test('release data is deterministic and RSS is capped at twenty newest releases', async () => {
+  const { renderRss } = await import(pathToFileURL(path.join(ROOT, 'site/src/lib/rss.mjs')));
   const raw = Array.from({ length: 23 }, (_, index) => ({
     html_url: `https://github.com/bnfy/blanc/releases/tag/v1.0.${index}`,
     tag_name: `v1.0.${index}`,
@@ -128,10 +130,22 @@ test('rendering is deterministic and RSS is capped at twenty newest releases', (
     body: `* fix: release ${index}`,
   }));
   const releases = changelog.normalizeReleases(raw);
-  assert.equal(changelog.renderChangelog(releases), changelog.renderChangelog(releases));
-  const rss = changelog.renderRss(releases);
+  assert.equal(changelog.renderReleasesJson(releases), changelog.renderReleasesJson(releases));
+  const rss = renderRss(releases);
   assert.equal((rss.match(/<item>/g) || []).length, 20);
   assert.match(rss, /<lastBuildDate>Fri, 23 Jan 2026 00:00:00 GMT<\/lastBuildDate>/);
+});
+
+test('normalized releases carry pre-rendered New-York dates', () => {
+  const releases = changelog.normalizeReleases([{
+    html_url: 'https://github.com/bnfy/blanc/releases/tag/v1.0.0',
+    tag_name: 'v1.0.0', name: '1.0.0', draft: false, prerelease: false,
+    // 01:30 UTC on the 12th is the evening of the 11th in New York.
+    published_at: '2026-07-12T01:30:00Z',
+    body: '* fix: something',
+  }]);
+  assert.equal(releases[0].humanDate, 'July 11, 2026');
+  assert.equal(releases[0].machineDate, '2026-07-11');
 });
 
 test('paginated adjacent JSON arrays are parsed without corrupting strings', () => {
@@ -142,19 +156,20 @@ test('paginated adjacent JSON arrays are parsed without corrupting strings', () 
   ]);
 });
 
-test('offline CLI writes artifacts and --check fails after either one goes stale', () => {
+test('offline CLI writes release data and --check fails after it goes stale', () => {
   const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'blanc-changelog-'));
   const args = ['--input', FIXTURE_PATH, '--output-dir', outputDir];
   const generate = spawnSync(process.execPath, [SCRIPT_PATH, ...args], { encoding: 'utf8' });
   assert.equal(generate.status, 0, generate.stderr);
-  assert.ok(fs.existsSync(path.join(outputDir, 'changelog.html')));
-  assert.ok(fs.existsSync(path.join(outputDir, 'changelog.xml')));
+  const jsonPath = path.join(outputDir, 'releases.json');
+  assert.ok(fs.existsSync(jsonPath));
+  JSON.parse(fs.readFileSync(jsonPath, 'utf8')); // valid JSON
 
   const fresh = spawnSync(process.execPath, [SCRIPT_PATH, ...args, '--check'], { encoding: 'utf8' });
   assert.equal(fresh.status, 0, fresh.stderr);
 
-  fs.appendFileSync(path.join(outputDir, 'changelog.xml'), '<!-- stale -->');
+  fs.appendFileSync(jsonPath, '\n');
   const stale = spawnSync(process.execPath, [SCRIPT_PATH, ...args, '--check'], { encoding: 'utf8' });
   assert.equal(stale.status, 1);
-  assert.match(stale.stderr, /Changelog output is stale or missing/);
+  assert.match(stale.stderr, /stale or missing/);
 });
