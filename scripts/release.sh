@@ -136,9 +136,11 @@ if ! GENERATED="$(gh api "repos/$REPO/releases/generate-notes" -f tag_name="$TAG
   exit 1
 fi
 {
-  echo "Blanc v$VERSION brings fully adaptive app icons to macOS 26 and later. Every Dock colorway is now an Icon Composer stack that follows the user's Icon & Widget Style — Default, Dark, Clear, or Tinted — including the system-selected tint color, while older macOS releases retain the existing flat icons."
+  echo "Blanc v$VERSION introduces Tab Sync: see your open tabs from your other devices. Turn on \"share this device's open tabs\" under Settings → Sync and each machine publishes a snapshot of its tabs — browse them from the ⌘L panel, the Quick Switcher, or the start page on any synced device, and open one locally with a click. It's a menu, not a mirror: nothing ever force-opens or closes a tab on another machine."
   echo
-  echo "This release also updates Electron to 43.1.1, electron-builder to 26.15.3, and Cucumber to 13.1.1, bringing the latest Chromium patch and a clean dependency audit."
+  echo "Sharing is off by default and per-device, private tabs never leave the machine, and like the rest of Profile Sync the snapshots are end-to-end encrypted — the sync server only ever stores ciphertext it cannot read."
+  echo
+  echo "This release also updates Electron to 43.2.0 for the latest Chromium stable."
   echo
   printf '%s\n' "$GENERATED"
 } > "$NOTES_FILE"
