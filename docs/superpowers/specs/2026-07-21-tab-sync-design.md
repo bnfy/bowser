@@ -14,8 +14,8 @@ Chosen over two alternatives during brainstorming:
 
 ## 2. Experience
 
-- **⌘L panel:** below the local groups' section, one collapsed header per remote device — `blanc on MacBook Air · 5 tabs · 2h ago` — using the same fold/unfold pattern as group headers. Clicking a row opens that URL as a plain new local tab (ungrouped, normal `createTab` path; no group reconstruction in v1). Devices with zero tabs, retracted entries, and the local device itself never render.
-- **Quick Switcher:** remote tabs join the match pool (existing loose substring/in-order matching), ranked below local tabs and favorites. Rows carry the device name.
+- **⌘L panel:** below the local groups' section, one collapsed header per remote device — `blanc on MacBook Air · 5 tabs · 2h ago` — using the same fold/unfold pattern as group headers. Rows keep the remote device's tab order (which already clusters groups), pinned tabs lead with a pin marker, and grouped rows carry the group name as a quiet mono label — the same annotation vocabulary local rows use. Clicking a row opens that URL as a plain new local tab (ungrouped, normal `createTab` path; no group reconstruction in v1). Devices with zero tabs, retracted entries, and the local device itself never render.
+- **Quick Switcher:** remote tabs join the match pool (existing loose substring/in-order matching), ranked below local tabs and favorites. Rows carry the device name; group/pin metadata is ignored here and on the start page.
 - **Start page:** an "on your other devices" block after the tab-groups section, fed via the `startPage` hooks (`pages:start:data` grows `remoteDevices`). Clicking navigates the current tab, same as favorites there. Renders only when remote snapshots exist — the ledger page stays quiet otherwise.
 - **Settings → Sync:** a "Share this device's open tabs with your other devices" checkbox, **off by default for everyone** (fresh setups included). The resting pill is unchanged.
 
@@ -45,7 +45,8 @@ devices: {
 ```
 
 - **`deviceId`** is a random UUID minted lazily, stored in `sync.json`. It is deliberately **not** the telemetry `installId` — nothing may attach to that identifier (CLAUDE.md), and browsing data least of all.
-- **Snapshot contents** reuse the exact filter `persistSession` already applies, extracted into a shared `snapshotPersistableTabs()` in `main.js`: private tabs and private-only groups never enter, `blanc://error` URLs unwrap to their real destination. Defensive caps: 500 tabs per device, titles truncated to 200 chars.
+- **Snapshot contents** derive from the same entry-building logic `persistSession` uses, extracted into a small **pure module `src/main/session-snapshot.js`** (no `electron` import — `main.js` isn't loadable under `node --test`; `sync-wipe.js` is the precedent). It exposes two shapes: `persistableEntries(tabs)` — exactly today's `persistSession` semantics (private tabs and private-only groups excluded, `blanc://error` unwrapped), used unchanged for `session.json` — and `syncSnapshot(entries, groups)`, which additionally applies the portability filter for the synced copy.
+- **Portability filter (sync snapshot only):** `http:`/`https:` URLs only — `file://` paths don't exist on other machines and `blanc://` internal pages aren't worth a row; URLs longer than 2048 chars are skipped; titles truncated to 200 chars; at most 500 tabs per device. `session.json` keeps persisting everything it does today; only the synced snapshot is filtered.
 - Snapshots mirror `session.json`'s persistable data but flow through their own store; `session.json` itself is untouched.
 
 ## 5. Merge semantics
@@ -59,14 +60,15 @@ Union by `deviceId`, last-writer-wins per entry on `updatedAt`. Each device only
 ## 6. Sync integration
 
 - `sync.js`'s `STORES` gains `{ name: 'session', export: tabsync.exportForSync, merge: tabsync.mergeFromSync }`. Order still doesn't matter.
-- **Scheduling:** tab state churns far faster than favorites/settings (~10 broadcasts/s while loading), so tab-driven changes schedule sync through a longer debounce (**15s**) via a `tabsync.onLocalChange` hook fed from the same call sites as `persistSession`. Favorites/settings keep their existing 4s `schedule()`.
+- **Scheduling — separate timer, fingerprint-gated.** `sync.js` has one trailing timer today, and `schedule()` clears it on every call — so high-churn tab events routed through it would keep postponing a pending 4s favorites/settings sync indefinitely. Tab-driven syncs therefore get their **own trailing timer** (15s debounce) that never touches the existing one. And because `persistSession` runs inside `broadcastTabs()` — which also fires for blocked-count ticks and loading-flag flips (~10/s during loads) — the tab trigger is gated by a **snapshot fingerprint**: a stable hash of the sync snapshot (urls, titles, group names, pinned). Broadcasts that don't change the snapshot schedule nothing; no-op uploads never happen.
+- **Freshness — pull on focus/panel-open.** Local-change triggers alone never make another device's tabs appear on an *idle* machine (it would only pull at launch or after its own edits). So the receiving side gets a **session-store-only refresh** — pull + merge, pushing only if our fingerprint changed — triggered when the window regains focus (`browser-window-focus`) and when the ⌘L panel opens (`showOverlay('panel'|'palette')`), throttled to at most once per 60 s, only while sync is enabled. Session-only keeps it off the bookmarks/settings blobs and well inside the worker's 30 GETs/min per-account limit.
 - Sync-on-launch (already present) publishes a fresh snapshot after session restore.
 - **Quit:** a best-effort fire-and-forget `syncNow()` in `before-quit`. A change made in the final seconds before quitting may not upload until that device next launches — an accepted, documented limitation; no blocking of quit on network.
 
 ## 7. Worker (`cloudflare/sync-worker/`)
 
 - `'session'` joins the `STORES` whitelist — the one-line change the code comment reserved. `handleDelete` already iterates `STORES`, so account-wide wipe covers the new blob automatically.
-- `MAX_BLOB_BYTES` stays 512 KB (500 tabs ≈ 150 KB even before compression). Rate limits unchanged; one extra GET+PUT per sync cycle is well inside them.
+- `MAX_BLOB_BYTES` stays 512 KB — but note it caps the **combined, encrypted multi-device map** (`JSON.stringify` of the base64 blob), so the per-device tab cap alone doesn't bound it. The client enforces an **account-level plaintext budget of 320 KB** at export (≈ 440 KB once encrypted + base64'd, safely under the worker cap): first trim our own tab list from the end until under budget, then — only if still over, a pathological many-device account — drop the stalest *other* devices' entries from the pushed map. A dropped device resurrects on its own next push (its local copy still holds its entry); only third-device visibility is briefly affected. Rate limits unchanged; one extra GET+PUT per sync cycle plus the throttled focus refresh is well inside them.
 
 ## 8. Privacy & threat model
 
@@ -77,9 +79,11 @@ Union by `deviceId`, last-writer-wins per entry on `updatedAt`. Each device only
 
 ## 9. Testing
 
-Unit tests (`test/unit/`, node --test):
+Unit tests (`test/unit/`, node --test) — most of the surface lives in pure modules (`session-snapshot.js`, `tabsync.js` merge logic) precisely so it's testable without Electron:
 - Merge: per-device LWW; retraction beats stale copies and cannot be resurrected by an older entry; 30-day pruning; tab cap and title truncation enforced on export.
-- Snapshot builder: private-tab exclusion, private-only group exclusion, error-URL unwrapping.
+- Snapshot builder (`session-snapshot.js`): private-tab exclusion, private-only group exclusion, error-URL unwrapping in `persistableEntries`; HTTP(S)-only filter, URL-length skip, and caps in `syncSnapshot`; `persistableEntries` output unchanged from today's `persistSession` behavior.
+- Fingerprint: identical snapshots hash equal; blocked-count/loading-flag-only changes don't alter it; url/title/group/pin changes do.
+- Size budget: own-tabs trimming first, stale-other-device dropping second, output always under the plaintext budget.
 - Consent gating: `syncTabs` off → export omits/retracts own entry while merge still applies remote entries.
 
 Acceptance: a Gherkin scenario added to `spec/acceptance/` (dry-run-resolvable; desktop step bindings as feasible under `BLANC_TEST`).
@@ -93,6 +97,6 @@ Acceptance: a Gherkin scenario added to `spec/acceptance/` (dry-run-resolvable; 
 ## 11. Out of scope (v1)
 
 - Opening a whole remote group at once ("open all here").
-- Real-time presence / push freshness (the 15s debounce + pull-on-launch cadence is the freshness).
+- Real-time presence / server push (the 15s publish debounce + pull on launch/focus/panel-open is the freshness).
 - Remote-closing tabs on another device; any write path targeting another device's entry.
 - History and downloads sync (unchanged from the original spec's phasing).
