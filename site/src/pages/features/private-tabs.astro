@@ -1,0 +1,44 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+<BaseLayout
+  title={"Private Tabs That Stay Out of Your History | Blanc Browser"}
+  description={"Open a Blanc private tab to keep pages out of browsing history, session restore, and reopen-closed—then close the private tab when you are done."}
+  path="/features/private-tabs"
+  page="feature-private-tabs"
+  current="features"
+  ogDescription={"Keep private pages out of Blanc history, session restore, and reopen-closed."}
+  ogImage="/feature-private-tabs.png"
+  ogImageAlt={"Blanc private-tab state with a dark page, dashed Island outline, and private close chip."}
+>
+  <script type="application/ld+json" is:inline slot="head">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://blancbrowser.com/"},{"@type":"ListItem","position":2,"name":"Features","item":"https://blancbrowser.com/features"},{"@type":"ListItem","position":3,"name":"Private tabs","item":"https://blancbrowser.com/features/private-tabs"}]}
+</script>
+
+<main class="feature-page feature-detail-page">
+  <nav class="breadcrumb" aria-label="Breadcrumb"><a href="/">home</a><span aria-hidden="true">/</span><a href="/features">features</a><span aria-hidden="true">/</span><span aria-current="page">private tabs</span></nav>
+  <section class="feature-hero feature-hero--detail feature-hero--text" aria-labelledby="private-title"><p class="section-kicker">a clean trail</p><h1 id="private-title">Private tabs that stay out of the record.</h1><p>Pages opened in a private tab are not written to Blanc history and are not restored when you reopen the browser.</p></section>
+  <figure class="product-capture feature-capture">
+    <div class="demo-stage island-figure" data-theme="private" role="img" aria-label="A Blanc private tab: the Island has a dashed outline and hollow tab dots with a 'private' quick-exit chip, floating over Blanc's dark private page.">
+      <div class="demo-page" aria-hidden="true"><div class="bar w1"></div><div class="bar w2"></div><div class="bar w3"></div><div class="bar w4"></div></div>
+      <div class="demo-island private" aria-hidden="true">
+        <div class="pill">
+          <div class="dots"><span></span><span class="cur"></span><span></span></div>
+          <span class="priv-chip">private <svg width="8" height="8" viewBox="0 0 12 12"><path d="M3 3 L9 9 M9 3 L3 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+        </div>
+      </div>
+    </div>
+    <figcaption>A private tab visibly changes the Island, and its quick-exit chip closes the tab when you are done.</figcaption>
+  </figure>
+  <section class="feature-copy-grid feature-copy-grid--top" aria-labelledby="private-behavior-title">
+    <div><p class="section-kicker">what stays private</p><h2 id="private-behavior-title">Use a private tab, then leave no Blanc trail behind.</h2></div>
+    <div class="feature-copy-list">
+      <article><h3>Not in history.</h3><p>Pages you visit in a private tab stay out of Blanc's browsing history, so they do not become part of the local record.</p></article>
+      <article><h3>Not waiting after a restart.</h3><p>Private tabs are excluded from session restore and reopen-closed. They do not quietly return the next time you open Blanc.</p></article>
+      <article><h3>One simple exit.</h3><p>The private chip on the Island is a quick way to close the active private tab when you are finished.</p></article>
+    </div>
+  </section>
+  <aside class="truth-note" aria-labelledby="private-note-title"><p class="section-kicker">good to know</p><h2 id="private-note-title">Private does not mean anonymous.</h2><p>Private tabs keep activity out of Blanc's local history and session restore. They do not create a separate web identity: cookies and site storage are shared with regular tabs, and websites, your network, or an employer may still observe activity.</p><a class="text-link" href="/privacy#what-stays-on-your-device" data-track="feature_cta_click" data-feature="private-tabs" data-cta-position="truth-note">Read the full privacy policy <span aria-hidden="true">↗</span></a></aside>
+  <section class="feature-close" aria-labelledby="private-close-title"><p class="section-kicker">ready when you need it</p><h2 id="private-close-title">Keep a private page out of the record.</h2><a class="cta" href="/download" data-track="feature_cta_click" data-feature="private-tabs" data-cta-position="feature-close">download blanc</a></section>
+</main>
+</BaseLayout>

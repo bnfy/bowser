@@ -1,0 +1,54 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+<BaseLayout
+  title={"Browser Command Palette and Quick Tab Switcher | Blanc"}
+  description={"Use Command or Control L in Blanc to switch tabs, search history and favorites, open groups, or run slash commands without leaving the page."}
+  path="/features/command-palette"
+  page="feature-command-palette"
+  current="features"
+  ogDescription={"Switch tabs, search history and favorites, open groups, or run slash commands without leaving the page."}
+  ogImage="/feature-command-palette.png"
+  ogImageAlt={"Blanc's compact Island over a real web page, the control surface that opens the command palette and quick switcher."}
+>
+  <script type="application/ld+json" is:inline slot="head">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://blancbrowser.com/"},{"@type":"ListItem","position":2,"name":"Features","item":"https://blancbrowser.com/features"},{"@type":"ListItem","position":3,"name":"Command palette","item":"https://blancbrowser.com/features/command-palette"}]}
+</script>
+
+<main class="feature-page feature-detail-page">
+  <nav class="breadcrumb" aria-label="Breadcrumb"><a href="/">home</a><span aria-hidden="true">/</span><a href="/features">features</a><span aria-hidden="true">/</span><span aria-current="page">command palette</span></nav>
+  <section class="feature-hero feature-hero--detail feature-hero--text" aria-labelledby="command-title"><p class="section-kicker">keyboard first</p><h1 id="command-title">One shortcut to move through your whole session.</h1><p>Press Command or Control L to jump to a tab, favorite, history item, or group. Type / when you want to run a browser command instead.</p></section>
+  <figure class="product-capture feature-capture">
+    <div class="demo-stage island-figure island-figure--panel" role="img" aria-label="Blanc's command palette open over a web page: typing 'no' surfaces Notion from favorites, plus Netflix, Nintendo, and MS NOW from open tabs and history.">
+      <div class="demo-page" aria-hidden="true"><div class="bar w1"></div><div class="bar w2"></div><div class="bar w3"></div><div class="bar w4"></div></div>
+      <picture>
+        <source media="(max-width: 560px)" srcset="/shots/mobile/github.jpg">
+        <img class="demo-shot show" src="/shots/desktop/github.jpg" loading="lazy" alt="" aria-hidden="true">
+      </picture>
+      <div class="demo-island open" aria-hidden="true">
+        <div class="panel">
+          <div class="panel-row"><div class="field"><span class="typed">no</span><span class="caret"></span></div></div>
+          <div class="list">
+            <div class="trow hl"><span class="fav" style="background-image:url('https://icons.duckduckgo.com/ip3/notion.so.ico')"></span><span class="title">Notion</span><span class="dom">notion.so</span><span class="tag">favorite</span><span class="enter">↵</span></div>
+            <div class="trow"><span class="fav" style="background-image:url('https://icons.duckduckgo.com/ip3/netflix.com.ico')"></span><span class="title">Netflix</span><span class="dom">netflix.com</span></div>
+            <div class="trow"><span class="fav" style="background-image:url('https://icons.duckduckgo.com/ip3/nintendo.com.ico')"></span><span class="title">Nintendo</span><span class="dom">nintendo.com</span><span class="tag">history</span></div>
+            <div class="trow"><span class="fav" style="background-image:url('https://icons.duckduckgo.com/ip3/msnbc.com.ico')"></span><span class="title">MS NOW</span><span class="dom">msnow.com</span><span class="tag">history</span></div>
+          </div>
+          <div class="foot">esc to dismiss · ⌘L summons · / for commands</div>
+        </div>
+      </div>
+    </div>
+    <figcaption>One control surface opens tab switching, browser commands, and navigation without changing the page underneath.</figcaption>
+  </figure>
+  <section class="feature-copy-grid feature-copy-grid--top" aria-labelledby="jump-title">
+    <div><p class="section-kicker">jump, don't hunt</p><h2 id="jump-title">The same input gets you to the next thing.</h2></div>
+    <div class="feature-copy-list">
+      <article><h3>Find a tab with a few letters.</h3><p>The Quick Switcher matches across open tabs, favorites, browsing history, and named groups. Choose a result to focus it without sorting through a tab strip.</p></article>
+      <article><h3>Run a browser action with /.</h3><p>Type <code>/</code> to see commands for everyday browser work, including <code>/private</code>, <code>/find</code>, <code>/group work</code>, and <code>/allow-ads</code>.</p></article>
+      <article><h3>Keep the page where it is.</h3><p>The command palette floats over the page instead of moving content to make room. Dismiss it with Escape when you are done.</p></article>
+    </div>
+  </section>
+  <aside class="truth-note" aria-labelledby="command-note-title"><p class="section-kicker">one place for the little chores</p><h2 id="command-note-title">Switch the session. Change the browser. Stay in context.</h2><p>The command palette brings search, tab switching, and browser actions into one repeatable gesture. It is designed to shorten the trip between what you are reading and what you need to do next.</p><a class="text-link" href="/features/tab-groups" data-track="feature_cta_click" data-feature="command-palette" data-cta-position="related-feature">See how commands work with tab groups <span aria-hidden="true">↗</span></a></aside>
+  <section class="feature-close" aria-labelledby="command-close-title"><p class="section-kicker">the browser stays quiet</p><h2 id="command-close-title">Bring up the controls only when you need them.</h2><a class="cta" href="/download" data-track="feature_cta_click" data-feature="command-palette" data-cta-position="feature-close">download blanc</a></section>
+</main>
+</BaseLayout>

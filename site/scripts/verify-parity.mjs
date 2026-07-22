@@ -153,6 +153,13 @@ function bodyText(html, { fromFeatures, isNew }) {
   // open/close (<path ...></path>, Astro's serialization) parse to the same
   // DOM — normalize to the explicit form on both sides.
   body = body.replace(/<([\w-]+)([^>]*?)\s*\/>/g, '<$1$2></$1>');
+  // Attribute order is semantically meaningless and the baseline itself is
+  // inconsistent (class-before-href on feature pages, href-first elsewhere) —
+  // canonicalize by sorting each tag's attributes.
+  body = body.replace(/<([\w-]+)((?:\s+[\w:.@-]+(?:="[^"]*")?)*)\s*>/g, (m, name, attrs) => {
+    const tokens = attrs.match(/[\w:.@-]+(?:="[^"]*")?/g) ?? [];
+    return `<${name}${tokens.length ? ' ' + tokens.sort().join(' ') : ''}>`;
+  });
   return body.replace(/>\s+</g, '><').replace(/\s+/g, ' ').trim();
 }
 
