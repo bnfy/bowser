@@ -76,7 +76,7 @@
       "category": "public.app-category.productivity",
       "icon": "build/app-icons/Icon.icon",
       "hardenedRuntime": true,
-      "identity": "55283A84D3706D5A22386D5F002A0CD4845ECFD4",
+      "identity": "DC5F2BF8893332C0D1107601A60493FD8C80C55A",
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.inherit.plist",
       "provisioningProfile": "build/embedded.provisionprofile",
