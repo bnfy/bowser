@@ -232,8 +232,8 @@ and visual assets are done, but a few infra steps are deliberately not yet
 live:
 
 - The marketing site (`site/`) is live on the Cloudflare Pages project
-  `blancbrowser` (direct upload: `npx wrangler pages deploy site
-  --project-name=blancbrowser`), which serves `blancbrowser.com` and
+  `blancbrowser` (direct upload: `npm run site:deploy`, which builds the
+  Astro site and uploads `site/dist`), which serves `blancbrowser.com` and
   `getbowser.com` from the same deployment. The page's canonical tag points
   search engines at `blancbrowser.com`; an actual 301 redirect from
   `getbowser.com` hasn't been set up.

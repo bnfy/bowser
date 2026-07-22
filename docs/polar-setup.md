@@ -14,8 +14,8 @@ The code ships with placeholders; these steps light it up.
    sandbox org has its own id — for dev testing, temporarily use the
    sandbox org id (dev builds already point at sandbox-api.polar.sh).
 4. Copy the hosted checkout URL into the `href="#"` of the
-   "become a supporter" link in `site/index.html` (marked TODO(polar)).
+   "become a supporter" link in `site/src/pages/index.astro` (marked TODO(polar)).
 5. Test end-to-end in dev: buy the sandbox product with Polar's test
    card, activate the key in Settings, confirm colorways unlock.
-6. Deploy the site: `npx wrangler pages deploy site --project-name=blancbrowser`.
+6. Deploy the site: `npm run site:deploy`.
 7. Ship a release so packaged builds carry the production org id.
