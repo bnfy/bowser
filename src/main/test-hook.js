@@ -36,6 +36,10 @@ function install(refs) {
     openFindBar,
     getOverlayMode,
     showOverlay,
+    showUtilityPage,
+    hideUtilitySheet,
+    getUtilitySheetState,
+    getUtilitySheetWebContents,
     getPrivateBrowsingSession,
     attemptChromeNavigation,
     getChromeUrl,
@@ -164,11 +168,14 @@ function install(refs) {
     openFind() { openFindBar(); },
     openPalette() { showOverlay('palette'); },
     overlayMode() { return getOverlayMode(); },
+    utilitySurface() { return getUtilitySheetState(); },
     attemptChromeNavigation(url) { return attemptChromeNavigation(String(url)); },
     chromeUrl() { return getChromeUrl(); },
 
     // ---- isolation between scenarios ----
     reset() {
+      // No scenario inherits another's open surface.
+      hideUtilitySheet();
       // A fresh tab first so closing the rest never empties the window.
       const keep = createTab(newTabUrl());
       setActiveTab(keep, { focusContent: false });

@@ -26,6 +26,8 @@ const { groupFavoritesForMenu } = require('./bookmark-data');
 const history = require('./history');
 const { JsonStore } = require('./store');
 const { persistableEntries } = require('./session-snapshot');
+const { filterRestoredSession } = require('./session-restore');
+const { isUtilityUrl } = require('./utility-pages');
 const { shouldClearFaviconOnNavigate } = require('./favicon-policy');
 const { setupWebAuthn } = require('./webauthn');
 const { HANDOFF_PROTOCOLS, classifyExternalNavigation } = require('./external-protocols');
@@ -435,6 +437,9 @@ function createOverlay() {
 
 function showOverlay(mode, { prefill } = {}) {
   if (!hasLiveWindow() || !overlayView) return;
+  // One floating layer at a time: summoning the island dismisses the sheet
+  // (the overlay takes focus itself — no tab refocus in between).
+  hideUtilitySheet({ refocusContent: false });
   // Opening the panel is a freshness signal: pull other devices' tabs
   // (throttled to 1/min inside refreshSession — tab-sync spec §6).
   if (mode === 'panel' || mode === 'palette') sync.refreshSession();
@@ -458,6 +463,85 @@ function hideOverlay({ refocusContent = true } = {}) {
     win.contentView.removeChildView(overlayView);
     overlayView.webContents.send('overlay:hide');
     win.webContents.send('chrome:island-state', { mode: null });
+    if (refocusContent) tabs.get(activeTabId)?.view.webContents.focus();
+  }
+}
+
+// --- Utility sheet (design: 2026-07-22-utility-sheet-design.md) ---
+// The five utility pages render here, never as tabs. One lazy transparent
+// view; the page draws its own scrim + card (body.sheet in pages.css).
+let utilitySheetView = null;
+/** Currently shown utility URL; null = hidden. The single mode flag. */
+let utilitySheetUrl = null;
+
+function createUtilitySheet() {
+  utilitySheetView = new WebContentsView({ webPreferences: TAB_WEB_PREFERENCES });
+  utilitySheetView.setBackgroundColor('#00000000');
+  const wc = utilitySheetView.webContents;
+  // Esc dismisses no matter what inside the page holds focus (mirrors the
+  // island overlay's handler).
+  wc.on('before-input-event', (event, input) => {
+    if (utilitySheetUrl && input.type === 'keyDown' && input.key === 'Escape') {
+      event.preventDefault();
+      hideUtilitySheet();
+    }
+  });
+  // A crashed sheet renderer is dismissed and destroyed; the next open
+  // lazily recreates it. Close the dead webContents — dropping the
+  // reference alone leaks the crashed guest. Default refocus: nothing else
+  // will hand focus back after a crash.
+  wc.on('render-process-gone', () => {
+    hideUtilitySheet();
+    wc.close();
+    utilitySheetView = null;
+  });
+  // Default-deny (design §4): utility→utility stays in-sheet; http(s)
+  // opens a real tab (createTab's dismissal covers the sheet); approved
+  // handoff protocols go to the OS; everything else — and every
+  // window.open — dies.
+  wc.on('will-navigate', (event, targetUrl) => {
+    if (isUtilityUrl(targetUrl)) {
+      utilitySheetUrl = targetUrl; // keep the toggle honest across in-sheet nav
+      return;
+    }
+    event.preventDefault();
+    if (/^https?:\/\//i.test(targetUrl)) {
+      const id = createTab(targetUrl);
+      if (id) setActiveTab(id);
+    } else {
+      handOffToOs(targetUrl);
+    }
+  });
+  wc.setWindowOpenHandler(() => ({ action: 'deny' }));
+}
+
+function showUtilityPage(url) {
+  if (!hasLiveWindow()) return;
+  // Toggle: a direct re-invocation (menu/accelerator) of the shown page
+  // closes it. Overlay-hosted entry points can never hit this — summoning
+  // the overlay already dismissed the sheet.
+  if (utilitySheetUrl === url) return hideUtilitySheet();
+  // One floating layer at a time, in both directions.
+  hideOverlay({ refocusContent: false });
+  if (!utilitySheetView) createUtilitySheet();
+  utilitySheetUrl = url;
+  // Rapid page swaps abort the in-flight load — loadURL rejects with
+  // ERR_ABORTED; that's routine, not an error.
+  utilitySheetView.webContents.loadURL(url).catch(() => {});
+  // Mirror tabs: a detached view's document still reports visibilityState
+  // 'visible' and never background-throttles — toggle real visibility.
+  utilitySheetView.setVisible(true);
+  win.contentView.addChildView(utilitySheetView);
+  resizeActiveView();
+  utilitySheetView.webContents.focus();
+}
+
+function hideUtilitySheet({ refocusContent = true } = {}) {
+  if (!utilitySheetUrl) return;
+  utilitySheetUrl = null;
+  if (hasLiveWindow() && utilitySheetView) {
+    win.contentView.removeChildView(utilitySheetView);
+    utilitySheetView.setVisible(false);
     if (refocusContent) tabs.get(activeTabId)?.view.webContents.focus();
   }
 }
@@ -584,6 +668,10 @@ function resizeActiveView() {
     });
   }
   if (overlayMode && overlayView) overlayView.setBounds(overlayBounds());
+  if (utilitySheetUrl && utilitySheetView) {
+    const b = win.getContentBounds();
+    utilitySheetView.setBounds({ x: 0, y: chromeHeight, width: b.width, height: Math.max(0, b.height - chromeHeight) });
+  }
 }
 
 /** Pick the sharpest favicon from a page's declared icon links. The pill
@@ -1159,6 +1247,10 @@ function setActiveTab(id, { focusContent = true, focusAddress = false } = {}) {
   // Re-selecting the active tab is a no-op.
   if (id === activeTabId) return;
 
+  // Tab switches dismiss the sheet; the switched-to tab takes focus via
+  // the existing flow below.
+  hideUtilitySheet({ refocusContent: false });
+
   lastActiveByCluster.set(clusterKeyForTab(next), id);
 
   // No window to attach to (quitting, or macOS with all windows closed):
@@ -1196,7 +1288,10 @@ function setActiveTab(id, { focusContent = true, focusAddress = false } = {}) {
   }
   if (shouldFocusAddress) next.view.setVisible(false);
   win.contentView.addChildView(next.view);
-  // The freshly attached tab view must not stack above an open overlay.
+  // The freshly attached tab view must not stack above an open overlay —
+  // nor above the sheet (defensive: §5 means they shouldn't coexist here,
+  // but a race must never paint a tab over either floating layer).
+  if (utilitySheetUrl && utilitySheetView) win.contentView.addChildView(utilitySheetView);
   if (overlayMode && overlayView) win.contentView.addChildView(overlayView);
   resizeActiveView();
   // Focusing the tab's WebContentsView gives it OS keyboard focus. For a
@@ -1327,6 +1422,7 @@ function cycleCluster(direction) {
 
 /** Focus an existing tab already on this internal page, or open one. */
 function openInternalPage(url) {
+  if (isUtilityUrl(url)) return showUtilityPage(url);
   const existing = tabOrder.find((id) => tabs.get(id)?.url.startsWith(url));
   if (existing) {
     setActiveTab(existing);
@@ -1916,6 +2012,11 @@ function createMainWindow() {
     overlayMode = null;
     if (overlayView && !overlayView.webContents.isDestroyed()) overlayView.webContents.close();
     overlayView = null;
+    // The sheet doesn't outlive its window either — dropping the reference
+    // without closing would leak the webContents.
+    if (utilitySheetView && !utilitySheetView.webContents.isDestroyed()) utilitySheetView.webContents.close();
+    utilitySheetView = null;
+    utilitySheetUrl = null;
     flushPermissionPrompts();
   });
 
@@ -2085,6 +2186,9 @@ app.whenReady().then(async () => {
       createTab, setActiveTab, closeTab, duplicateTab, toggleTabPinned, groupTabByName, reopenClosedTab, newTabUrl,
       normalizeAddressInput, handoffProtocols: HANDOFF_PROTOCOLS, openInternalPage, openFindBar,
       getOverlayMode: () => overlayMode, showOverlay, getPrivateBrowsingSession,
+      showUtilityPage, hideUtilitySheet,
+      getUtilitySheetState: () => ({ visible: !!utilitySheetUrl, url: utilitySheetUrl }),
+      getUtilitySheetWebContents: () => utilitySheetView?.webContents ?? null,
       attemptChromeNavigation: (url) => win?.webContents.executeJavaScript(
         `location.href = ${JSON.stringify(String(url))}`
       ),
