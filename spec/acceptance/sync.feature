@@ -12,7 +12,7 @@ Feature: Tab sync (open tabs from other devices)
   @F27-2 @F27 @all
   Scenario: A remote device's tab opens locally as a new ungrouped tab
     Given a synced device "MacBook Air" with 3 shared tabs
-    When I open the palette and unfold "blanc on MacBook Air"
+    When I open the palette and unfold "MacBook Air"
     And I choose its first remote tab
     Then it opens as a new ungrouped local tab
 

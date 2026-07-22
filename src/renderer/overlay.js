@@ -131,13 +131,14 @@
     }
   }
 
-  /** Short label for a tab's location: host for web pages, page name for
-   * internal ones, empty for a blank new tab. */
+  /** Short label for a tab's location: host for web pages (sans the noise
+   * "www." carries in a list this dense), page name for internal ones,
+   * empty for a blank new tab. */
   function tabDomain(tab) {
     if (!tab?.url || tab.url.startsWith('blanc://newtab')) return '';
     try {
       const u = new URL(tab.url);
-      return u.protocol === 'blanc:' ? `blanc://${u.host}` : u.host;
+      return u.protocol === 'blanc:' ? `blanc://${u.host}` : u.host.replace(/^www\./, '');
     } catch {
       return tab.url;
     }
@@ -179,7 +180,9 @@
 
   function tabRow(tab) {
     const row = document.createElement('div');
-    row.className = 'island-row' + (tab.id === state.activeTabId ? ' active' : '');
+    // .tab-row scopes the at-rest quieting (metadata joins the hover/focus
+    // reveal) to list rows — Quick-Switcher/command rows keep their subs.
+    row.className = 'island-row tab-row' + (tab.id === state.activeTabId ? ' active' : '');
     row.dataset.tabId = tab.id;
 
     const faviconWrap = document.createElement('span');
@@ -210,14 +213,6 @@
       tag.className = 'row-private';
       tag.textContent = 'private';
       row.append(tag);
-    }
-
-    if (tab.blockedCount > 0) {
-      const shield = document.createElement('span');
-      shield.className = 'shield';
-      shield.textContent = String(tab.blockedCount);
-      shield.title = `Blanc blocked ${tab.blockedCount} ${tab.blockedCount === 1 ? 'ad or tracker' : 'ads & trackers'} on this page`;
-      row.append(shield);
     }
 
     const pin = document.createElement('button');
@@ -390,7 +385,7 @@
   // --- Remote devices (tab sync) ---
 
   const hostOfUrl = (url) => {
-    try { return new URL(url).host; } catch { return url; }
+    try { return new URL(url).host.replace(/^www\./, ''); } catch { return url; }
   };
 
   function timeAgo(ts) {
@@ -415,14 +410,14 @@
     return rows;
   }
 
-  /** "blanc on MacBook Air · 5 ——— 2h ago": click folds/unfolds. */
+  /** "MacBook Air · 5 ——— 2h ago": click folds/unfolds. */
   function remoteHeaderRow(device) {
     const row = document.createElement('div');
     row.className = 'island-ghead';
     const open = unfoldedDevices.has(device.deviceId);
     row.innerHTML = `${CARET}<span class="ghead-name"></span><span class="ghead-n"></span><span class="ghead-rule"></span><span class="ghead-n"></span>`;
     row.querySelector('.caret').classList.toggle('open', open);
-    row.querySelector('.ghead-name').textContent = `blanc on ${device.name}`;
+    row.querySelector('.ghead-name').textContent = device.name;
     const ns = row.querySelectorAll('.ghead-n');
     ns[0].textContent = String(device.tabs.length);
     ns[1].textContent = timeAgo(device.updatedAt);
@@ -439,7 +434,7 @@
    * no group reconstruction in v1, spec §2). */
   function remoteTabRow(tab, device) {
     const row = document.createElement('div');
-    row.className = 'island-row';
+    row.className = 'island-row tab-row';
     const favicon = document.createElement('span');
     setFavicon(favicon, null); // snapshots carry no favicon — default glyph
     const title = document.createElement('span');
@@ -582,7 +577,7 @@
     }
   }
 
-  const stripUrl = (u) => (u || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
+  const stripUrl = (u) => (u || '').replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
 
   /** True when the typed text is a real navigation target rather than a search
    * query — mirrors the navigate branches of normalizeAddressInput (main.js)
@@ -762,10 +757,10 @@
     }
 
     islandHint.textContent = activeTab()?.private
-      ? 'private · nothing here is saved to history · esc to dismiss'
+      ? 'private · nothing here is saved to history'
       : state.groups.length
-        ? `esc to dismiss · /group moves this tab · ${modKey}1–9 jumps between sections`
-        : `esc to dismiss · ${modKey}L summons · / for commands`;
+        ? `/group moves this tab · ${modKey}1–9 jumps between sections`
+        : `${modKey}L summons · / for commands`;
   }
 
   function renderPanel() {
