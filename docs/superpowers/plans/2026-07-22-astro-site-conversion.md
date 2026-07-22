@@ -415,10 +415,18 @@ Do not delete it in this task — Task 4 replaces it with the real index. (Delet
 ```js
 #!/usr/bin/env node
 // Compares built pages (site/dist/) against the pre-Astro baseline
-// (git tag site-pre-astro). Head metadata is compared as normalized tag
-// sets with an allowlist of intended deltas; bodies are compared as
-// whitespace-collapsed, link-normalized HTML. Pages not yet ported are
-// SKIPPED (a later task requires zero skips).
+// (git tag site-pre-astro). Head metadata is compared as a normalized tag
+// MULTISET with an allowlist of intended deltas; <html>/<body> attributes
+// and each page's external-script count are asserted; bodies are compared
+// as whitespace-collapsed, link-normalized HTML. Pages not yet ported are
+// SKIPPED (later tasks require zero skips).
+//
+// Flags:
+//   --only a.html,b.html   compare only these pages (incremental task gates)
+//   --strict               skips are failures (full-conversion gate)
+//   --changelog-dir <dir>  read the changelog.html baseline from <dir>
+//                          instead of the git tag (deterministic comparison
+//                          when releases moved on after the tag — Task 7)
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -433,6 +441,13 @@ const PAGES = [
   'features/command-palette.html', 'features/tab-groups.html', 'features/sync.html',
   'features/security.html',
 ];
+
+function flagValue(name) {
+  const i = process.argv.indexOf(name);
+  return i === -1 ? null : process.argv[i + 1];
+}
+const ONLY = flagValue('--only') ? new Set(flagValue('--only').split(',')) : null;
+const CHANGELOG_DIR = flagValue('--changelog-dir');
 
 // href/src rewrites the port intentionally makes (old → new).
 const LINKS = [
@@ -450,30 +465,43 @@ const PRIVACY_REWRITES = [
 ];
 
 function baseline(file) {
+  // Task 7 pins a deterministic changelog expectation (old generator, same
+  // release snapshot) because the git tag's changelog predates new releases.
+  if (file === 'changelog.html' && CHANGELOG_DIR) {
+    const p = path.resolve(ROOT, CHANGELOG_DIR, 'changelog.html');
+    return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null;
+  }
   try {
     return execFileSync('git', ['show', `site-pre-astro:site/${file}`], { cwd: ROOT, encoding: 'utf8' });
   } catch { return null; }
 }
 
 function normalizeUrl(url, fromFeatures) {
-  let u = url.replace(/\?v=[\w-]+$/, '');
+  let u = url.replace(/\?v=[\w-]+/, '');
+  // Fragment-aware: features.html#ad-blocking and ../privacy.html#anchor
+  // exist in the baseline — normalize the path part, reattach the fragment.
+  const hashAt = u.indexOf('#');
+  const frag = hashAt === -1 ? '' : u.slice(hashAt);
+  if (hashAt !== -1) u = u.slice(0, hashAt);
+  if (!u) return frag; // same-page anchor link
+  const done = (p) => p + frag;
   if (fromFeatures) {
-    if (u.startsWith('../shots/')) return '/' + u.slice(3);
+    if (u.startsWith('../shots/')) return done('/' + u.slice(3));
     if (u.startsWith('../')) {
       const target = u.slice(3);
-      for (const [oldHref, newHref] of LINKS) if (target === oldHref) return newHref;
-      return u;
+      for (const [oldHref, newHref] of LINKS) if (target === oldHref) return done(newHref);
+      return done(u);
     }
     // sibling feature page: island.html → /features/island
-    const sibling = u.match(/^([a-z-]+)\.html(#.*)?$/);
-    if (sibling) return `/features/${sibling[1]}${sibling[2] || ''}`;
+    const sibling = u.match(/^([a-z-]+)\.html$/);
+    if (sibling) return done(`/features/${sibling[1]}`);
   } else {
-    if (u.startsWith('shots/')) return '/' + u;
-    for (const [oldHref, newHref] of LINKS) if (u === oldHref) return newHref;
-    const feature = u.match(/^features\/([a-z-]+)\.html(#.*)?$/);
-    if (feature) return `/features/${feature[1]}${feature[2] || ''}`;
+    if (u.startsWith('shots/')) return done('/' + u);
+    for (const [oldHref, newHref] of LINKS) if (u === oldHref) return done(newHref);
+    const feature = u.match(/^features\/([a-z-]+)\.html$/);
+    if (feature) return done(`/features/${feature[1]}`);
   }
-  return u;
+  return done(u);
 }
 
 function rewriteLinks(html, fromFeatures) {
@@ -530,13 +558,44 @@ function bodyText(html, { fromFeatures, isNew }) {
   // scripts as <script type="module" src="/_astro/..."> (in place or head,
   // depending on Astro version). Strip script *includes* from both sides
   // wherever they sit, keep inline scripts (changelog search) for comparison.
+  // The script PROFILE is asserted separately (scriptCount below), so a
+  // missing demo.js or a stray site.js on a legal page still fails.
   body = body.replace(/<script\b[^>]*\bsrc="[^"]*"[^>]*><\/script>\s*/g, '');
   if (!isNew) body = rewriteLinks(body, fromFeatures);
   return body.replace(/>\s+</g, '><').replace(/\s+/g, ' ').trim();
 }
 
-let failed = 0; let skipped = 0;
+// External-script profile: legal pages have 0, index has 2 (site.js+demo.js),
+// everything else 1. The old page is ground truth; the new page must include
+// exactly as many processed scripts (hashed module bundles count 1:1 —
+// chunk-splitting shows up as imports inside the JS, not extra tags).
+function scriptCount(html) {
+  return (html.match(/<script\b[^>]*\bsrc="[^"]*"[^>]*>/g) ?? []).length;
+}
+
+// <html>/<body> open-tag attributes (lang, data-page, ...) — normalized,
+// sorted. A missing data-page must fail, it feeds site.js analytics payloads.
+function openTag(html, tag) {
+  const m = html.match(new RegExp(`<${tag}\\b[^>]*>`));
+  if (!m) return `<${tag}>`;
+  const attrs = [...m[0].matchAll(/([\w-]+)="([^"]*)"/g)].map(([, k, v]) => `${k}="${v}"`).sort();
+  return `${tag} ${attrs.join(' ')}`;
+}
+
+// Multiset diff — duplicated meta tags must not hide behind set semantics.
+function diffMultiset(oldTags, newTags) {
+  const count = new Map();
+  for (const t of oldTags) count.set(t, (count.get(t) ?? 0) + 1);
+  for (const t of newTags) count.set(t, (count.get(t) ?? 0) - 1);
+  return {
+    missing: [...count].filter(([, n]) => n > 0).map(([t, n]) => (n > 1 ? `${t} ×${n}` : t)),
+    extra: [...count].filter(([, n]) => n < 0).map(([t, n]) => (n < -1 ? `${t} ×${-n}` : t)),
+  };
+}
+
+let ok = 0; let failed = 0; let skipped = 0;
 for (const file of PAGES) {
+  if (ONLY && !ONLY.has(file)) continue;
   const distPath = path.join(DIST, file);
   if (!fs.existsSync(distPath)) { console.log(`SKIP  ${file} (not built yet)`); skipped++; continue; }
   const oldHtmlRaw = baseline(file);
@@ -546,37 +605,48 @@ for (const file of PAGES) {
   const newHtml = fs.readFileSync(distPath, 'utf8');
   const fromFeatures = file.startsWith('features/');
 
-  const oldHead = headTags(oldHtml, DROP_OLD, fromFeatures);
-  const newHead = headTags(newHtml, DROP_NEW, false);
-  const missing = oldHead.filter((t) => !newHead.includes(t));
-  const extra = newHead.filter((t) => !oldHead.includes(t));
+  const { missing, extra } = diffMultiset(
+    headTags(oldHtml, DROP_OLD, fromFeatures),
+    headTags(newHtml, DROP_NEW, false)
+  );
+
+  const problems = [];
+  for (const t of missing) problems.push(`head missing: ${t}`);
+  for (const t of extra) problems.push(`head extra:   ${t}`);
+  for (const tag of ['html', 'body']) {
+    const oldTag = openTag(oldHtml, tag);
+    const newTag = openTag(newHtml, tag);
+    if (oldTag !== newTag) problems.push(`<${tag}> attrs: old [${oldTag}] new [${newTag}]`);
+  }
+  const oldScripts = scriptCount(oldHtml);
+  const newScripts = scriptCount(newHtml);
+  if (oldScripts !== newScripts) problems.push(`script profile: baseline has ${oldScripts} external script(s), build has ${newScripts}`);
 
   const oldBody = bodyText(oldHtml, { fromFeatures, isNew: false });
   const newBody = bodyText(newHtml, { fromFeatures: false, isNew: true });
-  const bodyOk = oldBody === newBody;
-
-  if (!missing.length && !extra.length && bodyOk) { console.log(`OK    ${file}`); continue; }
-  failed++;
-  console.log(`FAIL  ${file}`);
-  for (const t of missing) console.log(`  head missing: ${t}`);
-  for (const t of extra) console.log(`  head extra:   ${t}`);
-  if (!bodyOk) {
+  if (oldBody !== newBody) {
     let i = 0;
     while (i < Math.min(oldBody.length, newBody.length) && oldBody[i] === newBody[i]) i++;
-    console.log(`  body diverges at char ${i}:`);
-    console.log(`    old: …${oldBody.slice(Math.max(0, i - 60), i + 120)}…`);
-    console.log(`    new: …${newBody.slice(Math.max(0, i - 60), i + 120)}…`);
+    problems.push(`body diverges at char ${i}:\n    old: …${oldBody.slice(Math.max(0, i - 60), i + 120)}…\n    new: …${newBody.slice(Math.max(0, i - 60), i + 120)}…`);
   }
+
+  if (!problems.length) { console.log(`OK    ${file}`); ok++; continue; }
+  failed++;
+  console.log(`FAIL  ${file}`);
+  for (const p of problems) console.log(`  ${p}`);
 }
-console.log(`\n${PAGES.length - failed - skipped} ok, ${failed} failed, ${skipped} skipped`);
-if (process.argv.includes('--strict') && skipped) { console.error('STRICT: skips not allowed'); process.exit(1); }
+console.log(`\n${ok} ok, ${failed} failed, ${skipped} skipped`);
+if (process.argv.includes('--strict') && (skipped || ONLY)) {
+  console.error('STRICT: requires a full run (no --only) with zero skips');
+  process.exit(1);
+}
 process.exit(failed ? 1 : 0);
 ```
 
 - [ ] **Step 9: Build and run the comparator**
 
-Run: `npm run site:build && node site/scripts/verify-parity.mjs`
-Expected: `OK    about.html`, 13 SKIPs, exit 0. Iterate on `about.astro`/layout/components until about passes — the comparator's FAIL output pinpoints the first divergence. (`index.html` will FAIL while the smoke page exists — that is expected; treat only `about.html` as this task's gate. If the FAIL noise bothers the run, note it and move on.)
+Run: `npm run site:build && node site/scripts/verify-parity.mjs --only about.html`
+Expected: `OK    about.html`, `1 ok, 0 failed, 0 skipped`, exit 0. Iterate on `about.astro`/layout/components until it passes — the comparator's FAIL output pinpoints the first divergence. (A full run would report the temporary smoke `index.astro` as FAIL — that is exactly why `--only` exists; the smoke page is gone after Task 4.)
 
 - [ ] **Step 10: Commit**
 
@@ -641,8 +711,8 @@ Same profile as privacy; `title`/`description`/body come verbatim from `git show
 
 - [ ] **Step 4: Build + verify**
 
-Run: `npm run site:build && node site/scripts/verify-parity.mjs`
-Expected: `OK` for about, privacy, terms. The privacy check passing proves the copy change is exactly the sanctioned one and nothing else moved.
+Run: `npm run site:build && node site/scripts/verify-parity.mjs --only about.html,privacy.html,terms.html`
+Expected: `3 ok, 0 failed, 0 skipped`, exit 0. The privacy check passing proves the copy change is exactly the sanctioned one and nothing else moved.
 
 - [ ] **Step 5: Commit**
 
@@ -757,7 +827,7 @@ const ld = {
 };
 ---
 <BaseLayout
-  title="The Blanc Island — One Control Surface for Your Browser"
+  title="A Minimal Browser UI That Stays Out of Your Way | Blanc"
   description="Blanc replaces a traditional tab strip and toolbar with one floating Island for tabs, navigation, blocking status, and page actions."
   path="/features/island"
   page="feature-island"
@@ -1024,10 +1094,25 @@ git add scripts/generate-site-changelog.mjs test/unit/site-changelog.test.js sit
 **Interfaces:**
 - Consumes: `releases.json` entry shape from Task 6 (incl. `humanDate`/`machineDate`); `renderRss` from `site/src/lib/rss.mjs`; `BaseLayout` standard profile.
 
-- [ ] **Step 1: Generate the data (requires authenticated `gh`)**
+- [ ] **Step 1: Snapshot the raw releases and generate the data (requires authenticated `gh`)**
 
-Run: `npm run site:changelog`
-Expected: `Rendered N releases to .../site/src/data/releases.json.` Commit this file — it is the committed artifact replacing `changelog.html`.
+Releases may have been published after the `site-pre-astro` tag, so the tag's committed `changelog.html`/`changelog.xml` are not a valid expectation. Pin ONE raw-API snapshot and feed it to BOTH generators — the new one (produces `releases.json`) and the old one from the tag (produces the deterministic baseline expectation):
+
+```bash
+mkdir -p site/.parity
+gh api --paginate 'repos/bnfy/blanc/releases?per_page=100' > site/.parity/raw-releases.json
+node scripts/generate-site-changelog.mjs --input site/.parity/raw-releases.json
+git show site-pre-astro:scripts/generate-site-changelog.mjs > site/.parity/old-generator.mjs
+node site/.parity/old-generator.mjs --input site/.parity/raw-releases.json --output-dir site/.parity/old
+```
+
+Expected: `site/src/data/releases.json` written (commit it — it is the committed artifact replacing `changelog.html`), and `site/.parity/old/changelog.html` + `site/.parity/old/changelog.xml` written (the expectations; NOT committed). Add to `.gitignore`:
+
+```
+site/.parity/
+```
+
+Both generators consumed identical input, so every comparison below is deterministic regardless of release drift.
 
 - [ ] **Step 2: Create `site/src/pages/changelog.xml.js`**
 
@@ -1117,18 +1202,18 @@ import releases from '../data/releases.json';
 
 Note: Astro auto-escapes all interpolations — this is where the old `escapeHtml` responsibility now lives.
 
-- [ ] **Step 4: Build + verify page and RSS**
+- [ ] **Step 4: Build + verify page and RSS deterministically**
 
-Run: `npm run site:build && node site/scripts/verify-parity.mjs --strict`
-Expected: 14 OK, 0 skipped, exit 0. (The baseline `changelog.html` was generated from the same releases, so the body must match modulo the comparator's normalizations. If GitHub gained a release since the baseline tag, the comparator will show it as a body diff — in that case regenerate the baseline expectation by accepting the diff manually: confirm the only divergence is the new release article, then note it in the commit message.)
+Run: `npm run site:build && node site/scripts/verify-parity.mjs --strict --changelog-dir site/.parity/old`
+Expected: 14 OK, 0 skipped, exit 0 — `changelog.html` is compared against the old generator's output over the identical release snapshot, so the check is exact with no manual acceptance path.
 
-Then byte-compare RSS:
+Then byte-compare RSS against the old generator's output from the same snapshot:
 
 ```bash
-diff <(git show site-pre-astro:site/changelog.xml) site/dist/changelog.xml && echo RSS-IDENTICAL
+diff site/.parity/old/changelog.xml site/dist/changelog.xml && echo RSS-IDENTICAL
 ```
 
-Expected: `RSS-IDENTICAL` (same caveat about a release published after the baseline).
+Expected: `RSS-IDENTICAL` — byte-for-byte, deterministic (the Task 6 requirement that `rss.mjs` keeps the template byte-identical is exactly what this proves).
 
 - [ ] **Step 5: Run the check mode against the committed JSON**
 
@@ -1138,8 +1223,10 @@ Expected: `Release data is current (N releases).` (message per Task 6 wording).
 - [ ] **Step 6: Commit**
 
 ```bash
-git add site/src/data/releases.json site/src/pages/changelog.astro site/src/pages/changelog.xml.js && git commit -m "site: changelog page + RSS endpoint rendered from releases.json"
+git add site/src/data/releases.json site/src/pages/changelog.astro site/src/pages/changelog.xml.js .gitignore && git commit -m "site: changelog page + RSS endpoint rendered from releases.json"
 ```
+
+If any later task needs to re-verify after `releases.json` is regenerated, first re-run the Task 7 Step 1 snapshot block so `site/.parity/` matches the committed data.
 
 ---
 
@@ -1273,62 +1360,80 @@ git rm site/index.html site/download.html site/features.html site/about.html sit
 
 - [ ] **Step 2: Build + full comparator (proves nothing depended on the deleted files)**
 
-Run: `npm run site:build && node site/scripts/verify-parity.mjs --strict`
-Expected: 14 OK, exit 0.
+Run: `npm run site:build && node site/scripts/verify-parity.mjs --strict --changelog-dir site/.parity/old`
+Expected: 14 OK, exit 0. (The comparator reads baselines from the git tag and `site/.parity/`, never the working tree — deleting the legacy files cannot affect it.)
 
-- [ ] **Step 3: Add sharp and the recompression script**
+- [ ] **Step 3: Add sharp + mozjpeg and the LOSSLESS recompression script**
 
-Run: `npm --prefix site install --save-dev sharp`
+Run: `npm --prefix site install --save-dev sharp mozjpeg`
+
+The shots are already-compressed JPEGs — a quality re-encode would stack generational loss. So: **lossless only**, with an automatic decoded-pixel-equality gate on every file (objective fidelity check covering all images — desktop and mobile shots, OG assets, everything — no eyeballing as the safety net). JPEGs go through mozjpeg's `jpegtran` (Huffman/progressive optimization — DCT coefficients untouched); PNGs through sharp's max-effort lossless re-encode. `-copy none` strips EXIF/metadata, which these marketing assets don't need.
 
 Create `site/scripts/compress-images.mjs`:
 
 ```js
 #!/usr/bin/env node
-// One-shot, re-runnable: recompress public/ images in place, keeping a file
-// only when the recompressed version is smaller. JPEGs: mozjpeg q85 (visually
-// lossless for these screenshots). PNGs: lossless max-effort recompress.
+// Re-runnable, LOSSLESS-only: optimize public/ images in place. A file is
+// replaced only when the optimized version is BOTH smaller AND decodes to
+// pixel-identical RGBA — anything else is kept and reported.
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import mozjpeg from 'mozjpeg';
 import sharp from 'sharp';
 
 const PUB = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../public');
 
-async function walk(dir) {
+function walk(dir) {
   const out = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...await walk(p));
+    if (entry.isDirectory()) out.push(...walk(p));
     else if (/\.(jpe?g|png)$/i.test(entry.name)) out.push(p);
   }
   return out;
 }
 
+async function pixelsEqual(bufA, bufB) {
+  const [a, b] = await Promise.all([
+    sharp(bufA).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
+    sharp(bufB).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
+  ]);
+  return a.info.width === b.info.width && a.info.height === b.info.height
+    && a.data.equals(b.data);
+}
+
 let before = 0; let after = 0;
-for (const file of await walk(PUB)) {
+for (const file of walk(PUB)) {
   const src = fs.readFileSync(file);
-  const isJpg = /\.jpe?g$/i.test(file);
-  const img = sharp(src);
-  const buf = isJpg
-    ? await img.jpeg({ quality: 85, mozjpeg: true }).toBuffer()
-    : await img.png({ compressionLevel: 9, effort: 10, palette: false }).toBuffer();
   before += src.length;
-  if (buf.length < src.length) {
-    fs.writeFileSync(file, buf);
-    after += buf.length;
-    console.log(`${path.relative(PUB, file)}: ${src.length} -> ${buf.length}`);
+  let out;
+  if (/\.jpe?g$/i.test(file)) {
+    const tmp = path.join(os.tmpdir(), `blanc-jpg-${path.basename(file)}`);
+    execFileSync(mozjpeg, ['-copy', 'none', '-optimize', '-progressive', '-outfile', tmp, file]);
+    out = fs.readFileSync(tmp);
+    fs.rmSync(tmp);
+  } else {
+    out = await sharp(src).png({ compressionLevel: 9, effort: 10, palette: false }).toBuffer();
+  }
+  if (out.length < src.length && await pixelsEqual(src, out)) {
+    fs.writeFileSync(file, out);
+    after += out.length;
+    console.log(`${path.relative(PUB, file)}: ${src.length} -> ${out.length} (pixel-identical)`);
   } else {
     after += src.length;
-    console.log(`${path.relative(PUB, file)}: kept (already smaller)`);
+    console.log(`${path.relative(PUB, file)}: kept (${out.length >= src.length ? 'no gain' : 'PIXEL MISMATCH — not replaced'})`);
   }
 }
 console.log(`total: ${(before / 1024).toFixed(0)}KiB -> ${(after / 1024).toFixed(0)}KiB`);
 ```
 
-- [ ] **Step 4: Run it and eyeball the results**
+- [ ] **Step 4: Run it and sanity-check**
 
 Run: `node site/scripts/compress-images.mjs`
-Expected: per-file savings report. Then `npm run site:dev` and visually check: the Island demo shots (index), a feature page's static shot, and `open site/public/og-image.png` — no visible artifacts. If any file looks degraded, restore it (`git checkout -- site/public/<file>`) and note it.
+Expected: per-file report; every replaced file says `pixel-identical`, any `PIXEL MISMATCH` line means the file was left untouched (investigate if one appears — it indicates a decoder edge case, not shipped damage). Because replacement requires decoded-pixel equality, no visual review is needed for fidelity; do one quick render check (`npm run site:dev`, load `/` and one feature page) to confirm nothing structural broke, and `git diff --stat site/public` to see the byte savings.
 
 - [ ] **Step 5: Commit**
 
@@ -1348,8 +1453,8 @@ git add -A site && git commit -m "site: remove legacy static files; recompress p
 
 - [ ] **Step 1: Head/body/meta parity (§7.1) — strict**
 
-Run: `npm run site:build && node site/scripts/verify-parity.mjs --strict`
-Expected: 14 OK, 0 failed, 0 skipped, exit 0.
+Run: `npm run site:build && node site/scripts/verify-parity.mjs --strict --changelog-dir site/.parity/old`
+Expected: 14 OK, 0 failed, 0 skipped, exit 0. (If `site/.parity/` is missing — fresh checkout — re-run Task 7 Step 1's snapshot block first.)
 
 - [ ] **Step 2: dist layout + external hashed assets (§7.4)**
 
@@ -1364,11 +1469,11 @@ Expected: `HTML-LAYOUT-IDENTICAL`, `HASHED-ASSETS-PRESENT`, `NO-INLINE-STYLES`. 
 - [ ] **Step 3: Machine outputs (§7.4)**
 
 ```bash
-diff <(git show site-pre-astro:site/changelog.xml) site/dist/changelog.xml && echo RSS-IDENTICAL
+diff site/.parity/old/changelog.xml site/dist/changelog.xml && echo RSS-IDENTICAL
 diff <(git show site-pre-astro:site/sitemap.xml | grep -v lastmod) <(grep -v lastmod site/dist/sitemap.xml) && echo SITEMAP-IDENTICAL
 ```
 
-Expected: both IDENTICAL lines (modulo any release published after the baseline tag — verify manually if so).
+Expected: both IDENTICAL lines — deterministic (the RSS expectation comes from the pinned release snapshot, the sitemap fields from the tag).
 
 - [ ] **Step 4: Create and run `site/scripts/shoot-pages.mjs` (§7.2)**
 
@@ -1447,7 +1552,7 @@ Serve the real build: `npm --prefix site run preview`, open the printed URL and 
 - [ ] **Step 6: Repo checks (§7.5)**
 
 Run: `npm run test:unit && npm run site:changelog:check && npm run substrate:check`
-Expected: all green (substrate:check proves the site work didn't disturb the app-side guards).
+Expected: all green (substrate:check proves the site work didn't disturb the app-side guards). Note `site:changelog:check` compares the committed `releases.json` against LIVE GitHub — if it fails because a release shipped mid-conversion, that's the guard working: re-run Task 7 Step 1's snapshot block, commit the refreshed `releases.json`, rebuild, and re-run this step.
 
 - [ ] **Step 7: Commit**
 
@@ -1605,16 +1710,33 @@ git add .github/workflows/site.yml site/CLAUDE.md README.md docs/polar-setup.md 
 
 ---
 
-### Task 12: Deploy + post-deploy checks
+### Task 12: Push, CI gate, deploy + post-deploy checks
 
-**⚠️ Deploying publishes to blancbrowser.com — confirm with the user before running the deploy command.**
+**⚠️ Deploying publishes to blancbrowser.com — confirm with the user before running the deploy command. Order matters: push first so the Site workflow validates the exact commit BEFORE anything goes live.**
 
-- [ ] **Step 1: Final pre-flight**
+- [ ] **Step 1: Final pre-flight (local)**
 
-Run: `npm run test:unit && npm run site:build && node site/scripts/verify-parity.mjs --strict`
+Run: `npm run test:unit && npm run site:build && node site/scripts/verify-parity.mjs --strict --changelog-dir site/.parity/old`
 Expected: all green.
 
-- [ ] **Step 2: Deploy (after user confirmation)**
+- [ ] **Step 2: Clean worktree, then push commits and the baseline tag**
+
+```bash
+test -z "$(git status --porcelain)" && echo CLEAN || echo "DIRTY — commit or stash before deploying"
+git push origin main && git push origin site-pre-astro
+```
+
+Expected: `CLEAN` (a dirty tree means the deploy wouldn't correspond to committed code — stop and commit first), then both pushes succeed. (The tag is referenced by the parity scripts in `site/scripts/`; pushing it keeps them functional for other clones.)
+
+- [ ] **Step 3: Wait for the Site workflow to pass**
+
+```bash
+gh run watch "$(gh run list --workflow=site.yml --branch=main --limit=1 --json databaseId --jq '.[0].databaseId')" --exit-status
+```
+
+Expected: exit 0 (workflow green). If it fails, fix, commit, push, and repeat — do NOT deploy a commit CI hasn't validated.
+
+- [ ] **Step 4: Deploy (after user confirmation)**
 
 ```bash
 npm run site:deploy
@@ -1622,7 +1744,7 @@ npm run site:deploy
 
 Expected: wrangler uploads `site/dist` and prints the deployment URL.
 
-- [ ] **Step 3: Post-deploy spot checks (§7.6)**
+- [ ] **Step 5: Post-deploy spot checks (§7.6)**
 
 ```bash
 curl -sI https://blancbrowser.com/sitemap.xml | grep -i content-type
@@ -1633,11 +1755,3 @@ curl -sI https://blancbrowser.com/shots/desktop/github.jpg | head -1
 ```
 
 Expected: XML content types on both feeds; canonical `https://blancbrowser.com/features/island`; `/_astro/` asset references > 0; shots return `200`. Then load `https://blancbrowser.com/` in a real browser: fonts render (Inter, not a system fallback — check computed `font-family` resolves to `Inter Variable`), demo plays, consent flow works.
-
-- [ ] **Step 4: Push commits and the baseline tag**
-
-```bash
-git push origin main && git push origin site-pre-astro
-```
-
-(The tag is referenced by the parity scripts in `site/scripts/`; pushing it keeps them functional for other clones.)
