@@ -1750,13 +1750,18 @@ git push origin site-pre-astro
 echo "pushed $HEAD_SHA"
 ```
 
-Expected: prints `pushed <sha>`; a dirty tree exits 1 **before** anything is pushed (the deploy must correspond to committed, CI-validated code). Keep `$HEAD_SHA` for Step 3. (The tag is referenced by the parity scripts in `site/scripts/`; pushing it keeps them functional for other clones.)
+Expected: prints `pushed <sha>`; a dirty tree exits 1 **before** anything is pushed (the deploy must correspond to committed, CI-validated code). (The tag is referenced by the parity scripts in `site/scripts/`; pushing it keeps them functional for other clones.)
 
 - [ ] **Step 3: Wait for the Site workflow run FOR THAT COMMIT to pass**
 
-Grabbing the latest run immediately after pushing races against run creation and can watch the *previous* run. Poll for a run filtered by the exact commit, then watch it:
+Grabbing the latest run immediately after pushing races against run creation and can watch the *previous* run. This block is self-contained — it re-derives the commit rather than relying on a shell variable from Step 2 (separate invocations don't share variables) and verifies it is what was actually pushed:
 
 ```bash
+HEAD_SHA=$(git rev-parse HEAD)
+[ "$(git rev-parse origin/main)" = "$HEAD_SHA" ] || {
+  echo "HEAD is not the pushed origin/main commit" >&2
+  exit 1
+}
 RUN_ID=""
 for i in $(seq 1 24); do
   RUN_ID=$(gh run list --workflow=site.yml --commit "$HEAD_SHA" --limit 1 --json databaseId --jq '.[0].databaseId')
