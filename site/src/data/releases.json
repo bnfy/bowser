@@ -1,0 +1,808 @@
+[
+  {
+    "tag": "v0.20.0",
+    "version": "0.20.0",
+    "name": "0.20.0",
+    "publishedAt": "2026-07-22T10:18:12.000Z",
+    "humanDate": "July 22, 2026",
+    "machineDate": "2026-07-22",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.20.0",
+    "anchor": "v0-20-0",
+    "changes": [
+      {
+        "text": "Tab Sync: open tabs from your other devices (F27)",
+        "url": "https://github.com/bnfy/blanc/pull/41"
+      }
+    ],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.19.0...v0.20.0",
+    "extraParagraphs": [
+      "Blanc v0.20.0 introduces Tab Sync: see your open tabs from your other devices. Turn on \"share this device's open tabs\" under Settings → Sync and each machine publishes a snapshot of its tabs — browse them from the ⌘L panel, the Quick Switcher, or the start page on any synced device, and open one locally with a click. It's a menu, not a mirror: nothing ever force-opens or closes a tab on another machine.",
+      "Sharing is off by default and per-device, private tabs never leave the machine, and like the rest of Profile Sync the snapshots are end-to-end encrypted — the sync server only ever stores ciphertext it cannot read.",
+      "This release also updates Electron to 43.2.0 for the latest Chromium stable."
+    ]
+  },
+  {
+    "tag": "v0.19.0",
+    "version": "0.19.0",
+    "name": "0.19.0",
+    "publishedAt": "2026-07-20T04:42:28.000Z",
+    "humanDate": "July 20, 2026",
+    "machineDate": "2026-07-20",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.19.0",
+    "anchor": "v0-19-0",
+    "changes": [],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.18.0...v0.19.0",
+    "extraParagraphs": [
+      "Blanc v0.19.0 brings fully adaptive app icons to macOS 26 and later. Every Dock colorway is now an Icon Composer stack that follows the user's Icon & Widget Style — Default, Dark, Clear, or Tinted — including the system-selected tint color, while older macOS releases retain the existing flat icons.",
+      "This release also updates Electron to 43.1.1, electron-builder to 26.15.3, and Cucumber to 13.1.1, bringing the latest Chromium patch and a clean dependency audit."
+    ]
+  },
+  {
+    "tag": "v0.18.0",
+    "version": "0.18.0",
+    "name": "0.18.0",
+    "publishedAt": "2026-07-12T04:53:56.000Z",
+    "humanDate": "July 12, 2026",
+    "machineDate": "2026-07-12",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.18.0",
+    "anchor": "v0-18-0",
+    "changes": [],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.17.0...v0.18.0",
+    "extraParagraphs": [
+      "Blanc v0.18.0 sharpens the everyday chrome. The resting Island pill is larger and easier to read, and each tab dot now blooms into a small disc showing that tab's favicon when you hover or focus it — so you can see which tab you're switching to before you click.",
+      "The Favorites page gets a quieter, ledger-style layout: row and folder actions become understated text revealed on hover or focus, folder names move into their section headers, and dates line up in a right-aligned column."
+    ]
+  },
+  {
+    "tag": "v0.17.0",
+    "version": "0.17.0",
+    "name": "0.17.0",
+    "publishedAt": "2026-07-12T02:15:26.000Z",
+    "humanDate": "July 11, 2026",
+    "machineDate": "2026-07-11",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.17.0",
+    "anchor": "v0-17-0",
+    "changes": [
+      {
+        "text": "Add /save [folder] slash command",
+        "url": "https://github.com/bnfy/blanc/pull/38"
+      },
+      {
+        "text": "Network privacy (M2+M3): WebRTC leak protection + encrypted DNS",
+        "url": "https://github.com/bnfy/blanc/pull/39"
+      }
+    ],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.16.0...v0.17.0",
+    "extraParagraphs": [
+      "Blanc v0.17.0 adds two privacy features that respect the VPN or proxy you already use: WebRTC leak protection and optional encrypted DNS (DoH).",
+      "Encrypted DNS hides your DNS lookups from the network in transit to the resolver you choose. It does not hide the sites you visit — destination IPs stay visible to your network — and choosing a provider is a trust decision. Automatic mode upgrades opportunistically and can fall back to unencrypted DNS; only the named-provider and custom positions are strict.",
+      "WebRTC leak protection keeps WebRTC from exposing addresses beyond your default connection, with an optional \"disable direct UDP\" mode for use behind an application proxy."
+    ]
+  },
+  {
+    "tag": "v0.16.0",
+    "version": "0.16.0",
+    "name": "0.16.0",
+    "publishedAt": "2026-07-11T19:50:36.000Z",
+    "humanDate": "July 11, 2026",
+    "machineDate": "2026-07-11",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.16.0",
+    "anchor": "v0-16-0",
+    "changes": [
+      {
+        "text": "Import favorites from other browsers + favorites folders",
+        "url": "https://github.com/bnfy/blanc/pull/36"
+      },
+      {
+        "text": "Reflect favorites folders in the native Favorites menu",
+        "url": "https://github.com/bnfy/blanc/pull/37"
+      }
+    ],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.15.5...v0.16.0",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.15.5",
+    "version": "0.15.5",
+    "name": "0.15.5",
+    "publishedAt": "2026-07-11T04:49:12.000Z",
+    "humanDate": "July 11, 2026",
+    "machineDate": "2026-07-11",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.15.5",
+    "anchor": "v0-15-5",
+    "changes": [
+      {
+        "text": "fix(webauthn): Touch ID passkeys — entitlement, provisioning profile, verified signing chain",
+        "url": "https://github.com/bnfy/blanc/pull/32"
+      }
+    ],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.15.4...v0.15.5",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.15.4",
+    "version": "0.15.4",
+    "name": "0.15.4",
+    "publishedAt": "2026-07-11T02:03:25.000Z",
+    "humanDate": "July 10, 2026",
+    "machineDate": "2026-07-10",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.15.4",
+    "anchor": "v0-15-4",
+    "changes": [
+      {
+        "text": "fix(pages): private new tabs open blank — register blanc:// on the private session",
+        "url": "https://github.com/bnfy/blanc/pull/35"
+      }
+    ],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.15.3...v0.15.4",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.15.3",
+    "version": "0.15.3",
+    "name": "0.15.3",
+    "publishedAt": "2026-07-11T01:15:52.000Z",
+    "humanDate": "July 10, 2026",
+    "machineDate": "2026-07-10",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.15.3",
+    "anchor": "v0-15-3",
+    "changes": [
+      {
+        "text": "fix(webauthn): restore Touch ID passkeys without restricted entitlement",
+        "url": "https://github.com/bnfy/blanc/pull/31"
+      },
+      {
+        "text": "fix(security): harden desktop browser boundaries",
+        "url": "https://github.com/bnfy/blanc/pull/33"
+      },
+      {
+        "text": "fix(privacy): audit follow-ups — telemetry pipeline, sync wipe, negative security tests",
+        "url": "https://github.com/bnfy/blanc/pull/34"
+      }
+    ],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.15.1...v0.15.3",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.15.1",
+    "version": "0.15.1",
+    "name": "0.15.1",
+    "publishedAt": "2026-07-10T22:51:53.000Z",
+    "humanDate": "July 10, 2026",
+    "machineDate": "2026-07-10",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.15.1",
+    "anchor": "v0-15-1",
+    "changes": [
+      {
+        "text": "fix(build): Gatekeeper rejection on fresh installs + Intel Mac support",
+        "url": "https://github.com/bnfy/blanc/pull/30"
+      }
+    ],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.15.0...v0.15.1",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.15.0",
+    "version": "0.15.0",
+    "name": "0.15.0",
+    "publishedAt": "2026-07-10T18:41:39.000Z",
+    "humanDate": "July 10, 2026",
+    "machineDate": "2026-07-10",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.15.0",
+    "anchor": "v0-15-0",
+    "changes": [
+      {
+        "text": "feat: add macOS Touch ID passkeys",
+        "url": "https://github.com/bnfy/blanc/pull/26"
+      },
+      {
+        "text": "fix(release): guard all packaging inputs",
+        "url": "https://github.com/bnfy/blanc/pull/27"
+      },
+      {
+        "text": "iOS M6: theming, settings-lite, session restore, TestFlight prep",
+        "url": "https://github.com/bnfy/blanc/pull/28"
+      },
+      {
+        "text": "feat(site): marketing site release 1 — features, download, mobile optimization",
+        "url": "https://github.com/bnfy/blanc/pull/29"
+      }
+    ],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.14.0...v0.15.0",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.14.0",
+    "version": "0.14.0",
+    "name": "0.14.0",
+    "publishedAt": "2026-07-10T02:32:58.000Z",
+    "humanDate": "July 9, 2026",
+    "machineDate": "2026-07-09",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.14.0",
+    "anchor": "v0-14-0",
+    "changes": [
+      {
+        "text": "test: add YouTube ad-blocking filter-list regression tests",
+        "url": "https://github.com/bnfy/blanc/pull/19"
+      },
+      {
+        "text": "ci: fix substrate job failing on the adblock-youtube unit test",
+        "url": "https://github.com/bnfy/blanc/pull/20"
+      },
+      {
+        "text": "Move new tab / private launchers into a dedicated island panel footer",
+        "url": "https://github.com/bnfy/blanc/pull/22"
+      },
+      {
+        "text": "feat(adblock): support $domain= in the WKContentRuleList converter",
+        "url": "https://github.com/bnfy/blanc/pull/21"
+      },
+      {
+        "text": "build(adblock): add --check drift guard for the generated blocklist",
+        "url": "https://github.com/bnfy/blanc/pull/23"
+      },
+      {
+        "text": "Island chrome: monochrome palette, favicon fix, and pill polish",
+        "url": "https://github.com/bnfy/blanc/pull/24"
+      },
+      {
+        "text": "fix(ios): hold ContentBlocker pending targets weakly, drop on failure",
+        "url": "https://github.com/bnfy/blanc/pull/25"
+      }
+    ],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.13.4...v0.14.0",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.13.4",
+    "version": "0.13.4",
+    "name": "0.13.4",
+    "publishedAt": "2026-07-09T21:24:05.000Z",
+    "humanDate": "July 9, 2026",
+    "machineDate": "2026-07-09",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.13.4",
+    "anchor": "v0-13-4",
+    "changes": [],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.13.3...v0.13.4",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.13.3",
+    "version": "0.13.3",
+    "name": "0.13.3",
+    "publishedAt": "2026-07-09T19:31:33.000Z",
+    "humanDate": "July 9, 2026",
+    "machineDate": "2026-07-09",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.13.3",
+    "anchor": "v0-13-3",
+    "changes": [
+      {
+        "text": "iOS port: roadmap, M0-M1 walking skeleton, M2 design",
+        "url": "https://github.com/bnfy/blanc/pull/16"
+      }
+    ],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.13.2...v0.13.3",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.13.2",
+    "version": "0.13.2",
+    "name": "0.13.2",
+    "publishedAt": "2026-07-09T00:56:32.000Z",
+    "humanDate": "July 8, 2026",
+    "machineDate": "2026-07-08",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.13.2",
+    "anchor": "v0-13-2",
+    "changes": [
+      {
+        "text": "Fix Google sign-in \"browser may not be secure\" by matching Chrome browser signals",
+        "url": "https://github.com/bnfy/blanc/pull/18"
+      }
+    ],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.13.1...v0.13.2",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.13.1",
+    "version": "0.13.1",
+    "name": "0.13.1",
+    "publishedAt": "2026-07-08T21:49:22.000Z",
+    "humanDate": "July 8, 2026",
+    "machineDate": "2026-07-08",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.13.1",
+    "anchor": "v0-13-1",
+    "changes": [
+      {
+        "text": "Patch Sec-CH-UA client hints to include Chrome brand",
+        "url": "https://github.com/bnfy/blanc/pull/17"
+      }
+    ],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.13.0...v0.13.1",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.13.0",
+    "version": "0.13.0",
+    "name": "0.13.0",
+    "publishedAt": "2026-07-08T14:43:32.000Z",
+    "humanDate": "July 8, 2026",
+    "machineDate": "2026-07-08",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.13.0",
+    "anchor": "v0-13-0",
+    "changes": [
+      {
+        "text": "Add cross-platform parity spec, acceptance tests, and substrate generators",
+        "url": "https://github.com/bnfy/blanc/pull/13"
+      },
+      {
+        "text": "Document parity infrastructure in CLAUDE.md; guard settings:check against unguarded keys",
+        "url": "https://github.com/bnfy/blanc/pull/14"
+      },
+      {
+        "text": "Harden ping worker against transient KV failures; enable Workers Logs",
+        "url": "https://github.com/bnfy/blanc/pull/8"
+      },
+      {
+        "text": "Add active-user metrics to the launch ping",
+        "url": "https://github.com/bnfy/blanc/pull/15"
+      }
+    ],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.12.0...v0.13.0",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.12.0",
+    "version": "0.12.0",
+    "name": "0.12.0",
+    "publishedAt": "2026-07-07T16:41:13.000Z",
+    "humanDate": "July 7, 2026",
+    "machineDate": "2026-07-07",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.12.0",
+    "anchor": "v0-12-0",
+    "changes": [
+      {
+        "text": "Ship end-to-end encrypted profile sync (v1: Favorites + settings)",
+        "url": "https://github.com/bnfy/blanc/pull/12"
+      }
+    ],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.11.0...v0.12.0",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.11.0",
+    "version": "0.11.0",
+    "name": "0.11.0",
+    "publishedAt": "2026-07-07T02:05:22.000Z",
+    "humanDate": "July 6, 2026",
+    "machineDate": "2026-07-06",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.11.0",
+    "anchor": "v0-11-0",
+    "changes": [
+      {
+        "text": "Fix 15 code-review findings from the Supporter/monetization work",
+        "url": "https://github.com/bnfy/blanc/pull/11"
+      }
+    ],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.10.0...v0.11.0",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.10.0",
+    "version": "0.10.0",
+    "name": "0.10.0",
+    "publishedAt": "2026-07-06T22:00:03.000Z",
+    "humanDate": "July 6, 2026",
+    "machineDate": "2026-07-06",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.10.0",
+    "anchor": "v0-10-0",
+    "changes": [
+      {
+        "text": "Arrow-key workspace navigation + Help menu with Keyboard Shortcuts page",
+        "url": "https://github.com/bnfy/blanc/pull/9"
+      },
+      {
+        "text": "Monetization phase 1: Blanc Supporter license, support rails, grant drafts",
+        "url": "https://github.com/bnfy/blanc/pull/10"
+      }
+    ],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.9.7...v0.10.0",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.9.7",
+    "version": "0.9.7",
+    "name": "0.9.7",
+    "publishedAt": "2026-07-06T19:25:20.000Z",
+    "humanDate": "July 6, 2026",
+    "machineDate": "2026-07-06",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.9.7",
+    "anchor": "v0-9-7",
+    "changes": [
+      {
+        "text": "Add Windows and Linux release builds via CI workflow",
+        "url": "https://github.com/bnfy/blanc/pull/3"
+      },
+      {
+        "text": "Fix Windows/Linux release workflow: real filenames, cert-profile gate",
+        "url": "https://github.com/bnfy/blanc/pull/5"
+      },
+      {
+        "text": "Drop nonexistent .blockmap from the Linux AppImage asset list",
+        "url": "https://github.com/bnfy/blanc/pull/6"
+      },
+      {
+        "text": "Document tonight's Windows/Linux release gotchas in CLAUDE.md",
+        "url": "https://github.com/bnfy/blanc/pull/7"
+      }
+    ],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.9.6...v0.9.7",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.9.6",
+    "version": "0.9.6",
+    "name": "0.9.6",
+    "publishedAt": "2026-07-06T04:21:56.000Z",
+    "humanDate": "July 6, 2026",
+    "machineDate": "2026-07-06",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.9.6",
+    "anchor": "v0-9-6",
+    "changes": [],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.9.5...v0.9.6",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.9.5",
+    "version": "0.9.5",
+    "name": "0.9.5",
+    "publishedAt": "2026-07-06T02:25:39.000Z",
+    "humanDate": "July 5, 2026",
+    "machineDate": "2026-07-05",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.9.5",
+    "anchor": "v0-9-5",
+    "changes": [
+      {
+        "text": "Expand native Tabs/Favorites menus: pin, mute, duplicate tab",
+        "url": "https://github.com/bnfy/blanc/pull/4"
+      }
+    ],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.9.4...v0.9.5",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.9.4",
+    "version": "0.9.4",
+    "name": "0.9.4",
+    "publishedAt": "2026-07-05T21:39:17.000Z",
+    "humanDate": "July 5, 2026",
+    "machineDate": "2026-07-05",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.9.4",
+    "anchor": "v0-9-4",
+    "changes": [],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.9.3...v0.9.4",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.9.3",
+    "version": "0.9.3",
+    "name": "0.9.3",
+    "publishedAt": "2026-07-05T20:24:57.000Z",
+    "humanDate": "July 5, 2026",
+    "machineDate": "2026-07-05",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.9.3",
+    "anchor": "v0-9-3",
+    "changes": [],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.9.2...v0.9.3",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.9.2",
+    "version": "0.9.2",
+    "name": "0.9.2",
+    "publishedAt": "2026-07-05T19:05:07.000Z",
+    "humanDate": "July 5, 2026",
+    "machineDate": "2026-07-05",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.9.2",
+    "anchor": "v0-9-2",
+    "changes": [
+      {
+        "text": "Add opt-in launch ping telemetry",
+        "url": "https://github.com/bnfy/blanc/pull/2"
+      }
+    ],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.9.1...v0.9.2",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.9.1",
+    "version": "0.9.1",
+    "name": "0.9.1",
+    "publishedAt": "2026-07-05T06:17:54.000Z",
+    "humanDate": "July 5, 2026",
+    "machineDate": "2026-07-05",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.9.1",
+    "anchor": "v0-9-1",
+    "changes": [],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.9.0...v0.9.1",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.9.0",
+    "version": "0.9.0",
+    "name": "0.9.0",
+    "publishedAt": "2026-07-05T05:45:51.000Z",
+    "humanDate": "July 5, 2026",
+    "machineDate": "2026-07-05",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.9.0",
+    "anchor": "v0-9-0",
+    "changes": [],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.8.0...v0.9.0",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.8.0",
+    "version": "0.8.0",
+    "name": "0.8.0",
+    "publishedAt": "2026-07-05T05:04:17.000Z",
+    "humanDate": "July 5, 2026",
+    "machineDate": "2026-07-05",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.8.0",
+    "anchor": "v0-8-0",
+    "changes": [],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.7.3...v0.8.0",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.7.3",
+    "version": "0.7.3",
+    "name": "0.7.3",
+    "publishedAt": "2026-07-05T04:44:11.000Z",
+    "humanDate": "July 5, 2026",
+    "machineDate": "2026-07-05",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.7.3",
+    "anchor": "v0-7-3",
+    "changes": [],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.7.2...v0.7.3",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.7.2",
+    "version": "0.7.2",
+    "name": "0.7.2",
+    "publishedAt": "2026-07-05T04:21:24.000Z",
+    "humanDate": "July 5, 2026",
+    "machineDate": "2026-07-05",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.7.2",
+    "anchor": "v0-7-2",
+    "changes": [],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.7.1...v0.7.2",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.7.1",
+    "version": "0.7.1",
+    "name": "0.7.1",
+    "publishedAt": "2026-07-05T03:55:41.000Z",
+    "humanDate": "July 4, 2026",
+    "machineDate": "2026-07-04",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.7.1",
+    "anchor": "v0-7-1",
+    "changes": [],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.7.0...v0.7.1",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.7.0",
+    "version": "0.7.0",
+    "name": "0.7.0",
+    "publishedAt": "2026-07-05T03:42:35.000Z",
+    "humanDate": "July 4, 2026",
+    "machineDate": "2026-07-04",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.7.0",
+    "anchor": "v0-7-0",
+    "changes": [
+      {
+        "text": "Add blancbrowser.com marketing site",
+        "url": "https://github.com/bnfy/blanc/pull/1"
+      },
+      {
+        "text": "@bnfy made their first contribution",
+        "url": "https://github.com/bnfy/blanc/pull/1"
+      }
+    ],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.6.2...v0.7.0",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.6.2",
+    "version": "0.6.2",
+    "name": "0.6.2",
+    "publishedAt": "2026-07-04T19:48:00.000Z",
+    "humanDate": "July 4, 2026",
+    "machineDate": "2026-07-04",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.6.2",
+    "anchor": "v0-6-2",
+    "changes": [],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.6.1...v0.6.2",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.6.1",
+    "version": "0.6.1",
+    "name": "0.6.1",
+    "publishedAt": "2026-07-04T19:30:11.000Z",
+    "humanDate": "July 4, 2026",
+    "machineDate": "2026-07-04",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.6.1",
+    "anchor": "v0-6-1",
+    "changes": [],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.6.0...v0.6.1",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.6.0",
+    "version": "0.6.0",
+    "name": "0.6.0",
+    "publishedAt": "2026-07-04T18:54:25.000Z",
+    "humanDate": "July 4, 2026",
+    "machineDate": "2026-07-04",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.6.0",
+    "anchor": "v0-6-0",
+    "changes": [],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.5.1...v0.6.0",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.5.1",
+    "version": "0.5.1",
+    "name": "0.5.1",
+    "publishedAt": "2026-07-04T14:57:26.000Z",
+    "humanDate": "July 4, 2026",
+    "machineDate": "2026-07-04",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.5.1",
+    "anchor": "v0-5-1",
+    "changes": [],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.5.0...v0.5.1",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.5.0",
+    "version": "0.5.0",
+    "name": "0.5.0",
+    "publishedAt": "2026-07-04T14:22:26.000Z",
+    "humanDate": "July 4, 2026",
+    "machineDate": "2026-07-04",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.5.0",
+    "anchor": "v0-5-0",
+    "changes": [],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.4.1...v0.5.0",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.4.1",
+    "version": "0.4.1",
+    "name": "0.4.1",
+    "publishedAt": "2026-07-04T04:34:58.000Z",
+    "humanDate": "July 4, 2026",
+    "machineDate": "2026-07-04",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.4.1",
+    "anchor": "v0-4-1",
+    "changes": [],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.4.0...v0.4.1",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.4.0",
+    "version": "0.4.0",
+    "name": "0.4.0",
+    "publishedAt": "2026-07-04T04:24:03.000Z",
+    "humanDate": "July 4, 2026",
+    "machineDate": "2026-07-04",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.4.0",
+    "anchor": "v0-4-0",
+    "changes": [],
+    "compareUrl": "https://github.com/bnfy/blanc/compare/v0.3.0...v0.4.0",
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.3.0",
+    "version": "0.3.0",
+    "name": "0.3.0",
+    "publishedAt": "2026-07-04T02:21:21.000Z",
+    "humanDate": "July 3, 2026",
+    "machineDate": "2026-07-03",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.3.0",
+    "anchor": "v0-3-0",
+    "changes": [],
+    "compareUrl": null,
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.2.0",
+    "version": "0.2.0",
+    "name": "0.2.0",
+    "publishedAt": "2026-07-04T01:50:48.000Z",
+    "humanDate": "July 3, 2026",
+    "machineDate": "2026-07-03",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.2.0",
+    "anchor": "v0-2-0",
+    "changes": [],
+    "compareUrl": null,
+    "extraParagraphs": [
+      "Blanc rebrand release: identity rebrand, extensions popover, and new-tab focus-race fix."
+    ]
+  },
+  {
+    "tag": "v0.1.3",
+    "version": "0.1.3",
+    "name": "v0.1.3",
+    "publishedAt": "2026-07-03T22:52:46.000Z",
+    "humanDate": "July 3, 2026",
+    "machineDate": "2026-07-03",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.1.3",
+    "anchor": "v0-1-3",
+    "changes": [
+      {
+        "text": "Consistent SVG toolbar icon set (replaces mismatched Unicode glyphs)",
+        "url": null
+      },
+      {
+        "text": "Fixed disconnected arrowhead on the reload icon",
+        "url": null
+      },
+      {
+        "text": "New blank tabs autofocus the address bar",
+        "url": null
+      },
+      {
+        "text": "Fixed the intermittent focus race so keystrokes reliably land in the address bar after opening a tab",
+        "url": null
+      }
+    ],
+    "compareUrl": null,
+    "extraParagraphs": []
+  },
+  {
+    "tag": "v0.1.2",
+    "version": "0.1.2",
+    "name": "v0.1.2",
+    "publishedAt": "2026-07-03T19:32:34.000Z",
+    "humanDate": "July 3, 2026",
+    "machineDate": "2026-07-03",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.1.2",
+    "anchor": "v0-1-2",
+    "changes": [],
+    "compareUrl": null,
+    "extraParagraphs": [
+      "Light mode: warm-stone light palette (now the default), with a System/Light/Dark appearance setting that themes the chrome, internal pages, and web content together."
+    ]
+  },
+  {
+    "tag": "v0.1.1",
+    "version": "0.1.1",
+    "name": "v0.1.1",
+    "publishedAt": "2026-07-03T19:22:23.000Z",
+    "humanDate": "July 3, 2026",
+    "machineDate": "2026-07-03",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.1.1",
+    "anchor": "v0-1-1",
+    "changes": [],
+    "compareUrl": null,
+    "extraParagraphs": [
+      "Auto-update test release: version label on the new tab page now reads v0.1.1."
+    ]
+  },
+  {
+    "tag": "v0.1.0",
+    "version": "0.1.0",
+    "name": "0.1.0",
+    "publishedAt": "2026-07-03T19:18:05.000Z",
+    "humanDate": "July 3, 2026",
+    "machineDate": "2026-07-03",
+    "url": "https://github.com/bnfy/blanc/releases/tag/v0.1.0",
+    "anchor": "v0-1-0",
+    "changes": [],
+    "compareUrl": null,
+    "extraParagraphs": []
+  }
+]

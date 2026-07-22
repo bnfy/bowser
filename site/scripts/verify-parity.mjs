@@ -146,6 +146,10 @@ function bodyText(html, { fromFeatures, isNew }) {
   // The script PROFILE is asserted separately (scriptCount below), so a
   // missing demo.js or a stray site.js on a legal page still fails.
   body = body.replace(/<script\b[^>]*\bsrc="[^"]*"[^>]*><\/script>\s*/g, '');
+  // Inline scripts are compared by CONTENT separately (inlineScripts below) —
+  // the old changelog generator emitted the search script after the footer,
+  // the layout slot renders it before; both run after the DOM they query.
+  body = body.replace(/<script\b(?![^>]*\bsrc=)[^>]*>[\s\S]*?<\/script>\s*/g, '');
   // HTML comments carry no rendered meaning and Astro strips them at build.
   body = body.replace(/<!--[\s\S]*?-->/g, '');
   if (!isNew) body = rewriteLinks(body, fromFeatures);
@@ -169,6 +173,16 @@ function bodyText(html, { fromFeatures, isNew }) {
 // chunk-splitting shows up as imports inside the JS, not extra tags).
 function scriptCount(html) {
   return (html.match(/<script\b[^>]*\bsrc="[^"]*"[^>]*>/g) ?? []).length;
+}
+
+// Inline-script CONTENT must survive the port even though position may move
+// (see bodyText). ld+json is head metadata, compared there — excluded here.
+function inlineScripts(html) {
+  const body = html.match(/<body[^>]*>([\s\S]*?)<\/body>/)?.[1] ?? '';
+  return [...body.matchAll(/<script\b(?![^>]*\bsrc=)([^>]*)>([\s\S]*?)<\/script>/g)]
+    .filter(([, attrs]) => !/application\/ld\+json/.test(attrs))
+    .map(([, , content]) => content.replace(/\s+/g, ' ').trim())
+    .sort();
 }
 
 // <html>/<body> open-tag attributes (lang, data-page, ...) — normalized,
@@ -219,6 +233,11 @@ for (const file of PAGES) {
   const oldScripts = scriptCount(oldHtml);
   const newScripts = scriptCount(newHtml);
   if (oldScripts !== newScripts) problems.push(`script profile: baseline has ${oldScripts} external script(s), build has ${newScripts}`);
+  const oldInline = inlineScripts(oldHtml);
+  const newInline = inlineScripts(newHtml);
+  if (JSON.stringify(oldInline) !== JSON.stringify(newInline)) {
+    problems.push(`inline scripts differ: baseline ${oldInline.length}, build ${newInline.length}`);
+  }
 
   const oldBody = bodyText(oldHtml, { fromFeatures, isNew: false });
   const newBody = bodyText(newHtml, { fromFeatures: false, isNew: true });
