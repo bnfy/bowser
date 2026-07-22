@@ -2328,6 +2328,14 @@ app.whenReady().then(async () => {
   // did-start-loading in the same tick), which would overwrite activeIndex
   // before it's read.
   const saved = structuredClone(ensureSessionStore().data);
+  // Stale sessions from before the utility sheet may hold utility-page
+  // tabs; drop them (zipped — groupIds/pinned/activeIndex stay aligned)
+  // so the createTab replay never routes through the sheet guard.
+  const cleaned = filterRestoredSession(saved, isUtilityUrl);
+  saved.urls = cleaned.urls;
+  saved.groupIds = cleaned.groupIds;
+  saved.pinned = cleaned.pinned;
+  saved.activeIndex = cleaned.activeIndex;
   // Groups first, so createTab's groupId validation sees them.
   groups = (Array.isArray(saved.groups) ? saved.groups : [])
     .filter((g) => g && typeof g.id === 'string' && typeof g.name === 'string')
