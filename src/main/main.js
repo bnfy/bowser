@@ -938,6 +938,23 @@ const TAB_WEB_PREFERENCES = {
 };
 
 function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = null, view = null, pinned = false, muted = false, restoreHistory = null } = {}) {
+  if (isUtilityUrl(url)) {
+    // Utility pages never become tabs regardless of caller (external
+    // open-url handoff, future call sites). Session restore filters
+    // first and never trips this. Callers tolerate null: setActiveTab
+    // no-ops on unknown ids.
+    showUtilityPage(url);
+    return null;
+  }
+  // Creating any real tab dismisses the sheet (design §5) — including
+  // BACKGROUND creation (cmd-click arrives as disposition 'background-tab'
+  // and never calls setActiveTab, so setActiveTab's dismissal alone has a
+  // hole). DEFAULT refocus: background creation activates nothing, so the
+  // current active tab must take focus back or it strands in the detached
+  // sheet; when foreground creation follows with setActiveTab, that call
+  // immediately re-focuses the new tab — the transient refocus is harmless.
+  // No-ops during session restore and window creation (sheet hidden).
+  hideUtilitySheet();
   const id = crypto.randomUUID();
   // An adopted view (window.open child, see the window-open handler) arrives
   // already constructed by Chromium with the opener relationship wired up;
@@ -1073,6 +1090,13 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
   // loads (address bar, commands, error pages) go through loadURL, which
   // doesn't fire will-navigate, so only page-initiated hops are caught.
   wc.on('will-navigate', (event, targetUrl) => {
+    // Utility pages never load in a tab — the newtab ledger links to
+    // blanc://bookmarks/ and blanc:→blanc: hops are otherwise legal.
+    if (isUtilityUrl(targetUrl)) {
+      event.preventDefault();
+      openInternalPage(targetUrl);
+      return;
+    }
     if (/^blanc:/i.test(targetUrl) && !wc.getURL().startsWith('blanc://')) {
       event.preventDefault();
     }
@@ -1153,6 +1177,15 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
   // tabs instead of falling through to bare Electron windows.
   const applyWindowOpenPolicy = (targetWc) => {
     targetWc.setWindowOpenHandler(({ url: targetUrl, disposition }) => {
+      // Utility pages never become tabs — and an adopted child must never
+      // reach createTab's guard: by createWindow time the guest webContents
+      // already exists, and a null return would leave it half-built and
+      // unmanaged. Route to the sheet, deny the child outright. (Only
+      // blanc:// pages can reach this line — web → blanc is denied below.)
+      if (isUtilityUrl(targetUrl)) {
+        openInternalPage(targetUrl);
+        return { action: 'deny' };
+      }
       // Web content must not mint privileged internal pages (Chrome blocks
       // web → chrome:// the same way). Only blanc:// pages themselves may
       // open blanc:// children.
@@ -1478,15 +1511,21 @@ const ZOOM_STEP = 0.5;
 const ZOOM_MIN = -8;
 const ZOOM_MAX = 8;
 
+/** Zoom acts on what the user is looking at: the sheet when open, else the active tab. */
+function zoomTargetWebContents() {
+  if (utilitySheetUrl && utilitySheetView) return utilitySheetView.webContents;
+  return tabs.get(activeTabId)?.view.webContents ?? null;
+}
+
 function zoomActiveTab(delta) {
-  const wc = tabs.get(activeTabId)?.view.webContents;
+  const wc = zoomTargetWebContents();
   if (!wc) return;
   const level = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, wc.getZoomLevel() + delta));
   wc.setZoomLevel(level);
 }
 
 function resetZoomForActiveTab() {
-  tabs.get(activeTabId)?.view.webContents.setZoomLevel(0);
+  zoomTargetWebContents()?.setZoomLevel(0);
 }
 
 function openFindBar() {
@@ -1584,8 +1623,11 @@ function registerIpcHandlers() {
     // — a bare mailto:/tel: URI has no "://" and would otherwise fall
     // through its domain-guessing heuristic into an unreachable https:// URL.
     if (handOffToOs(url, { trusted: true })) return;
+    const target = normalizeAddressInput(url);
+    // A typed utility address opens the sheet, never navigates the tab.
+    if (isUtilityUrl(target)) return openInternalPage(target);
     tabsWantingAddressBarFocus.delete(id);
-    tab.view.webContents.loadURL(normalizeAddressInput(url));
+    tab.view.webContents.loadURL(target);
   });
   chromeHandle('tabs:back', (_e, id) => tabs.get(id)?.view.webContents.navigationHistory.goBack());
   chromeHandle('tabs:forward', (_e, id) => tabs.get(id)?.view.webContents.navigationHistory.goForward());
