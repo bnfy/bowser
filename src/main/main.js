@@ -16,6 +16,7 @@ const { setupPermissionPolicy, setPermissionPrompter } = require('./permissions'
 const { setupAutoUpdater, checkForUpdatesManually } = require('./updater');
 const { sendLaunchPing } = require('./telemetry');
 const sync = require('./sync');
+const tabsync = require('./tabsync');
 const { setupDownloads, downloadsActivity, acknowledgeDownloads } = require('./downloads');
 const { attachContextMenu } = require('./context-menu');
 const { promptForCredentials } = require('./auth-dialog');
@@ -437,6 +438,9 @@ function createOverlay() {
 
 function showOverlay(mode, { prefill } = {}) {
   if (!hasLiveWindow() || !overlayView) return;
+  // Opening the panel is a freshness signal: pull other devices' tabs
+  // (throttled to 1/min inside refreshSession — tab-sync spec §6).
+  if (mode === 'panel' || mode === 'palette') sync.refreshSession();
   overlayMode = mode;
   overlayPrefill = prefill ?? null;
   // (Re-)adding moves the overlay to the top of the child-view stack.
@@ -547,6 +551,7 @@ function persistSession() {
 
 function broadcastTabs() {
   persistSession();
+  tabsync.noteTabsChanged();
   if (!win || win.isDestroyed()) return;
   const payload = { tabs: serializeTabs(), activeTabId, groups };
   win.webContents.send('tabs:updated', payload);
@@ -1531,6 +1536,7 @@ function registerIpcHandlers() {
   // Data + actions behind the island's slash commands and Quick Switcher.
   chromeHandle('chrome:history-list', (_e, opts) => history.listHistory(opts ?? {}));
   chromeHandle('chrome:favorites-list', () => bookmarks.listBookmarks());
+  chromeHandle('chrome:remote-tabs-list', () => sync.listRemoteDevices());
   chromeHandle('chrome:history-clear', () => history.clearHistory());
   chromeHandle('chrome:adblock-toggle', () => {
     const next = !settings.getSettings().adblockEnabled;
@@ -2065,6 +2071,7 @@ app.whenReady().then(async () => {
         .filter((g) => g.count > 0),
       focusGroup,
       blockedThisWeek: () => adblockWeekStats().data.blocked,
+      remoteDevices: () => sync.listRemoteDevices(),
     },
     shortcuts: { list: listShortcuts },
   });
@@ -2122,10 +2129,31 @@ app.whenReady().then(async () => {
     }
   });
 
+  // Live tab state for tab sync's snapshot builder. Must be registered
+  // before sync.init() so the launch sync can publish.
+  tabsync.setSnapshotProvider(() => ({
+    tabList: tabOrder.map((id) => tabs.get(id)).filter(Boolean),
+    groups,
+  }));
+  // A pull changed the cached device map: push the fresh list to the open
+  // surfaces (overlay panel; any tab currently on the start page).
+  tabsync.onRemoteChanged(() => {
+    const devices = sync.listRemoteDevices();
+    overlayView?.webContents.send('chrome:remote-tabs-updated', devices);
+    for (const tab of tabs.values()) {
+      if (tab.url?.startsWith('blanc://newtab')) {
+        tab.view.webContents.send('pages:start:remote-tabs', devices);
+      }
+    }
+  });
   // Profile sync: sync-on-launch if configured, then follow local changes.
   // Runs after stores + setupPages so its triggers see a live app; failures
   // are swallowed and surfaced only in Settings (never block startup).
   sync.init();
+  // Freshness pull when Blanc regains focus (tab-sync spec §6; throttled inside).
+  app.on('browser-window-focus', () => sync.refreshSession());
+  // Best-effort final push — fire-and-forget, never blocks quit (spec §6).
+  app.on('before-quit', () => { sync.syncNow().catch(() => {}); });
   // A sync pull that merged in favorites from another device refreshes the
   // pill's favorite state; open internal pages still pull on their next load,
   // as with any cross-surface bookmark change.

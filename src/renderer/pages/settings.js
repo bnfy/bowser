@@ -459,12 +459,14 @@
       const nowBtn = document.getElementById('syncNow');
       const disableBtn = document.getElementById('syncDisable');
       const wipeEl = document.getElementById('syncWipe');
+      const tabsShareEl = document.getElementById('syncTabsShare');
 
       const when = (ts) => (ts ? new Date(ts).toLocaleString() : 'never');
       function render(status, note) {
         const on = !!status.enabled;
         setup.hidden = on;
         active.hidden = !on;
+        tabsShareEl.checked = !!status.syncTabs;
         if (on) {
           const base = status.lastError
             ? `Sync is on (${status.handle}). ${status.lastError}`
@@ -508,6 +510,10 @@
         // on the server copy) — leave the checkbox set for the retry and say why.
         wipeEl.checked = res.ok ? false : wipeEl.checked;
         render(res.status, res.ok ? null : res.message);
+      });
+
+      tabsShareEl.addEventListener('change', async () => {
+        render(await window.bowserPages.settings.syncTabsSet(tabsShareEl.checked));
       });
     })();
   } else {

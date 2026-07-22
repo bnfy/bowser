@@ -157,6 +157,9 @@ function setupPages(hooks = {}) {
   handle('pages:settings:sync-enable', (payload) => sync.enable(payload ?? {}));
   handle('pages:settings:sync-disable', (opts) => sync.disable(opts ?? {}));
   handle('pages:settings:sync-now', () => sync.syncNow().then(() => sync.status()));
+  // Per-device consent for publishing this device's open tabs (spec §3) —
+  // lives in sync.json, never settings.json, so it cannot cross sync.
+  handle('pages:settings:sync-tabs-set', (on) => sync.setSyncTabs(!!on));
 
   handle('pages:app-version', () => app.getVersion());
 

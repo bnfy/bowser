@@ -45,6 +45,7 @@ if (window.location.protocol === 'blanc:') {
       syncEnable: (payload) => ipcRenderer.invoke('pages:settings:sync-enable', payload),
       syncDisable: (opts) => ipcRenderer.invoke('pages:settings:sync-disable', opts),
       syncNow: () => ipcRenderer.invoke('pages:settings:sync-now'),
+      syncTabsSet: (on) => ipcRenderer.invoke('pages:settings:sync-tabs-set', on),
     },
     permissions: {
       list: () => ipcRenderer.invoke('pages:permissions:list'),
