@@ -427,7 +427,17 @@ button.danger:hover { color: var(--on-danger); background: var(--danger); border
    left-aligned column that reads like a well-kept notebook — date,
    "Where to?", favorites, tab groups — with a quiet margin-note footer. */
 
-.ledger-body { padding: 150px 120px 140px; }
+/* The page must survive overflowing (Tab Sync can add rows per device):
+   flex column + min-height pins the footer to the viewport bottom while
+   content is short, and lets it fall in flow below the content — never
+   overlapping it — once the ledger outgrows the window. The top gap
+   yields with the window height for the same reason. */
+.ledger-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: clamp(90px, 16vh, 150px) 120px 40px;
+}
 
 .ledger { max-width: 520px; }
 .ledger-date {
@@ -520,10 +530,11 @@ a.ledger-label:hover { color: var(--accent); }
 .ledger-empty { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-dim); }
 
 .ledger-footer {
-  position: fixed;
-  left: 120px;
-  right: 120px;
-  bottom: 40px;
+  /* Pinned to the viewport bottom by the auto margin while the ledger is
+     short; once it overflows, the padding keeps the footer one section's
+     worth of rhythm (.ledger-section) below the last row. */
+  margin-top: auto;
+  padding-top: 50px;
   display: flex;
   justify-content: space-between;
   align-items: baseline;
@@ -537,8 +548,7 @@ a.ledger-label:hover { color: var(--accent); }
 .ledger-version { opacity: 0.6; font-size: 11px; }
 
 @media (max-width: 720px) {
-  .ledger-body { padding: 90px 48px 140px; }
-  .ledger-footer { left: 48px; right: 48px; }
+  .ledger-body { padding: 90px 48px 40px; }
 }
 
 /* ---------- centered mark (error page) ---------- */
