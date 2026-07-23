@@ -34,7 +34,7 @@ const graph = {
       name: 'Blanc Browser',
       alternateName: 'Blanc',
       url: 'https://blancbrowser.com/',
-      description: 'Blanc is a minimal desktop browser with the Blanc Island, built-in ad blocking, private tabs, slash commands, and real pages that stay in front.',
+      description: 'Blanc is a minimal desktop browser with search built into the Blanc Island, plus ad blocking, private tabs, slash commands, and real pages that stay in front.',
       applicationCategory: 'BrowserApplication',
       operatingSystem: 'macOS, Windows, Linux',
       softwareVersion: version,
@@ -53,14 +53,14 @@ const graph = {
 ---
 <BaseLayout
   title="Blanc — A Minimal, Private Desktop Browser"
-  description="Blanc is a minimal desktop browser with one floating control surface, built-in ad and tracker blocking, private tabs, and keyboard-first commands for macOS, Windows, and Linux."
+  description="Blanc is a minimal desktop browser with search built into one floating Island, plus ad and tracker blocking, private tabs, and keyboard-first commands for macOS, Windows, and Linux."
   path="/"
   page="home"
   header="island"
   footer="full"
   social="rich"
   ogTitle="Blanc Browser — A minimal desktop browser with built-in ad blocking"
-  ogDescription="One floating control surface, built-in ad and tracker blocking, private tabs, and keyboard-first commands."
+  ogDescription="Search, tabs, and browser controls in one floating Island, with built-in ad and tracker blocking and private tabs."
 >
   <script type="application/ld+json" is:inline set:html={JSON.stringify(graph)} slot="head" />
 
@@ -72,7 +72,7 @@ const graph = {
   <div class="hero-message" id="heroMessage">
     <div class="hero-message-slide is-active" data-hero-message>
       <h1>The browser that gets out of your way.</h1>
-      <p class="hero-copy">Blanc Browser is a minimal desktop browser with the Blanc Island, built-in ad blocking, private tabs, and slash commands.</p>
+      <p class="hero-copy">Blanc Browser is a minimal desktop browser with search built into the Blanc Island, plus ad blocking, private tabs, and slash commands.</p>
     </div>
     <div class="hero-message-slide" data-hero-message aria-hidden="true">
       <h1>Fewer ads. Less tracking. Built right in.</h1>
@@ -162,7 +162,7 @@ const graph = {
     <div class="home-story-copy">
       <p class="section-kicker">the blanc island</p>
       <h2 id="island-title">Your page gets the room.</h2>
-      <p>No permanent tab strip. No toolbar taking a bite out of every page. Blanc keeps tabs, navigation, and page controls in one small Island—there when you need it, out of the way when you do not.</p>
+      <p>No permanent tab strip. No toolbar taking a bite out of every page. Blanc keeps search, tabs, navigation, and page controls in one small Island—there when you need it, out of the way when you do not.</p>
       <a class="text-link" href="/features/island" data-track="feature_cta_click" data-feature="island" data-cta-position="home-story">See how the Island works <span aria-hidden="true">↗</span></a>
     </div>
     <figure class="product-capture">
@@ -210,7 +210,7 @@ const graph = {
     <article class="home-feature" id="commands">
       <p class="feature-index">03</p>
       <h2>Find the tab. Run the command. Keep moving.</h2>
-      <p>Press Command or Control L to search open tabs, favorites, history, and named groups—or type / to run a browser command.</p>
+      <p>Press Command or Control L and the Island blends open tabs, favorites, history, and named groups with live suggestions from your chosen search engine—or type / to run a browser command.</p>
       <a class="text-link" href="/features/command-palette" data-track="feature_cta_click" data-feature="command-palette" data-cta-position="home-feature-grid">Explore browser commands <span aria-hidden="true">↗</span></a>
     </article>
   </section>

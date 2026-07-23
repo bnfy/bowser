@@ -3,11 +3,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 ---
 <BaseLayout
   title={"Browser Command Palette and Quick Tab Switcher | Blanc"}
-  description={"Use Command or Control L in Blanc to switch tabs, search history and favorites, open groups, or run slash commands without leaving the page."}
+  description={"Use Command or Control L in Blanc to search the web with your chosen engine, switch tabs, search history and favorites, open groups, or run slash commands without leaving the page."}
   path="/features/command-palette"
   page="feature-command-palette"
   current="features"
-  ogDescription={"Switch tabs, search history and favorites, open groups, or run slash commands without leaving the page."}
+  ogDescription={"Search the web with your chosen engine, switch tabs, search history and favorites, open groups, or run slash commands without leaving the page."}
   ogImage="/feature-command-palette.png"
   ogImageAlt={"Blanc's compact Island over a real web page, the control surface that opens the command palette and quick switcher."}
 >
@@ -17,7 +17,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
 <main class="feature-page feature-detail-page">
   <nav class="breadcrumb" aria-label="Breadcrumb"><a href="/">home</a><span aria-hidden="true">/</span><a href="/features">features</a><span aria-hidden="true">/</span><span aria-current="page">command palette</span></nav>
-  <section class="feature-hero feature-hero--detail feature-hero--text" aria-labelledby="command-title"><p class="section-kicker">keyboard first</p><h1 id="command-title">One shortcut to move through your whole session.</h1><p>Press Command or Control L to jump to a tab, favorite, history item, or group. Type / when you want to run a browser command instead.</p></section>
+  <section class="feature-hero feature-hero--detail feature-hero--text" aria-labelledby="command-title"><p class="section-kicker">keyboard first</p><h1 id="command-title">One shortcut to move through your whole session.</h1><p>Press Command or Control L to search the web with your chosen engine or jump to a tab, favorite, history item, or group. Type / when you want to run a browser command instead.</p></section>
   <figure class="product-capture feature-capture">
     <div class="demo-stage island-figure island-figure--panel" role="img" aria-label="Blanc's command palette open over a web page: typing 'no' surfaces Notion from favorites, plus Netflix, Nintendo, and MS NOW from open tabs and history.">
       <div class="demo-page" aria-hidden="true"><div class="bar w1"></div><div class="bar w2"></div><div class="bar w3"></div><div class="bar w4"></div></div>
@@ -44,6 +44,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     <div><p class="section-kicker">jump, don't hunt</p><h2 id="jump-title">The same input gets you to the next thing.</h2></div>
     <div class="feature-copy-list">
       <article><h3>Find a tab with a few letters.</h3><p>The Quick Switcher matches across open tabs, favorites, browsing history, and named groups. Choose a result to focus it without sorting through a tab strip.</p></article>
+      <article><h3>Search with the engine you chose.</h3><p>Live suggestions from your default search engine appear beside your local matches. Choose one, or press Enter to search exactly what you typed. Suggestions can be turned off in Settings.</p></article>
       <article><h3>Run a browser action with /.</h3><p>Type <code>/</code> to see commands for everyday browser work, including <code>/private</code>, <code>/find</code>, <code>/group work</code>, and <code>/allow-ads</code>.</p></article>
       <article><h3>Keep the page where it is.</h3><p>The command palette floats over the page instead of moving content to make room. Dismiss it with Escape when you are done.</p></article>
     </div>
