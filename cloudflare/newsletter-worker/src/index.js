@@ -17,6 +17,7 @@ const ALLOWED_ORIGINS = new Set([
 ]);
 
 const SUBSCRIBE_RATE_LIMIT = 6; // per client IP per minute
+const QUARANTINE_TTL = 30 * 24 * 3600; // honeypot-caught addresses self-clean
 
 const json = (obj, status = 200, headers = {}) =>
   new Response(JSON.stringify(obj), {
@@ -61,17 +62,30 @@ async function handleSubscribe(request, env, cors) {
   }
   if (!body || typeof body !== 'object') return json({ error: 'bad request' }, 400, cors);
 
-  // Honeypot: the form ships a visually-hidden "website" field humans never
-  // fill. A bot that does gets a cheerful 200 and writes nothing.
+  const email =
+    typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+  const emailValid = email.length <= MAX_EMAIL_LENGTH && EMAIL_RE.test(email);
+
+  // Honeypot: the form ships a visually-hidden "website" field humans can't
+  // reach (off-screen, untabbable). A bot that fills it gets a cheerful 200
+  // and stays off the list — but the address is QUARANTINED under hp: for 30
+  // days rather than discarded, because the one way a real person lands here
+  // is browser/password-manager autofill filling the hidden field. They see
+  // "subscribed", so the miss would otherwise be invisible; the quarantine
+  // shows up in the /subscribers export, where a plausible-looking entry can
+  // be rescued by re-POSTing its email to /subscribe without the field.
   if (typeof body.website === 'string' && body.website.trim() !== '') {
+    if (emailValid && (await env.SUBSCRIBERS.get(`sub:${email}`)) === null) {
+      await env.SUBSCRIBERS.put(
+        `hp:${email}`,
+        JSON.stringify({ ts: new Date().toISOString() }),
+        { expirationTtl: QUARANTINE_TTL }
+      );
+    }
     return json({ ok: true }, 200, cors);
   }
 
-  const email =
-    typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
-  if (email.length > MAX_EMAIL_LENGTH || !EMAIL_RE.test(email)) {
-    return json({ error: 'invalid email' }, 400, cors);
-  }
+  if (!emailValid) return json({ error: 'invalid email' }, 400, cors);
 
   // Idempotent: re-subscribing an existing address keeps the original record
   // (first-seen timestamp survives) and returns the same 200, so the response
@@ -86,24 +100,34 @@ async function handleSubscribe(request, env, cors) {
 const authorized = (request, env) =>
   env.ADMIN_TOKEN && request.headers.get('Authorization') === `Bearer ${env.ADMIN_TOKEN}`;
 
-// GET /subscribers — bearer-token-gated export for whatever actually sends the
-// newsletter. Plain JSON: count + [{email, ts}].
-async function handleExport(env) {
-  const subscribers = [];
+async function listPrefix(env, prefix) {
+  const entries = [];
   let cursor;
   do {
-    const res = await env.SUBSCRIBERS.list({ prefix: 'sub:', cursor });
-    const entries = await Promise.all(
-      res.keys.map(async ({ name }) => ({
-        email: name.slice('sub:'.length),
-        ...(await env.SUBSCRIBERS.get(name, { type: 'json' })),
-      }))
+    const res = await env.SUBSCRIBERS.list({ prefix, cursor });
+    entries.push(
+      ...(await Promise.all(
+        res.keys.map(async ({ name }) => ({
+          email: name.slice(prefix.length),
+          ...(await env.SUBSCRIBERS.get(name, { type: 'json' })),
+        }))
+      ))
     );
-    subscribers.push(...entries);
     cursor = res.list_complete ? undefined : res.cursor;
   } while (cursor);
-  subscribers.sort((a, b) => (a.ts < b.ts ? -1 : 1));
-  return json({ count: subscribers.length, subscribers });
+  entries.sort((a, b) => (a.ts < b.ts ? -1 : 1));
+  return entries;
+}
+
+// GET /subscribers — bearer-token-gated export for whatever actually sends the
+// newsletter. Plain JSON: count + [{email, ts}], plus the honeypot quarantine
+// (see handleSubscribe) so autofill false-positives are visible, not lost.
+async function handleExport(env) {
+  const [subscribers, quarantined] = await Promise.all([
+    listPrefix(env, 'sub:'),
+    listPrefix(env, 'hp:'),
+  ]);
+  return json({ count: subscribers.length, subscribers, quarantined });
 }
 
 // DELETE /subscriber?email=… — bearer-token-gated removal, for unsubscribe and
@@ -112,7 +136,10 @@ async function handleExport(env) {
 async function handleRemove(env, url) {
   const email = (url.searchParams.get('email') ?? '').trim().toLowerCase();
   if (!email) return json({ error: 'email required' }, 400);
-  await env.SUBSCRIBERS.delete(`sub:${email}`);
+  await Promise.all([
+    env.SUBSCRIBERS.delete(`sub:${email}`),
+    env.SUBSCRIBERS.delete(`hp:${email}`),
+  ]);
   return new Response(null, { status: 204 });
 }
 

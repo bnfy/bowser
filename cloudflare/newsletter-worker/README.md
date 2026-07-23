@@ -22,9 +22,26 @@ Two consequences to stay honest about:
   self-serve link comes with the sending provider.
 
 Anti-abuse, in order: CORS restricted to `blancbrowser.com` (+ Astro's
-localhost dev origin), a visually-hidden `website` honeypot field (a filled
-honeypot gets a 200 and writes nothing), a per-IP limit of 6 subscribes per
-minute, and loose email-shape validation capped at 254 chars.
+localhost dev origin), a visually-hidden `website` honeypot field, a per-IP
+limit of 6 subscribes per minute, and loose email-shape validation capped at
+254 chars.
+
+**Honeypot quarantine:** a filled honeypot gets the same 200 as a real
+signup but the address goes to a `hp:` key with a 30-day TTL instead of the
+list. That's because the one way a *person* trips the honeypot is their
+browser or password manager autofilling the hidden field — they'd see
+"subscribed" while silently never being stored, with no way for anyone to
+notice. The quarantine makes the miss visible: the export (below) returns
+those addresses under `quarantined`, and a plausible-looking one is rescued
+by re-POSTing it to `/subscribe` without the `website` field:
+
+```
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"email":"a@example.com"}' https://<worker-url>/subscribe
+```
+
+Bot-submitted garbage just ages out on its own; an address already on the
+list is never quarantined.
 
 ## Deploy
 
@@ -66,9 +83,15 @@ Returns JSON like:
   "subscribers": [
     { "email": "a@example.com", "ts": "2026-07-23T10:00:00.000Z" },
     { "email": "b@example.com", "ts": "2026-07-24T09:30:00.000Z" }
+  ],
+  "quarantined": [
+    { "email": "maybe-real@example.com", "ts": "2026-07-24T11:00:00.000Z" }
   ]
 }
 ```
+
+`quarantined` is the honeypot quarantine described above — glance at it
+before a send; anything plausible gets rescued, the rest expires.
 
 ## Removing an address (unsubscribe / data deletion)
 
@@ -77,6 +100,7 @@ curl -X DELETE -H "Authorization: Bearer <ADMIN_TOKEN>" \
   "https://<worker-url>/subscriber?email=a@example.com"
 ```
 
-204 either way — removing an address that isn't on the list is a no-op.
-Do this promptly for any unsubscribe or deletion request; the privacy
-policy promises it.
+204 either way — removing an address that isn't on the list is a no-op, and
+the removal also clears any quarantined copy of the address. Do this
+promptly for any unsubscribe or deletion request; the privacy policy
+promises it.
