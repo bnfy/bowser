@@ -60,5 +60,5 @@ Feature: Island chrome, command palette, and slash commands
     Examples:
       | command    | outcome                                          |
       | /new       | a new ungrouped tab opens on the new-tab page     |
-      | /downloads | the downloads page opens                          |
+      | /downloads | the downloads page opens in the utility sheet     |
       | /find      | the find bar is shown                             |

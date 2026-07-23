@@ -26,6 +26,8 @@ const { groupFavoritesForMenu } = require('./bookmark-data');
 const history = require('./history');
 const { JsonStore } = require('./store');
 const { persistableEntries } = require('./session-snapshot');
+const { filterRestoredSession } = require('./session-restore');
+const { isUtilityUrl } = require('./utility-pages');
 const { shouldClearFaviconOnNavigate } = require('./favicon-policy');
 const { setupWebAuthn } = require('./webauthn');
 const { HANDOFF_PROTOCOLS, classifyExternalNavigation } = require('./external-protocols');
@@ -435,6 +437,9 @@ function createOverlay() {
 
 function showOverlay(mode, { prefill } = {}) {
   if (!hasLiveWindow() || !overlayView) return;
+  // One floating layer at a time: summoning the island dismisses the sheet
+  // (the overlay takes focus itself — no tab refocus in between).
+  hideUtilitySheet({ refocusContent: false });
   // Opening the panel is a freshness signal: pull other devices' tabs
   // (throttled to 1/min inside refreshSession — tab-sync spec §6).
   if (mode === 'panel' || mode === 'palette') sync.refreshSession();
@@ -458,6 +463,92 @@ function hideOverlay({ refocusContent = true } = {}) {
     win.contentView.removeChildView(overlayView);
     overlayView.webContents.send('overlay:hide');
     win.webContents.send('chrome:island-state', { mode: null });
+    if (refocusContent) tabs.get(activeTabId)?.view.webContents.focus();
+  }
+}
+
+// --- Utility sheet (design: 2026-07-22-utility-sheet-design.md) ---
+// The five utility pages render here, never as tabs. One lazy transparent
+// view; the page draws its own scrim + card (body.sheet in pages.css).
+let utilitySheetView = null;
+/** Currently shown utility URL; null = hidden. The single mode flag. */
+let utilitySheetUrl = null;
+
+function createUtilitySheet() {
+  utilitySheetView = new WebContentsView({ webPreferences: TAB_WEB_PREFERENCES });
+  utilitySheetView.setBackgroundColor('#00000000');
+  const wc = utilitySheetView.webContents;
+  // Esc dismisses no matter what inside the page holds focus (mirrors the
+  // island overlay's handler).
+  wc.on('before-input-event', (event, input) => {
+    if (utilitySheetUrl && input.type === 'keyDown' && input.key === 'Escape') {
+      event.preventDefault();
+      hideUtilitySheet();
+    }
+  });
+  // A crashed sheet renderer is dismissed and destroyed; the next open
+  // lazily recreates it. Close the dead webContents — dropping the
+  // reference alone leaks the crashed guest. Default refocus: nothing else
+  // will hand focus back after a crash.
+  wc.on('render-process-gone', () => {
+    hideUtilitySheet();
+    wc.close();
+    utilitySheetView = null;
+  });
+  // Default-deny (design §4): utility→utility stays in-sheet; http(s)
+  // opens a real tab (createTab's dismissal covers the sheet); approved
+  // handoff protocols go to the OS; everything else — and every
+  // window.open — dies.
+  wc.on('will-navigate', (event, targetUrl) => {
+    if (isUtilityUrl(targetUrl)) {
+      utilitySheetUrl = targetUrl; // keep the toggle honest across in-sheet nav
+      return;
+    }
+    event.preventDefault();
+    if (/^https?:\/\//i.test(targetUrl)) {
+      const id = createTab(targetUrl);
+      if (id) setActiveTab(id);
+    } else {
+      handOffToOs(targetUrl);
+    }
+  });
+  wc.setWindowOpenHandler(() => ({ action: 'deny' }));
+}
+
+/** Page identity, not URL spelling: each utility page is one document per
+ * blanc:// host, and accepted spellings differ (typed "blanc://settings"
+ * vs the menu's "blanc://settings/"). */
+function sameUtilityPage(a, b) {
+  try { return new URL(a).host === new URL(b).host; } catch { return false; }
+}
+
+function showUtilityPage(url) {
+  if (!hasLiveWindow()) return;
+  // Toggle: a direct re-invocation (menu/accelerator) of the shown page
+  // closes it. Overlay-hosted entry points can never hit this — summoning
+  // the overlay already dismissed the sheet.
+  if (utilitySheetUrl && sameUtilityPage(utilitySheetUrl, url)) return hideUtilitySheet();
+  // One floating layer at a time, in both directions.
+  hideOverlay({ refocusContent: false });
+  if (!utilitySheetView) createUtilitySheet();
+  utilitySheetUrl = url;
+  // Rapid page swaps abort the in-flight load — loadURL rejects with
+  // ERR_ABORTED; that's routine, not an error.
+  utilitySheetView.webContents.loadURL(url).catch(() => {});
+  // Mirror tabs: a detached view's document still reports visibilityState
+  // 'visible' and never background-throttles — toggle real visibility.
+  utilitySheetView.setVisible(true);
+  win.contentView.addChildView(utilitySheetView);
+  resizeActiveView();
+  utilitySheetView.webContents.focus();
+}
+
+function hideUtilitySheet({ refocusContent = true } = {}) {
+  if (!utilitySheetUrl) return;
+  utilitySheetUrl = null;
+  if (hasLiveWindow() && utilitySheetView) {
+    win.contentView.removeChildView(utilitySheetView);
+    utilitySheetView.setVisible(false);
     if (refocusContent) tabs.get(activeTabId)?.view.webContents.focus();
   }
 }
@@ -584,6 +675,10 @@ function resizeActiveView() {
     });
   }
   if (overlayMode && overlayView) overlayView.setBounds(overlayBounds());
+  if (utilitySheetUrl && utilitySheetView) {
+    const b = win.getContentBounds();
+    utilitySheetView.setBounds({ x: 0, y: chromeHeight, width: b.width, height: Math.max(0, b.height - chromeHeight) });
+  }
 }
 
 /** Pick the sharpest favicon from a page's declared icon links. The pill
@@ -850,6 +945,23 @@ const TAB_WEB_PREFERENCES = {
 };
 
 function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = null, view = null, pinned = false, muted = false, restoreHistory = null } = {}) {
+  if (isUtilityUrl(url)) {
+    // Utility pages never become tabs regardless of caller (external
+    // open-url handoff, future call sites). Session restore filters
+    // first and never trips this. Callers tolerate null: setActiveTab
+    // no-ops on unknown ids.
+    showUtilityPage(url);
+    return null;
+  }
+  // Creating any real tab dismisses the sheet (design §5) — including
+  // BACKGROUND creation (cmd-click arrives as disposition 'background-tab'
+  // and never calls setActiveTab, so setActiveTab's dismissal alone has a
+  // hole). DEFAULT refocus: background creation activates nothing, so the
+  // current active tab must take focus back or it strands in the detached
+  // sheet; when foreground creation follows with setActiveTab, that call
+  // immediately re-focuses the new tab — the transient refocus is harmless.
+  // No-ops during session restore and window creation (sheet hidden).
+  hideUtilitySheet();
   const id = crypto.randomUUID();
   // An adopted view (window.open child, see the window-open handler) arrives
   // already constructed by Chromium with the opener relationship wired up;
@@ -985,6 +1097,17 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
   // loads (address bar, commands, error pages) go through loadURL, which
   // doesn't fire will-navigate, so only page-initiated hops are caught.
   wc.on('will-navigate', (event, targetUrl) => {
+    // Utility pages never load in a tab — the newtab ledger links to
+    // blanc://bookmarks/ and blanc:→blanc: hops are otherwise legal. Only
+    // an INTERNAL page may summon the sheet: for web content this is a
+    // plain denial, same as any other web → blanc:// attempt below —
+    // otherwise any page could pop (and focus-steal via) privileged chrome
+    // with location.href = "blanc://settings/".
+    if (isUtilityUrl(targetUrl)) {
+      event.preventDefault();
+      if (wc.getURL().startsWith('blanc://')) openInternalPage(targetUrl);
+      return;
+    }
     if (/^blanc:/i.test(targetUrl) && !wc.getURL().startsWith('blanc://')) {
       event.preventDefault();
     }
@@ -1065,6 +1188,16 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
   // tabs instead of falling through to bare Electron windows.
   const applyWindowOpenPolicy = (targetWc) => {
     targetWc.setWindowOpenHandler(({ url: targetUrl, disposition }) => {
+      // Utility pages never become tabs — and an adopted child must never
+      // reach createTab's guard: by createWindow time the guest webContents
+      // already exists, and a null return would leave it half-built and
+      // unmanaged. Deny the child outright, and route to the sheet ONLY
+      // for an internal opener — web content asking for a blanc:// child
+      // gets the same silent denial it always did, never a focused sheet.
+      if (isUtilityUrl(targetUrl)) {
+        if (targetWc.getURL().startsWith('blanc://')) openInternalPage(targetUrl);
+        return { action: 'deny' };
+      }
       // Web content must not mint privileged internal pages (Chrome blocks
       // web → chrome:// the same way). Only blanc:// pages themselves may
       // open blanc:// children.
@@ -1159,6 +1292,10 @@ function setActiveTab(id, { focusContent = true, focusAddress = false } = {}) {
   // Re-selecting the active tab is a no-op.
   if (id === activeTabId) return;
 
+  // Tab switches dismiss the sheet; the switched-to tab takes focus via
+  // the existing flow below.
+  hideUtilitySheet({ refocusContent: false });
+
   lastActiveByCluster.set(clusterKeyForTab(next), id);
 
   // No window to attach to (quitting, or macOS with all windows closed):
@@ -1196,7 +1333,10 @@ function setActiveTab(id, { focusContent = true, focusAddress = false } = {}) {
   }
   if (shouldFocusAddress) next.view.setVisible(false);
   win.contentView.addChildView(next.view);
-  // The freshly attached tab view must not stack above an open overlay.
+  // The freshly attached tab view must not stack above an open overlay —
+  // nor above the sheet (defensive: §5 means they shouldn't coexist here,
+  // but a race must never paint a tab over either floating layer).
+  if (utilitySheetUrl && utilitySheetView) win.contentView.addChildView(utilitySheetView);
   if (overlayMode && overlayView) win.contentView.addChildView(overlayView);
   resizeActiveView();
   // Focusing the tab's WebContentsView gives it OS keyboard focus. For a
@@ -1327,6 +1467,7 @@ function cycleCluster(direction) {
 
 /** Focus an existing tab already on this internal page, or open one. */
 function openInternalPage(url) {
+  if (isUtilityUrl(url)) return showUtilityPage(url);
   const existing = tabOrder.find((id) => tabs.get(id)?.url.startsWith(url));
   if (existing) {
     setActiveTab(existing);
@@ -1382,15 +1523,21 @@ const ZOOM_STEP = 0.5;
 const ZOOM_MIN = -8;
 const ZOOM_MAX = 8;
 
+/** Zoom acts on what the user is looking at: the sheet when open, else the active tab. */
+function zoomTargetWebContents() {
+  if (utilitySheetUrl && utilitySheetView) return utilitySheetView.webContents;
+  return tabs.get(activeTabId)?.view.webContents ?? null;
+}
+
 function zoomActiveTab(delta) {
-  const wc = tabs.get(activeTabId)?.view.webContents;
+  const wc = zoomTargetWebContents();
   if (!wc) return;
   const level = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, wc.getZoomLevel() + delta));
   wc.setZoomLevel(level);
 }
 
 function resetZoomForActiveTab() {
-  tabs.get(activeTabId)?.view.webContents.setZoomLevel(0);
+  zoomTargetWebContents()?.setZoomLevel(0);
 }
 
 function openFindBar() {
@@ -1488,8 +1635,11 @@ function registerIpcHandlers() {
     // — a bare mailto:/tel: URI has no "://" and would otherwise fall
     // through its domain-guessing heuristic into an unreachable https:// URL.
     if (handOffToOs(url, { trusted: true })) return;
+    const target = normalizeAddressInput(url);
+    // A typed utility address opens the sheet, never navigates the tab.
+    if (isUtilityUrl(target)) return openInternalPage(target);
     tabsWantingAddressBarFocus.delete(id);
-    tab.view.webContents.loadURL(normalizeAddressInput(url));
+    tab.view.webContents.loadURL(target);
   });
   chromeHandle('tabs:back', (_e, id) => tabs.get(id)?.view.webContents.navigationHistory.goBack());
   chromeHandle('tabs:forward', (_e, id) => tabs.get(id)?.view.webContents.navigationHistory.goForward());
@@ -1916,6 +2066,11 @@ function createMainWindow() {
     overlayMode = null;
     if (overlayView && !overlayView.webContents.isDestroyed()) overlayView.webContents.close();
     overlayView = null;
+    // The sheet doesn't outlive its window either — dropping the reference
+    // without closing would leak the webContents.
+    if (utilitySheetView && !utilitySheetView.webContents.isDestroyed()) utilitySheetView.webContents.close();
+    utilitySheetView = null;
+    utilitySheetUrl = null;
     flushPermissionPrompts();
   });
 
@@ -2053,6 +2208,12 @@ app.whenReady().then(async () => {
     onDataChanged: refreshBookmarkFlags,
     // Parent for the favorites-import file dialog (evaluated lazily at click).
     getMainWindow: () => (hasLiveWindow() ? win : undefined),
+    // Utility sheet: only the sheet view itself may close the sheet — the
+    // strict pages:surface:close guard verifies the sender against this.
+    utilitySheet: {
+      isSheetSender: (wc) => !!utilitySheetView && wc === utilitySheetView.webContents,
+      close: () => hideUtilitySheet(),
+    },
     // The start page's ledger sections read live tab-group state and the
     // rolling blocked counter, both owned here.
     startPage: {
@@ -2085,6 +2246,9 @@ app.whenReady().then(async () => {
       createTab, setActiveTab, closeTab, duplicateTab, toggleTabPinned, groupTabByName, reopenClosedTab, newTabUrl,
       normalizeAddressInput, handoffProtocols: HANDOFF_PROTOCOLS, openInternalPage, openFindBar,
       getOverlayMode: () => overlayMode, showOverlay, getPrivateBrowsingSession,
+      showUtilityPage, hideUtilitySheet,
+      getUtilitySheetState: () => ({ visible: !!utilitySheetUrl, url: utilitySheetUrl }),
+      getUtilitySheetWebContents: () => utilitySheetView?.webContents ?? null,
       attemptChromeNavigation: (url) => win?.webContents.executeJavaScript(
         `location.href = ${JSON.stringify(String(url))}`
       ),
@@ -2176,6 +2340,14 @@ app.whenReady().then(async () => {
   // did-start-loading in the same tick), which would overwrite activeIndex
   // before it's read.
   const saved = structuredClone(ensureSessionStore().data);
+  // Stale sessions from before the utility sheet may hold utility-page
+  // tabs; drop them (zipped — groupIds/pinned/activeIndex stay aligned)
+  // so the createTab replay never routes through the sheet guard.
+  const cleaned = filterRestoredSession(saved, isUtilityUrl);
+  saved.urls = cleaned.urls;
+  saved.groupIds = cleaned.groupIds;
+  saved.pinned = cleaned.pinned;
+  saved.activeIndex = cleaned.activeIndex;
   // Groups first, so createTab's groupId validation sees them.
   groups = (Array.isArray(saved.groups) ? saved.groups : [])
     .filter((g) => g && typeof g.id === 'string' && typeof g.name === 'string')

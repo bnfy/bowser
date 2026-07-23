@@ -65,9 +65,9 @@ Then('a new ungrouped tab opens on the new-tab page', async function () {
   });
 });
 
-Then('the downloads page opens', async function () {
-  await this.waitForState((s) => s.tabs.some((t) => t.url.startsWith('blanc://downloads')));
-});
+// "the downloads page opens in the utility sheet" is bound by the generic
+// `the {word} page opens in the utility sheet` step in runnable.steps.js —
+// utility pages present as the sheet, never as tabs (utility-sheet design).
 
 Then('the find bar is shown', async function () {
   assert.strictEqual(await this.call('overlayMode'), 'find');

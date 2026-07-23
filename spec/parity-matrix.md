@@ -28,7 +28,7 @@ See [`README.md`](./README.md#status-legend) for meanings.
 | F13 | Permissions | SHIPPED | PLANNED | PLANNED | Explicit per-permission prompts with the same policy/copy. | — |
 | F14 | Settings | SHIPPED | PARTIAL | PLANNED | Same keys, defaults, validation (search engine, adblock, home page, theme, app icon, exceptions, usage ping, supporter). | D5, D6 |
 | F15 | Theming | SHIPPED | SHIPPED | PLANNED | system/light/dark + private scope; propagates to chrome, internal pages, web content live, no restart. | — |
-| F16 | Internal `blanc://` pages | SHIPPED | PARTIAL | PLANNED | newtab ledger, favorites, history, downloads, settings, shortcuts, error, auth — same content/copy. | — |
+| F16 | Internal `blanc://` pages | SHIPPED | PARTIAL | PLANNED | newtab ledger, favorites, history, downloads, settings, shortcuts, error, auth — same content/copy; utility pages present as a transient chrome surface (desktop: sheet), never tabs. | — |
 | F17 | Supporter & app icons | SHIPPED | PLANNED | PLANNED | 8 free + 3 supporter colorways; supporter unlock is trusted-forever, offline-OK, cosmetic-only. | D5, D6 |
 | F18 | Session persistence & restore | SHIPPED | PARTIAL | PLANNED | Restore tabs + groups; private tabs excluded; same `session.json` shape (adapted per platform store). | D8 |
 | F19 | Context menu (link/page actions) | SHIPPED | PLANNED | PLANNED | Same actions (open in new/background tab, copy link, etc.); OS hand-off honored. | D4, D7 |

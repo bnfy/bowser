@@ -42,6 +42,9 @@ if (window.location.protocol === 'blanc:') {
     shortcuts: {
       list: () => ipcRenderer.invoke('pages:shortcuts:list'),
     },
+    surface: {
+      close: () => ipcRenderer.invoke('pages:surface:close'),
+    },
     settings: {
       get: () => ipcRenderer.invoke('pages:settings:get'),
       set: (partial) => ipcRenderer.invoke('pages:settings:set', partial),

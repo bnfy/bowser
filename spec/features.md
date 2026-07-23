@@ -247,13 +247,21 @@ From the desktop `DEFAULTS`:
 
 - Pages: **newtab** (the "ledger" start page), **favorites** (`blanc://bookmarks/`),
   **history**, **downloads**, **settings**, **shortcuts**, **error**, **auth**.
+- **Presentation split:** the five *utility* pages (favorites, history, downloads,
+  settings, shortcuts) present as a **transient chrome surface** — on desktop a
+  sheet over a scrim — **never as tabs**; `newtab` and `error` remain tab content
+  (`auth` is a dialog). Outbound activations (a history entry, a favorite) open
+  real tabs and dismiss the surface. This is platform-neutral and maps to native
+  sheet presentation on mobile — no divergence entry needed.
 - The newtab ledger: date line, "Where to?", favorites, tab groups ("pick up where
   you left off" — clicking one focuses that group), footer with the weekly blocked
   count + palette hint. **No mascot** (retired in the rebrand — do not reintroduce).
 - **Strong reuse opportunity:** ship these as **one shared web bundle** rendered in
   a web view on every platform, so they stay pixel-identical for free (→ substrate).
 - **Acceptance:** newtab shows today's date, favorites, resumable groups, and the
-  weekly blocked count; each page's nav links resolve within `blanc://`.
+  weekly blocked count; each page's nav links resolve within `blanc://`; utility
+  pages open in the transient surface leaving the tab set untouched, and
+  activating a favorite from the surface opens exactly one real tab.
 
 ## F17 — Supporter & app icons
 
