@@ -52,6 +52,11 @@ contextBridge.exposeInMainWorld('browserAPI', {
   toggleAdblock: () => ipcRenderer.invoke('chrome:adblock-toggle'),
   allowAdsOnActiveSite: () => ipcRenderer.invoke('chrome:adblock-exempt-active'),
   cycleTheme: () => ipcRenderer.invoke('chrome:cycle-theme'),
+  onThemeAppearance: (callback) => {
+    const listener = (_event, appearance) => callback(appearance);
+    ipcRenderer.on('chrome:theme-appearance', listener);
+    return () => ipcRenderer.removeListener('chrome:theme-appearance', listener);
+  },
 
   minimizeWindow: () => ipcRenderer.send('window:minimize'),
   maximizeWindow: () => ipcRenderer.send('window:maximize'),

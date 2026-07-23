@@ -308,14 +308,100 @@ function lockPrivilegedNavigation(wc, trustedUrl) {
   wc.setWindowOpenHandler(() => ({ action: 'deny' }));
 }
 
-// Window background behind everything, matching the CSS --bg tokens so
-// resizes and load flashes stay in-theme.
-const chromeBackgroundColor = () => (nativeTheme.shouldUseDarkColors ? '#0e0e0e' : '#f4f4f1');
+// Window background behind everything so resizes and load flashes stay
+// in-theme. The renderer gets the resolved appearance at the same time: a
+// nativeTheme source change reaches prefers-color-scheme asynchronously, and
+// without the push the untinted strip behind the Island visibly trails the
+// Settings control.
+const chromeBackgroundColor = (
+  appearance = nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
+) =>
+  (appearance === 'dark' ? '#0e0e0e' : '#f4f4f1');
+const resolvedThemeAppearance = () =>
+  (nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
+let lastNativeThemeAppearance = resolvedThemeAppearance();
+let appliedThemeSource = null;
+let themeTintRefreshGeneration = 0;
+
+function applyChromeThemeAppearance(appearance) {
+  if (!hasLiveWindow()) return;
+  const resolved = appearance === 'dark' || appearance === 'light'
+    ? appearance
+    : resolvedThemeAppearance();
+  win.setBackgroundColor(chromeBackgroundColor(resolved));
+  win.webContents.send(
+    'chrome:theme-appearance',
+    resolved
+  );
+}
+
+function beginChromeThemeAppearance(appearance) {
+  if (!hasLiveWindow()) return;
+  // An explicit target can paint immediately. "system" has no trustworthy
+  // cross-platform resolved value until Electron removes the prior override,
+  // but the renderer can still disable its transition before that happens.
+  if (appearance === 'dark' || appearance === 'light') {
+    win.setBackgroundColor(chromeBackgroundColor(appearance));
+  }
+  win.webContents.send('chrome:theme-appearance', appearance ?? 'pending');
+}
+
+function refreshActivePageTintForThemeChange() {
+  const generation = ++themeTintRefreshGeneration;
+  const tab = activeTabId ? tabs.get(activeTabId) : null;
+  if (!tab || tab.private || !/^https?:\/\//.test(tab.url)) return;
+
+  // The captured top-edge pixels and meta theme-color both describe the old
+  // color scheme. Drop them before the page repaints so the strip cannot keep
+  // showing a stale site color during the handoff.
+  const hadTint = !!(tab.pageBg || tab.themeColor);
+  tab.pageBg = null;
+  tab.themeColor = null;
+  if (hadTint) broadcastTabs();
+
+  // Color-scheme media queries repaint asynchronously in the tab renderer.
+  // Sample across the likely repaint/transition window: the first gets the
+  // common case quickly, while later passes let a site with its own CSS
+  // transition settle. The generation guard prevents an older theme change's
+  // captures from winning after a newer one.
+  for (const delay of [32, 160, 400, 800]) {
+    setTimeout(() => {
+      if (generation !== themeTintRefreshGeneration) return;
+      samplePageTint(tab, {
+        immediate: true,
+        shouldApply: () => generation === themeTintRefreshGeneration,
+      });
+    }, delay);
+  }
+}
 
 // nativeTheme.themeSource drives prefers-color-scheme in every renderer —
 // chrome UI, internal pages, and the web content itself see one theme.
 function applyTheme() {
-  nativeTheme.themeSource = settings.getSettings().theme;
+  const source = settings.getSettings().theme;
+  // The settings listener runs for every preference write. Only a real theme
+  // source change should invalidate and re-sample the active website tint.
+  if (source === appliedThemeSource) return;
+  appliedThemeSource = source;
+  // Explicit choices are known before Electron does any native-theme work:
+  // push them first so the strip can paint in the same interaction frame.
+  // "system" must be resolved after removing the prior override.
+  const explicitAppearance = source === 'dark' || source === 'light' ? source : null;
+  beginChromeThemeAppearance(explicitAppearance);
+  refreshActivePageTintForThemeChange();
+  nativeTheme.themeSource = source;
+  if (!explicitAppearance) applyChromeThemeAppearance();
+}
+
+function handleNativeThemeUpdated() {
+  const appearance = resolvedThemeAppearance();
+  applyChromeThemeAppearance(appearance);
+  if (appearance === lastNativeThemeAppearance) return;
+  lastNativeThemeAppearance = appearance;
+  // Covers live OS appearance changes while the setting is "system". Explicit
+  // app theme changes already invalidated before assigning themeSource; doing
+  // it again here is harmless and keeps this path self-contained.
+  refreshActivePageTintForThemeChange();
 }
 
 // Swap the macOS Dock icon to the chosen colorway. Packaged macOS 26+ builds
@@ -760,7 +846,7 @@ function dominantColor(image) {
 /** Sample the top two pixel rows of a tab's rendered page — the edge that
  * visually abuts the chrome strip. Fails harmlessly for hidden views;
  * setActiveTab resamples on activation. */
-async function samplePageTint(tab) {
+async function samplePageTint(tab, { immediate = false, shouldApply = () => true } = {}) {
   if (!tabs.has(tab.id) || tab.view.webContents.isDestroyed()) return;
   if (tab.private || !/^https?:\/\//.test(tab.url)) {
     if (tab.pageBg) {
@@ -774,9 +860,10 @@ async function samplePageTint(tab) {
   try {
     const image = await tab.view.webContents.capturePage({ x: 0, y: 0, width, height: 2 });
     const color = dominantColor(image);
-    if (color && color !== tab.pageBg) {
+    if (shouldApply() && color && color !== tab.pageBg) {
       tab.pageBg = color;
-      scheduleBroadcastTabs();
+      if (immediate) broadcastTabs();
+      else scheduleBroadcastTabs();
     }
   } catch {
     /* view hidden or gone — nothing to paint from */
@@ -2176,11 +2263,11 @@ app.whenReady().then(async () => {
   }
 
   applyTheme();
+  lastNativeThemeAppearance = resolvedThemeAppearance();
   applyAppIcon();
   if (settings.getSettings().usagePing) sendLaunchPing();
-  nativeTheme.on('updated', () => {
-    if (win && !win.isDestroyed()) win.setBackgroundColor(chromeBackgroundColor());
-  });
+  // Also follow a live OS appearance change while the preference is "system".
+  nativeTheme.on('updated', handleNativeThemeUpdated);
 
   setupPermissionPolicy(ses);
   setupPermissionPolicy(privateSes, { persistDecisions: false });
