@@ -41,6 +41,12 @@ const { isTrustedSender } = require('./ipc-trust');
 const { applyDockAppIcon } = require('./app-icon');
 const { createSearchSuggestionService } = require('./search-suggestions');
 const { createAdblockStartupController } = require('./adblock-startup');
+const {
+  VERTICAL_TABS_WIDTH,
+  normalizeTabLayout,
+  calculateChromeLayout,
+} = require('./chrome-layout');
+const { reorderWithinBucket } = require('./tab-order');
 
 const NEW_TAB_URL = 'blanc://newtab/';
 const newTabUrl = () => settings.getSettings().homePage || NEW_TAB_URL;
@@ -587,6 +593,10 @@ function flushPermissionPrompts() {
 // with the `--strip-h` token (styles.css) so the initial web-view offset
 // doesn't jump on the first layout report.
 let chromeHeight = 64;
+// Device-local presentation preference. Settings owns validation and
+// persistence; this live copy makes every child-view bounds calculation use
+// one coherent value throughout a layout transition.
+let tabLayout = normalizeTabLayout(settings.getSettings().tabLayout);
 
 // The island's expanded states (command bar, ⌘L palette, find capsule)
 // render in a separate always-on-top WebContentsView so they float OVER
@@ -600,24 +610,16 @@ let overlayMode = null;
  * first load hadn't finished when showOverlay was called. */
 let overlayPrefill = null;
 
-// Find mode keeps the overlay's bounds tight around the capsule so the
-// rest of the page stays clickable while stepping through matches. Sized
-// to fit the capsule (top 60 + ~42 tall) plus its full shadow extent.
-const FIND_OVERLAY = { width: 560, height: 160 };
+function currentChromeLayout() {
+  const { width, height } = win.getContentBounds();
+  return calculateChromeLayout({ width, height, chromeHeight, tabLayout });
+}
 
 function overlayBounds() {
-  const { width, height } = win.getContentBounds();
-  if (overlayMode === 'find') {
-    // Below the strip, so the pill stays clickable while find is open and
-    // the strip's drag region can't shadow the capsule.
-    return {
-      x: Math.round((width - FIND_OVERLAY.width) / 2),
-      y: chromeHeight,
-      width: FIND_OVERLAY.width,
-      height: Math.max(0, Math.min(FIND_OVERLAY.height, height - chromeHeight)),
-    };
-  }
-  return { x: 0, y: 0, width, height };
+  const layout = currentChromeLayout();
+  if (overlayMode === 'find') return layout.findBounds;
+  if (overlayMode === 'palette') return layout.paletteBounds;
+  return layout.panelBounds;
 }
 
 function createOverlay() {
@@ -810,7 +812,15 @@ function serializeTabs() {
   return tabOrder
     .map((id) => tabs.get(id))
     .filter(Boolean)
-    .map(({ view, ...rest }) => rest);
+    .map(({ view, ...rest }) => {
+      // A page-favicon URL belongs to the tab's browsing session. Sending a
+      // private tab's remote URL into persistent chrome would make the chrome
+      // session fetch it again merely to paint the pill/overlay/rail, escaping
+      // the non-persistent private-session boundary. Private rows deliberately
+      // use the renderer's neutral fallback instead.
+      if (rest.private && rest.favicon) return { ...rest, favicon: null };
+      return rest;
+    });
 }
 
 // Open tabs persist across launches (restored in app.whenReady).
@@ -875,7 +885,13 @@ function broadcastTabs() {
   persistSession();
   tabsync.noteTabsChanged();
   if (!win || win.isDestroyed()) return;
-  const payload = { tabs: serializeTabs(), activeTabId, groups };
+  const payload = {
+    tabs: serializeTabs(),
+    activeTabId,
+    groups,
+    tabLayout,
+    verticalTabsWidth: VERTICAL_TABS_WIDTH,
+  };
   win.webContents.send('tabs:updated', payload);
   overlayView?.webContents.send('tabs:updated', payload);
 }
@@ -898,21 +914,40 @@ function scheduleBroadcastTabs() {
 
 function resizeActiveView() {
   if (!win || win.isDestroyed()) return;
+  const layout = currentChromeLayout();
   const tab = activeTabId ? tabs.get(activeTabId) : null;
-  if (tab) {
-    const bounds = win.getContentBounds();
-    tab.view.setBounds({
-      x: 0,
-      y: chromeHeight,
-      width: bounds.width,
-      height: Math.max(0, bounds.height - chromeHeight),
-    });
-  }
+  if (tab) tab.view.setBounds(layout.pageBounds);
   if (overlayMode && overlayView) overlayView.setBounds(overlayBounds());
   if (utilitySheetUrl && utilitySheetView) {
-    const b = win.getContentBounds();
-    utilitySheetView.setBounds({ x: 0, y: chromeHeight, width: b.width, height: Math.max(0, b.height - chromeHeight) });
+    utilitySheetView.setBounds(layout.utilityBounds);
   }
+}
+
+function applyTabLayout(nextLayout) {
+  const next = normalizeTabLayout(nextLayout);
+  if (next === tabLayout) return false;
+  tabLayout = next;
+
+  if (hasLiveWindow()) {
+    // A floating overlay is tied to the old pane center. Dismiss it in the
+    // same main-process turn, then rebound the attached page/sheet without
+    // navigating either document. The Settings sheet stays open so its own
+    // layout choice does not eject the user mid-interaction.
+    hideOverlay({ refocusContent: false });
+    resizeActiveView();
+    if (!utilitySheetUrl) tabs.get(activeTabId)?.view.webContents.focus();
+  }
+  broadcastTabs();
+  scheduleMenuRebuild();
+  return true;
+}
+
+function setTabLayout(nextLayout) {
+  if (nextLayout !== 'island' && nextLayout !== 'vertical') return tabLayout;
+  if (nextLayout === tabLayout) return tabLayout;
+  // onSettingsChanged synchronously calls applyTabLayout after the validated
+  // write, keeping menu, geometry, and renderer payload in one transition.
+  return normalizeTabLayout(settings.setSettings({ tabLayout: nextLayout }).tabLayout);
 }
 
 /** Pick the sharpest favicon from a page's declared icon links. The pill
@@ -1615,6 +1650,31 @@ function setActiveTab(id, { focusContent = true, focusAddress = false } = {}) {
   }
 }
 
+let railActivationSerial = 0;
+
+function activateTabFromRail(id) {
+  const tab = tabs.get(id);
+  if (!tab || tab.view.webContents.isDestroyed()) return false;
+  railActivationSerial += 1;
+
+  // One guarded main-process action owns the complete interaction so a
+  // renderer cannot leave an old sheet/panel stacked over the selected tab.
+  hideOverlay({ refocusContent: false });
+  hideUtilitySheet({ refocusContent: false });
+
+  if (id !== activeTabId) {
+    setActiveTab(id, { focusContent: true });
+  } else {
+    // setActiveTab deliberately no-ops for an already-active tab; the rail
+    // contract still requires that click/keyboard activation focus content.
+    tabsWantingAddressBarFocus.delete(id);
+    tab.view.setVisible(true);
+    resizeActiveView();
+    tab.view.webContents.focus();
+  }
+  return true;
+}
+
 /** URLs of recently closed tabs, oldest first (Cmd/Ctrl+Shift+T pops). */
 const recentlyClosedUrls = [];
 
@@ -1669,6 +1729,19 @@ function reorderTab(id, toIndex) {
   tabOrder.splice(clamped, 0, id);
   broadcastTabs();
   scheduleMenuRebuild();
+}
+
+function reorderTabWithinBucket(id, beforeId) {
+  // Renderer input is only a proposal. Main re-resolves both ids against its
+  // live model and rejects a stale/cross-group/cross-pin target.
+  const next = reorderWithinBucket(tabOrder, tabs, id, beforeId);
+  if (!next) return false;
+  if (next.some((tabId, index) => tabOrder[index] !== tabId)) {
+    tabOrder = next;
+    broadcastTabs();
+    scheduleMenuRebuild();
+  }
+  return true;
 }
 
 /** Cmd/Ctrl+1–9. With groups: n jumps to the nth cluster — a group's
@@ -1885,6 +1958,7 @@ function registerIpcHandlers() {
   });
   chromeHandle('tabs:close', (_e, id) => closeTab(id));
   chromeHandle('tabs:switch', (_e, id) => setActiveTab(id));
+  chromeHandle('tabs:activate-from-rail', (_e, id) => activateTabFromRail(id));
   chromeHandle('tabs:navigate', (_e, id, url) => {
     const tab = tabs.get(id);
     if (!tab) return;
@@ -1927,6 +2001,8 @@ function registerIpcHandlers() {
   chromeHandle('tabs:reload', (_e, id) => tabs.get(id)?.view.webContents.reload());
   chromeHandle('tabs:stop', (_e, id) => tabs.get(id)?.view.webContents.stop());
   chromeHandle('tabs:reorder', (_e, id, toIndex) => reorderTab(id, toIndex));
+  chromeHandle('tabs:reorder-within-bucket', (_e, id, beforeId) =>
+    reorderTabWithinBucket(id, beforeId));
   chromeHandle('tabs:set-group', (_e, id, groupId) => setTabGroup(id, groupId ?? null));
   chromeHandle('tabs:group-by-name', (_e, id, name) => groupTabByName(id, name));
   chromeHandle('tabs:toggle-group-collapsed', (_e, groupId) => toggleGroupCollapsed(groupId));
@@ -1942,7 +2018,13 @@ function registerIpcHandlers() {
       openInternalPage(`blanc://${name}/`);
     }
   });
-  chromeHandle('tabs:get-all', () => ({ tabs: serializeTabs(), activeTabId, groups }));
+  chromeHandle('tabs:get-all', () => ({
+    tabs: serializeTabs(),
+    activeTabId,
+    groups,
+    tabLayout,
+    verticalTabsWidth: VERTICAL_TABS_WIDTH,
+  }));
   chromeHandle('tabs:find', (_e, id, query, options) => tabs.get(id)?.view.webContents.findInPage(query, options));
   chromeHandle('tabs:find-stop', (_e, id) => tabs.get(id)?.view.webContents.stopFindInPage('clearSelection'));
 
@@ -1955,6 +2037,7 @@ function registerIpcHandlers() {
 
   chromeOn('chrome:open-island', () => showOverlay('panel'));
   chromeOn('chrome:open-find', () => showOverlay('find'));
+  chromeHandle('chrome:set-tab-layout', (_e, layout) => setTabLayout(layout));
   chromeOn('overlay:close', () => hideOverlay());
   chromeOn('chrome:downloads-ack', () => {
     acknowledgeDownloads();
@@ -2297,6 +2380,24 @@ function buildMenu() {
         { label: 'Zoom In', accelerator: 'CmdOrCtrl+=', visible: false, click: () => zoomActiveTab(ZOOM_STEP) },
         { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: () => zoomActiveTab(-ZOOM_STEP) },
         { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', click: resetZoomForActiveTab },
+        { type: 'separator' },
+        {
+          label: 'Tab Layout',
+          submenu: [
+            {
+              label: 'Island',
+              type: 'radio',
+              checked: tabLayout === 'island',
+              click: () => setTabLayout('island'),
+            },
+            {
+              label: 'Vertical Tabs',
+              type: 'radio',
+              checked: tabLayout === 'vertical',
+              click: () => setTabLayout('vertical'),
+            },
+          ],
+        },
         { type: 'separator' },
         { label: 'Downloads', accelerator: 'CmdOrCtrl+Shift+J', click: () => openInternalPage('blanc://downloads/') },
         { label: 'Settings', accelerator: 'CmdOrCtrl+,', click: () => openInternalPage('blanc://settings/') },
@@ -2645,13 +2746,25 @@ app.whenReady().then(async () => {
   if (acceptanceTestMode) {
     require('./test-hook').install({
       tabs, getTabOrder: () => tabOrder, getGroups: () => groups, getActiveTabId: () => activeTabId, clusterSlots,
-      createTab, setActiveTab, closeTab, duplicateTab, toggleTabPinned, groupTabByName, reopenClosedTab, newTabUrl,
+      createTab, setActiveTab, closeTab, duplicateTab, toggleTabPinned, toggleTabMuted,
+      groupTabByName, toggleGroupCollapsed, reorderTabWithinBucket, reopenClosedTab, newTabUrl,
+      setTabLayout, broadcastTabs,
+      getRailActivationSerial: () => railActivationSerial,
       normalizeAddressInput, handoffProtocols: HANDOFF_PROTOCOLS, openInternalPage, openFindBar,
       getOverlayMode: () => overlayMode, showOverlay, hideOverlay, getPrivateBrowsingSession,
       showUtilityPage, hideUtilitySheet,
       getUtilitySheetState: () => ({ visible: !!utilitySheetUrl, url: utilitySheetUrl }),
       getUtilitySheetWebContents: () => utilitySheetView?.webContents ?? null,
       getOverlayWebContents: () => overlayView?.webContents ?? null,
+      getChromeWebContents: () => win?.webContents ?? null,
+      setWindowContentSize: (width, height) => {
+        if (!hasLiveWindow()) return;
+        win.setContentSize(width, height);
+        resizeActiveView();
+      },
+      getWindowContentBounds: () => hasLiveWindow() ? win.getContentBounds() : null,
+      getUtilitySheetBounds: () => utilitySheetView?.getBounds() ?? null,
+      getOverlayBounds: () => overlayView?.getBounds() ?? null,
       setTestSearchSuggestionFixture,
       clearTestSearchSuggestionFixture,
       getTestSearchSuggestionRequests: () => structuredClone(testSearchSuggestionRequests),
@@ -2681,6 +2794,7 @@ app.whenReady().then(async () => {
     setAdBlockEnabled(s.adblockEnabled);
     applyTheme();
     applyAppIcon();
+    applyTabLayout(s.tabLayout);
     // WebRTC reapply is unconditional — setWebRTCIPHandlingPolicy is a cheap,
     // idempotent per-tab call and settings writes are infrequent/user-initiated.
     applyWebrtcPolicyToAllTabs();

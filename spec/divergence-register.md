@@ -392,3 +392,27 @@ whatever layer that platform provides.
 it, that's a documented capability gap, not a behavioral promise broken.
 
 **Status:** Accepted 2026-07-11.
+
+---
+
+## D19 — Desktop vertical rail vs. mobile tab overview
+**Features:** F28, F1, F2, F3, F4
+**Why:** A permanently reserved desktop rail makes many open tabs scannable in a
+wide, resizable window. Reserving the same geometry on a phone would consume the
+content area and fight the platform's native navigation model.
+
+- **Desktop:** optional fixed 248px left rail below the 64px strip. It is another
+  presentation of the canonical tab/group model; the Island remains the sole
+  address, search, and command surface.
+- **iOS:** no reserved rail. Use the native full-screen tab overview while
+  preserving Blanc's tab identity, private state, pinning, and named groups.
+- **Android:** no reserved rail. Use the native full-screen tab overview while
+  preserving the same tab identity, private state, pinning, and named groups.
+
+**Parity contract:** every platform lets users identify, reach, switch, close,
+create, and organize the same logical tabs and groups, with private and media
+state visible. Desktop alone may reserve persistent horizontal space for the
+rail; identical rail geometry, pointer drag behavior, and a synced layout
+preference are not parity requirements.
+
+**Status:** Accepted 2026-07-23.

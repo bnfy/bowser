@@ -13,6 +13,9 @@ contextBridge.exposeInMainWorld('browserAPI', {
   reload: (id) => ipcRenderer.invoke('tabs:reload', id),
   stop: (id) => ipcRenderer.invoke('tabs:stop', id),
   reorderTab: (id, toIndex) => ipcRenderer.invoke('tabs:reorder', id, toIndex),
+  reorderTabWithinBucket: (id, beforeId) =>
+    ipcRenderer.invoke('tabs:reorder-within-bucket', id, beforeId),
+  activateTabFromRail: (id) => ipcRenderer.invoke('tabs:activate-from-rail', id),
   setTabGroup: (id, groupId) => ipcRenderer.invoke('tabs:set-group', id, groupId),
   groupTabByName: (id, name) => ipcRenderer.invoke('tabs:group-by-name', id, name),
   toggleGroupCollapsed: (groupId) => ipcRenderer.invoke('tabs:toggle-group-collapsed', groupId),
@@ -36,6 +39,7 @@ contextBridge.exposeInMainWorld('browserAPI', {
   },
 
   reportChromeLayout: (height) => ipcRenderer.send('chrome:layout', { height }),
+  setTabLayout: (layout) => ipcRenderer.invoke('chrome:set-tab-layout', layout),
 
   openIsland: () => ipcRenderer.send('chrome:open-island'),
   openFindBar: () => ipcRenderer.send('chrome:open-find'),

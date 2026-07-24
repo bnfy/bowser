@@ -1,0 +1,137 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const VERSION = '1.0.0-rc.1';
+const TAG = `v${VERSION}`;
+const RELEASE_BASE = 'https://github.com/bnfy/blanc/releases';
+const RELEASE_URL = `${RELEASE_BASE}/tag/${TAG}`;
+const DOWNLOAD_URL = `${RELEASE_BASE}/download/${TAG}/Blanc-${VERSION}-arm64.dmg`;
+const CHECKSUM_URL = `${RELEASE_BASE}/download/${TAG}/SHA256SUMS`;
+---
+<BaseLayout
+  title="Blanc 1.0 Press Kit — Reviewer materials"
+  description="Embargoed reviewer materials for Blanc 1.0: verified Apple Silicon release candidate, facts, screenshots, review guide, limitations, and press contact."
+  path="/press"
+  page="press"
+  header="legal"
+  footer="compact"
+  analytics={false}
+  robots="noindex,nofollow,noarchive"
+  ogTitle="Blanc 1.0 — The browser in one small Island"
+  ogDescription="Reviewer materials for Blanc 1.0, the independent browser with an Island instead of a permanent tab strip."
+  ogImage="/press/blanc-1.0-social.png"
+  ogImageAlt="Blanc 1.0 reviewer kit: the browser in one small Island."
+>
+<main class="press-page">
+  <section class="press-hero" aria-labelledby="press-title">
+    <p class="section-kicker">embargoed reviewer kit · {TAG}</p>
+    <h1 id="press-title">The browser in one small Island.</h1>
+    <p>Blanc keeps search, tabs, named groups, page controls, and commands close—then leaves the page alone. The 1.0 release candidate adds an optional vertical tab rail without creating a second browser interface.</p>
+    <div class="press-actions" aria-label="Reviewer downloads">
+      <a class="press-primary-action" href={DOWNLOAD_URL}>download Apple Silicon RC</a>
+      <a class="press-secondary-action" href={CHECKSUM_URL}>verify SHA-256</a>
+      <a class="press-secondary-action" href={RELEASE_URL}>release notes</a>
+    </div>
+    <p class="press-availability"><strong>Review scope:</strong> macOS on Apple Silicon. Signed, notarized, and distributed as a prerelease after exact-artifact verification.</p>
+  </section>
+
+  <figure class="press-lead-shot">
+    <img src="/feature-island.png" width="2784" height="1824" alt="Blanc's compact Island floating over a web page instead of a permanent tab strip and toolbar." />
+    <figcaption>The resting Island keeps the active context visible without drawing a horizontal tab strip across the page.</figcaption>
+  </figure>
+
+  <section class="press-facts" aria-labelledby="press-facts-title">
+    <div>
+      <p class="section-kicker">the facts</p>
+      <h2 id="press-facts-title">A focused browser, not another browser platform.</h2>
+    </div>
+    <dl class="press-fact-grid">
+      <div><dt>price</dt><dd>Free</dd></div>
+      <div><dt>optional support</dt><dd>US$19 once, plus tax; cosmetic icons only</dd></div>
+      <div><dt>engine</dt><dd>Chromium through Electron</dd></div>
+      <div><dt>press platform</dt><dd>macOS · Apple Silicon</dd></div>
+      <div><dt>publisher</dt><dd>Bananify</dd></div>
+      <div><dt>built in</dt><dd>Blocking, private tabs, groups, sync</dd></div>
+    </dl>
+  </section>
+
+  <section class="press-story" aria-labelledby="press-story-title">
+    <p class="section-kicker">why it exists</p>
+    <h2 id="press-story-title">No conventional horizontal tab strip. No agent operating inside your session.</h2>
+    <div class="press-story-copy">
+      <p>The Island is the product claim: one coherent surface for navigation, search, tab switching, named groups, page actions, and slash commands. A vertical rail is available when a persistent tab overview helps, while the Island remains the only place to address the web.</p>
+      <p>Built-in ad and tracker blocking, private tabs, end-to-end-encrypted Profile Sync, and the absence of a built-in AI assistant support that interaction model. They are not substitutes for it.</p>
+    </div>
+  </section>
+
+  <section class="press-gallery" aria-labelledby="press-gallery-title">
+    <div class="press-section-heading">
+      <div>
+        <p class="section-kicker">screenshots</p>
+        <h2 id="press-gallery-title">Representative release-candidate views.</h2>
+      </div>
+      <p>Open the full-resolution file, then save it for editorial use. Product UI may not be materially altered.</p>
+    </div>
+    <div class="press-gallery-grid">
+      <figure class="press-gallery-shot--vertical">
+        <a href="/press/vertical-tabs.png">
+          <img src="/press/vertical-tabs.png" width="1400" height="888" alt="Blanc with its optional vertical tab rail open beside a web page." />
+        </a>
+        <figcaption>Optional vertical tabs · RC</figcaption>
+      </figure>
+      <figure>
+        <a href="/feature-command-palette.png">
+          <img src="/feature-command-palette.png" width="1200" height="630" alt="Blanc's Island expanded into its command palette over a web page." />
+        </a>
+        <figcaption>Search, switch, and command</figcaption>
+      </figure>
+      <figure>
+        <a href="/feature-tab-groups.png">
+          <img src="/feature-tab-groups.png" width="1200" height="630" alt="Blanc's Island showing named tab groups." />
+        </a>
+        <figcaption>Named groups, not colored workspaces</figcaption>
+      </figure>
+      <figure>
+        <a href="/feature-private-tabs.png">
+          <img src="/feature-private-tabs.png" width="1200" height="630" alt="Blanc private-tab styling with an explicit private chip." />
+        </a>
+        <figcaption>Private state stays explicit</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="press-review" aria-labelledby="press-review-title">
+    <div>
+      <p class="section-kicker">five-minute review</p>
+      <h2 id="press-review-title">The shortest path through the product thesis.</h2>
+    </div>
+    <ol class="press-review-steps">
+      <li><span>01</span><div><strong>Launch cleanly.</strong><p>Review and commit the two first-run privacy choices. The local chrome appears even while blocking filters prepare.</p></div></li>
+      <li><span>02</span><div><strong>Open the Island.</strong><p>Press Command-L, switch among local results, type <code>/</code>, and create a named group with <code>/group review</code>.</p></div></li>
+      <li><span>03</span><div><strong>Turn on the rail.</strong><p>Choose View → Tab Layout → Vertical Tabs. Tabs move to the left without reloading the active page; search and commands remain in the Island.</p></div></li>
+      <li><span>04</span><div><strong>Check protection.</strong><p>Visit an ad-supported page, inspect the shield count, and open a private tab to see its separate in-memory state.</p></div></li>
+      <li><span>05</span><div><strong>Open a utility.</strong><p>Favorites, History, Downloads, Settings, and Shortcuts float as a sheet instead of consuming another tab.</p></div></li>
+    </ol>
+  </section>
+
+  <aside class="press-limits" aria-labelledby="press-limits-title">
+    <p class="section-kicker">the honest part</p>
+    <h2 id="press-limits-title">What Blanc 1.0 does not claim.</h2>
+    <div class="press-limit-grid">
+      <p><strong>No extensions or password import.</strong> The extension runtime was deliberately removed after native crashes and could not make allowlisted password-manager bridges work.</p>
+      <p><strong>No zero-telemetry slogan.</strong> First run commits the documented search-suggestion and usage-ping choices before either path may send.</p>
+      <p><strong>No universal launch matrix.</strong> This candidate is Apple Silicon only. Other targets remain out until their exact native packages pass the same gate.</p>
+      <p><strong>No “blocks everything” promise.</strong> Blocking is integrated and on by default, but filters remain best effort.</p>
+    </div>
+  </aside>
+
+  <section class="press-contact" aria-labelledby="press-contact-title">
+    <p class="section-kicker">press contact</p>
+    <h2 id="press-contact-title">A direct line to the person shipping it.</h2>
+    <p><strong>Anthony Loria</strong><br />Bananify / Blanc Browser<br /><a href="mailto:support@blancbrowser.com">support@blancbrowser.com</a></p>
+    <p>Bananify is the independent studio publishing Blanc. Anthony Loria
+      created and leads development of the browser.</p>
+    <p>Use <strong>Security</strong> in the subject for private vulnerability reports. Include the RC version, macOS version, Mac model, steps, expected result, and observed result for product feedback.</p>
+  </section>
+</main>
+</BaseLayout>

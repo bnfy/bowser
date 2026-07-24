@@ -10,7 +10,12 @@ function start() {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(
       `<!doctype html><html><head><meta charset="utf-8"><title>${name}</title></head>` +
-      `<body><h1>${name}</h1><p>widget widget widget</p></body></html>`
+      `<body><h1>${name}</h1><p>widget widget widget</p>` +
+      `<input id="acceptance-draft" aria-label="Unsaved draft">` +
+      `<script>` +
+      `const key='acceptance-load-count';` +
+      `sessionStorage.setItem(key,String(Number(sessionStorage.getItem(key)||0)+1));` +
+      `</script></body></html>`
     );
   });
   return new Promise((resolve) => {

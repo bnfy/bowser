@@ -13,6 +13,23 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 let userDataDir;
 let fixturesHandle;
 
+async function launchApp() {
+  const electronApp = await _electron.launch({
+    args: [REPO_ROOT, `--user-data-dir=${userDataDir}`],
+    env: { ...process.env, BLANC_TEST: '1' },
+  });
+
+  // Wait for whenReady to have installed the test hook.
+  await electronApp.evaluate(
+    () => new Promise((resolve) => {
+      const t = setInterval(() => {
+        if (globalThis.__blanc) { clearInterval(t); resolve(); }
+      }, 50);
+    })
+  );
+  return electronApp;
+}
+
 BeforeAll({ timeout: 120_000 }, async () => {
   fixturesHandle = await fixtures.start();
   ctx.fixturesBase = fixturesHandle.base;
@@ -20,19 +37,13 @@ BeforeAll({ timeout: 120_000 }, async () => {
   // Isolated, throwaway profile so no prior session/history/settings leaks in.
   userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'blanc-acceptance-'));
 
-  ctx.app = await _electron.launch({
-    args: [REPO_ROOT, `--user-data-dir=${userDataDir}`],
-    env: { ...process.env, BLANC_TEST: '1' },
-  });
-
-  // Wait for whenReady to have installed the test hook.
-  await ctx.app.evaluate(
-    () => new Promise((resolve) => {
-      const t = setInterval(() => {
-        if (globalThis.__blanc) { clearInterval(t); resolve(); }
-      }, 50);
-    })
-  );
+  ctx.app = await launchApp();
+  // F28-1 exercises a genuine process relaunch against this same profile,
+  // rather than a renderer reload or an in-memory persistence proxy.
+  ctx.relaunch = async () => {
+    if (ctx.app) await ctx.app.close();
+    ctx.app = await launchApp();
+  };
 });
 
 Before(async function () {
@@ -45,6 +56,8 @@ Before(async function () {
 
 AfterAll(async () => {
   if (ctx.app) await ctx.app.close();
+  ctx.app = null;
+  ctx.relaunch = null;
   if (fixturesHandle) await fixturesHandle.close();
   if (userDataDir) fs.rmSync(userDataDir, { recursive: true, force: true });
 });

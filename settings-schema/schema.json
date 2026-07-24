@@ -8,6 +8,8 @@
     { "id": "brave", "label": "Brave Search" }
   ],
   "themes": ["system", "light", "dark"],
+  "$tabLayouts": "Desktop-only, device-local tab presentation. Default: island. Never included in Profile Sync or generated mobile settings.",
+  "tabLayouts": ["island", "vertical"],
   "webrtcPolicies": ["standard", "strict"],
   "secureDnsOptions": ["auto", "off", "cloudflare", "quad9", "mullvad", "custom"],
   "appIcons": [
@@ -41,7 +43,7 @@
     "supporter": null
   },
   "$internalDefaults": "Keys present in settings.js DEFAULTS that are intentionally desktop-only (not mobile-parity settings); settings:check allowlists these instead of requiring them in the schema.",
-  "internalDefaults": ["onboardingVersion", "_syncMeta"],
+  "internalDefaults": ["tabLayout", "onboardingVersion", "_syncMeta"],
   "settings": [
     { "key": "searchEngine", "type": "enum", "enum": "searchEngines", "default": "duckduckgo" },
     { "key": "searchSuggestions", "type": "boolean", "default": true, "note": "device-local; not synced; private tabs override off" },

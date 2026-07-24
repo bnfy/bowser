@@ -3,6 +3,7 @@
 // per-scenario map of logical page names -> tab ids (reset in a Before hook).
 module.exports = {
   app: null,
+  relaunch: null,
   fixturesBase: null,
   tabByName: {},
   activeExpectedUrl: null,

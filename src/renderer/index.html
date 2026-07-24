@@ -33,6 +33,42 @@
       <div id="windowControls" class="no-drag"></div>
     </div>
   </div>
+  <aside id="verticalTabsRail" class="vertical-tabs-rail no-drag" aria-label="Vertical tabs" hidden>
+    <div class="vertical-tabs-toolbar">
+      <span class="vertical-tabs-heading">tabs</span>
+      <button
+        id="verticalTabsUseIsland"
+        class="vertical-tabs-layout-button"
+        type="button"
+        title="Keep tabs in the Island"
+        aria-label="Use Island tab layout"
+        data-focus-key="layout:island"
+      >
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <rect x="1.75" y="4.25" width="12.5" height="7.5" rx="3.75"></rect>
+          <circle cx="5.25" cy="8" r="0.75"></circle>
+          <circle cx="8" cy="8" r="0.75"></circle>
+        </svg>
+        <span>Island</span>
+      </button>
+    </div>
+    <div id="verticalTabsList" class="vertical-tabs-list" role="list" aria-label="Open tabs"></div>
+    <div class="vertical-tabs-footer">
+      <button
+        id="verticalTabsNew"
+        class="vertical-tabs-new"
+        type="button"
+        aria-label="New tab"
+        data-focus-key="action:new-tab"
+      >
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"></path></svg>
+        <span>New tab</span>
+        <kbd id="verticalTabsNewShortcut"></kbd>
+      </button>
+    </div>
+    <div id="verticalTabsAnnouncer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+  </aside>
+  <script src="vertical-tabs.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

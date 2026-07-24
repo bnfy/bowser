@@ -5,6 +5,7 @@
 (() => {
   const { platform } = window.browserAPI;
   const isMac = platform === 'darwin';
+  document.documentElement.dataset.platform = platform;
   if (isMac) document.body.classList.add('mac');
 
   const chromeEl = document.getElementById('chrome');
@@ -25,7 +26,12 @@
   const permAllowBtn = document.getElementById('permAllowBtn');
   const permBlockBtn = document.getElementById('permBlockBtn');
 
-  let state = { tabs: [], activeTabId: null, groups: [] };
+  let state = {
+    tabs: [],
+    activeTabId: null,
+    groups: [],
+    tabLayout: 'island',
+  };
   /** Overlay mode mirrored from main — the pill hides while the command
    * bar is expanded in place ('panel'); the palette keeps it visible. */
   let islandMode = null;
@@ -319,6 +325,11 @@
   }
 
   function render() {
+    // The rail is a presentation of this same trusted payload, not another
+    // tab store. Its module also applies the layout attribute/width used to
+    // center the resting Island over the remaining page pane.
+    window.blancVerticalTabs?.render(state);
+
     const tab = activeTab();
 
     backBtn.disabled = !tab?.canGoBack;

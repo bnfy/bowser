@@ -39,6 +39,16 @@
   adblockEnabled.addEventListener('change', () =>
     window.bowserPages.settings.set({ adblockEnabled: adblockEnabled.checked }));
 
+  // --- Tab presentation (desktop-only, device-local) ---
+  if (supports('tabLayout')) {
+    const tabLayout = document.getElementById('tabLayout');
+    tabLayout.value = settings.tabLayout ?? 'island';
+    tabLayout.addEventListener('change', () =>
+      window.bowserPages.settings.set({ tabLayout: tabLayout.value }));
+  } else {
+    document.getElementById('tabLayoutSetting')?.remove();
+  }
+
   // --- Home page ---
   if (supports('homePage')) {
     const homePage = document.getElementById('homePage');

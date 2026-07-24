@@ -76,8 +76,11 @@ A feature's row in [`../parity-matrix.md`](../parity-matrix.md) should not move 
 
 ## Scope of this first cut
 
-- Every feature `F1–F24` has at least one scenario; the differentiators and the
-  most divergence-heavy features have several.
-- Scenarios are written; **step definitions are not** — those are the first
-  per-platform task, and writing the desktop bindings first (against the shipping
-  app) is the cheapest way to validate that the scenarios are phrased correctly.
+- Fourteen feature files cover `F1–F24` and `F27–F28`; the differentiators and
+  the most divergence-heavy features have several scenarios. F25 (DoH) and F26
+  (WebRTC policy) still have manual acceptance contracts in `features.md` but no
+  Gherkin transcription.
+- Desktop step definitions cover the `runnable` subset in
+  `test/desktop/cucumber.mjs`. The complete desktop-only F28/D19 rail contract
+  is bound and verified there; other blank checklist cells remain acceptance
+  backlog until a platform binding and verification move them to ✅.

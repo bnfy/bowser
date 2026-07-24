@@ -9,7 +9,7 @@ feature's row in [`../parity-matrix.md`](../parity-matrix.md) shouldn't reach
 
 > Desktop is the shipped reference, so its `@all` cells are ✅ (behaviour verified
 > in the shipping app; automated step-defs are a separate track). iOS/Android are
-> greenfield → ⬜. The grid below tracks stable scenario IDs across 13 `.feature`
+> greenfield → ⬜. The grid below tracks stable scenario IDs across 14 `.feature`
 > files.
 
 ## Files
@@ -29,6 +29,7 @@ feature's row in [`../parity-matrix.md`](../parity-matrix.md) shouldn't reach
 | Supporter & session | `supporter-and-session.feature` | F17, F18 |
 | Platform services | `platform-services.feature` | F21, F22, F23, F24 |
 | Tab sync | `sync.feature` | F27 |
+| Vertical tabs | `vertical-tabs.feature` | F28 (D19) |
 
 ## Grid
 
@@ -91,6 +92,18 @@ feature's row in [`../parity-matrix.md`](../parity-matrix.md) shouldn't reach
 | F27-1 | Sharing open tabs off by default | — | ✅ | ⬜ | ⬜ |
 | F27-2 | Remote tab opens locally as new ungrouped tab | — | ✅ | ⬜ | ⬜ |
 | F27-3 | Sharing-off retracts this device | — | ✅ | ⬜ | ⬜ |
+| F28-1 | Layout default, persistence, and no-sync rule | D19 | ✅ | ➖ | ➖ |
+| F28-2 | Layout switching preserves live guest content | D19 | ✅ | ➖ | ➖ |
+| F28-3 | Guest and utility-sheet page-pane geometry | D19 | ✅ | ➖ | ➖ |
+| F28-4 | Panel and palette page-pane geometry | D19 | ✅ | ➖ | ➖ |
+| F28-5 | Find geometry at 640×480 | D19 | ✅ | ➖ | ➖ |
+| F28-6 | Canonical buckets, groups, and remote-tab scope | D19 | ✅ | ➖ | ➖ |
+| F28-7 | Identity, private, loading, pin, and audio states | D19 | ✅ | ➖ | ➖ |
+| F28-8 | Rail pointer and retained menu actions | D19 | ✅ | ➖ | ➖ |
+| F28-9 | Activation dismisses surfaces and focuses content | D19 | ✅ | ➖ | ➖ |
+| F28-10 | Same-bucket drag reorder | D19 | ✅ | ➖ | ➖ |
+| F28-11 | Cross-bucket drag rejection | D19 | ✅ | ➖ | ➖ |
+| F28-12 | Roving keyboard and accessible action flow | D19 | ✅ | ➖ | ➖ |
 
 > **M0–M1 note (2026-07-08):** F5 (address/search + OS hand-off) and F1 (minimal
 > address surface) are implemented and unit-tested on iOS, but the iOS acceptance
@@ -98,13 +111,14 @@ feature's row in [`../parity-matrix.md`](../parity-matrix.md) shouldn't reach
 
 ## Coverage check
 
-- Every feature `F1–F24` has ≥1 scenario. ✅
-- Every divergence `D1–D14` is exercised by ≥1 scenario **except** `D11` (window
-  model), `D13` (shield-count fidelity), and `D14` (cosmetic depth) — these have no
-  discrete behavioural assertion. D11 is verified implicitly wherever island
-  scenarios (F1) run on each platform's windowing; D13/D14 are covered within the
-  F12 contract (F12-1's shield assertion is relaxed on iOS per D13 — see
-  [`../blocking-backends.md`](../blocking-backends.md)). Add dedicated scenarios if
-  concrete assertions emerge.
-- Mobile-gained / platform-specific outcomes (F22, F24) correctly carry platform
-  tags rather than `@all`.
+- Features `F1–F24` and `F27–F28` have ≥1 Gherkin scenario. F25 (DoH) and F26
+  (WebRTC policy) retain manual acceptance contracts in `features.md` but have
+  not yet been transcribed into this suite.
+- The suite explicitly tags D1–D10, D12, D16, and D19. D11 is exercised
+  implicitly wherever Island scenarios run against platform windowing; D13/D14
+  are covered within the F12 contract (F12-1's shield assertion is relaxed on
+  iOS per D13 — see
+  [`../blocking-backends.md`](../blocking-backends.md)). D15, D17, and D18 do
+  not yet have discrete Gherkin assertions.
+- Mobile-gained / platform-specific outcomes (F22, F24, F28) correctly carry
+  platform tags rather than `@all`.

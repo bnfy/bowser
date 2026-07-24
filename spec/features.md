@@ -20,7 +20,9 @@ toolbar (Bowser Design System "Island Chrome").
   that opens the panel; on a pointer platform, hovering/focusing a dot reveals
   that tab's favicon so it can be identified before switching), favicon, the
   active group's name, domain, shield count (F12), a private chip when private
-  (F4), and a trailing action cluster (reload / favorite / downloads).
+  (F4), and a trailing action cluster (reload / favorite / downloads). In
+  desktop vertical mode (F28/D19), the rail becomes the persistent tab
+  presentation and the resting pill omits only its redundant tab dots.
 - **Expanded states** (one at a time): `panel` (command bar expanded in place),
   `palette` (same panel summoned by the ⌘L-equivalent, floated over a scrim),
   `find` (F8). Only the active state shows; Escape/back dismisses.
@@ -82,7 +84,9 @@ toolbar (Bowser Design System "Island Chrome").
   and permission decisions remain memory-only and disappear when Blanc quits.
 - While the active tab is private, chrome uses the **private theme** (F15): dashed
   pill border, hollow dots, and a "private" chip that closes the tab (quick exit).
-- Shield counts, downloads, favorites behave normally.
+- Shield counts and downloads behave normally. Existing Favorites can be
+  opened in private tabs, but Blanc does not add Favorites from private
+  browsing because that would create a persistent record.
 - On desktop, device-bound passkeys follow the session split: private tabs can't
   see the normal profile's passkeys, and passkeys *created* in a private tab are
   **ephemeral** — unusable after Blanc quits (D16).
@@ -230,6 +234,7 @@ From the desktop `DEFAULTS`:
 | `adblockEnabled` | `true` | boolean |
 | `homePage` | `""` | empty = `blanc://newtab`; else a URL |
 | `theme` | `system` | system/light/dark |
+| `tabLayout` | `island` | desktop-only `island`/`vertical`; device-local, never synced (F28/D19) |
 | `appIcon` | `paper` | a free icon id, or a supporter id **iff** supporter active |
 | `adblockExceptions` | `[]` | lowercased hostnames, no scheme/path/`www.` |
 | `usagePing` | `true` | boolean (F21) |
@@ -408,3 +413,45 @@ From the desktop `DEFAULTS`:
 - **Acceptance:** With sharing on on device A, device B lists A's tabs after a
   focus refresh and opens one as a new ungrouped local tab; toggling sharing
   off on A removes A's section from B after the next sync.
+
+## F28 — Vertical tabs
+
+- On desktop, `tabLayout` selects `island` or `vertical`. It defaults to
+  `island`, persists on that device, and is never included in Profile Sync.
+  Changing it is a live presentation change over the existing main-owned tab
+  model: it neither reloads guest content nor creates a second tab/workspace
+  store. Mobile uses its native tab overview instead (D19).
+- The desktop vertical layout is a fixed **248px left rail** in the trusted
+  chrome document, beginning below the 64px strip. The Island remains the only
+  address, search, and command surface. Guest tabs and the utility sheet occupy
+  the remaining page pane. Panel and palette overlays exclude the rail
+  horizontally but retain `y = 0`, so the Island expands in place; resting and
+  expanded Island states share the page-pane center. Find is centered in that
+  pane and capped at 560px. At the supported 640×480 minimum, the pane is 392px
+  wide and the visible find capsule fits within 368px of it without touching
+  the rail.
+- The rail renders local tabs from the canonical tab order: ungrouped pins,
+  named groups (group pins first), then loose tabs, followed by the new-tab
+  action. Rows expose favicon and title plus active, loading, private, pinned,
+  audible, and muted states. Group headers fold/unfold, including an explicit
+  collapsed-active state. Remote-device tabs stay in the Quick Switcher and
+  start page; they never become rail rows.
+- Pointer actions switch, close, middle-click close, create a new tab, and
+  fold/unfold groups. Drag reorder is accepted only within the same
+  `{groupId,pinned}` bucket; `beforeId: null` means the validated source
+  bucket's end. Cross-group and pinned↔unpinned drops are rejected without
+  changing order or membership. Pin/unpin, mute/unmute, duplicate, and group
+  membership editing remain available through the Island and native menus in
+  the first rail release.
+- A rail activation atomically dismisses any panel, palette, find capsule, or
+  utility sheet, activates the requested tab at most once, and focuses its
+  content — including when the row already represents the active tab. Primary
+  row controls and their close actions are accessible siblings. Primary focus
+  roves with Arrow keys and Home/End; Enter/Space activates; Escape returns
+  focus to the active page.
+- **Acceptance:** The desktop scenarios in
+  [`acceptance/vertical-tabs.feature`](./acceptance/vertical-tabs.feature)
+  verify the default, persistence, no-sync rule, no-reload layout switching,
+  guest/sheet/panel/palette/find geometry (including 640×480), canonical row
+  states and actions, group/private/loading/audio behavior, accepted and
+  rejected reorder paths, activation cleanup/focus, and keyboard flow.

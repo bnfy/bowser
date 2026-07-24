@@ -11,6 +11,7 @@
 const settings = require('./settings');
 const history = require('./history');
 const bookmarks = require('./bookmarks');
+const { Menu } = require('electron');
 
 /**
  * @param {object} refs - live references from main.js's module scope.
@@ -27,9 +28,15 @@ function install(refs) {
     closeTab,
     duplicateTab,
     toggleTabPinned,
+    toggleTabMuted,
     groupTabByName,
+    toggleGroupCollapsed,
+    reorderTabWithinBucket,
     reopenClosedTab,
     newTabUrl,
+    setTabLayout,
+    broadcastTabs,
+    getRailActivationSerial,
     normalizeAddressInput,
     handoffProtocols,
     openInternalPage,
@@ -42,6 +49,11 @@ function install(refs) {
     getUtilitySheetState,
     getUtilitySheetWebContents,
     getOverlayWebContents,
+    getChromeWebContents,
+    setWindowContentSize,
+    getWindowContentBounds,
+    getUtilitySheetBounds,
+    getOverlayBounds,
     setTestSearchSuggestionFixture,
     clearTestSearchSuggestionFixture,
     getTestSearchSuggestionRequests,
@@ -66,6 +78,35 @@ function install(refs) {
   const isLoadingOf = (t) => { try { return t.view.webContents.isLoadingMainFrame(); } catch { return false; } };
   const sessionPersistentOf = (t) => { try { return t.view.webContents.session.isPersistent(); } catch { return null; } };
   const lc = (s) => String(s).trim().toLowerCase();
+  let focusObservation = null;
+  const remoteFixture = [{
+    deviceId: 'acceptance-remote-device',
+    name: 'Press Mac',
+    platform: 'darwin',
+    updatedAt: Date.now(),
+    groups: [],
+    tabs: [{
+      url: 'https://remote.example/press-needle',
+      title: 'Remote press needle',
+      groupId: null,
+      pinned: false,
+    }],
+  }];
+
+  function clearFocusObservation() {
+    if (!focusObservation) return;
+    focusObservation.wc.removeListener('focus', focusObservation.listener);
+    focusObservation = null;
+  }
+
+  function pushRemoteDevices(devices) {
+    getOverlayWebContents()?.send('chrome:remote-tabs-updated', devices);
+    for (const tab of tabs.values()) {
+      if (urlOf(tab).startsWith('blanc://newtab')) {
+        tab.view.webContents.send('pages:start:remote-tabs', devices);
+      }
+    }
+  }
 
   globalThis.__blanc = {
     // ---- state ----
@@ -77,10 +118,16 @@ function install(refs) {
           url: urlOf(t),
           loadedUrl: committedUrlOf(t),
           loading: isLoadingOf(t),
+          isLoading: !!t.isLoading,
+          title: t.title || '',
+          favicon: t.favicon || null,
           groupId: t.groupId ?? null,
           pinned: !!t.pinned,
           muted: !!t.muted,
+          audible: !!t.audible,
           private: !!t.private,
+          webContentsId: t.view.webContents.id,
+          bounds: t.view.getBounds(),
           sessionKind: t.view.webContents.session === getPrivateBrowsingSession() ? 'private' : 'default',
           sessionPersistent: sessionPersistentOf(t),
         });
@@ -111,9 +158,29 @@ function install(refs) {
     },
     duplicateActive() { duplicateTab(getActiveTabId()); },
     pinTab(id) { toggleTabPinned(id); },
+    muteTab(id) { toggleTabMuted(id); },
     closeTab(id) { closeTab(id); },
     reopenClosed() { reopenClosedTab(); },
     groupActiveByName(name) { groupTabByName(getActiveTabId(), name); },
+    groupTabByName(id, name) { groupTabByName(id, name); },
+    activateTab(id, focusContent = false) { setActiveTab(id, { focusContent: !!focusContent }); },
+    railActivationSerial() { return getRailActivationSerial(); },
+    toggleGroup(id) { toggleGroupCollapsed(id); },
+    reorderWithinBucket(id, beforeId) { return reorderTabWithinBucket(id, beforeId); },
+    setTabPresentation(id, patch = {}) {
+      const tab = tabs.get(id);
+      if (!tab) return false;
+      if (typeof patch.title === 'string') tab.title = patch.title;
+      if (typeof patch.favicon === 'string' || patch.favicon === null) tab.favicon = patch.favicon;
+      if (typeof patch.isLoading === 'boolean') tab.isLoading = patch.isLoading;
+      if (typeof patch.audible === 'boolean') tab.audible = patch.audible;
+      if (typeof patch.muted === 'boolean') {
+        tab.muted = patch.muted;
+        tab.view.webContents.setAudioMuted(patch.muted);
+      }
+      broadcastTabs();
+      return true;
+    },
     closeTabsInGroupName(name) {
       const g = getGroups().find((x) => x.name === lc(name));
       if (!g) return;
@@ -155,6 +222,15 @@ function install(refs) {
     setSearchSuggestions(on) { settings.setSettings({ searchSuggestions: !!on }); },
     searchSuggestions() { return settings.getSettings().searchSuggestions; },
     settingsSyncValues() { return settings.exportForSync().values; },
+    tabLayout() { return settings.getSettings().tabLayout; },
+    setTabLayout(layout) { return setTabLayout(layout); },
+    mergeRemoteTabLayout(layout) {
+      settings.mergeFromSync({
+        values: { tabLayout: layout },
+        meta: { tabLayout: Date.now() + 60_000 },
+      });
+      return settings.getSettings().tabLayout;
+    },
     setAppIcon(x) { settings.setSettings({ appIcon: x }); },
     appIcon() { return settings.getSettings().appIcon; },
     secureDns() { return settings.getSettings().secureDns; },
@@ -175,7 +251,9 @@ function install(refs) {
       try { return handoffProtocols.has(new URL(url).protocol); } catch { return false; }
     },
     openDownloads() { openInternalPage('blanc://downloads/'); },
+    openSettings() { openInternalPage('blanc://settings/'); },
     openFind() { openFindBar(); },
+    openPanel() { showOverlay('panel'); },
     openPalette() { showOverlay('palette'); },
     closeOverlay() { hideOverlay({ refocusContent: false }); },
     overlayMode() { return getOverlayMode(); },
@@ -240,6 +318,119 @@ function install(refs) {
       return wc.executeJavaScript('document.body.dataset.mode || null');
     },
     utilitySurface() { return getUtilitySheetState(); },
+    windowContentBounds() { return getWindowContentBounds(); },
+    setWindowContentSize(width, height) { setWindowContentSize(width, height); },
+    activeGuestBounds() { return tabs.get(getActiveTabId())?.view.getBounds() ?? null; },
+    utilityBounds() { return getUtilitySheetBounds(); },
+    overlayBounds() { return getOverlayBounds(); },
+    async overlayElementRect(selector) {
+      const wc = getOverlayWebContents();
+      if (!wc) return null;
+      return wc.executeJavaScript(`(() => {
+        const element = document.querySelector(${JSON.stringify(String(selector))});
+        if (!element || element.hidden) return null;
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return {
+          x: rect.x, y: rect.y, width: rect.width, height: rect.height,
+          display: style.display, visibility: style.visibility
+        };
+      })()`);
+    },
+    async activePageState() {
+      const tab = tabs.get(getActiveTabId());
+      if (!tab) return null;
+      return tab.view.webContents.executeJavaScript(`(() => ({
+        loadCounter: Number(sessionStorage.getItem('acceptance-load-count') || 0),
+        draft: document.getElementById('acceptance-draft')?.value ?? null
+      }))()`);
+    },
+    async setActivePageDraft(value) {
+      const tab = tabs.get(getActiveTabId());
+      if (!tab) return false;
+      return tab.view.webContents.executeJavaScript(`(() => {
+        const input = document.getElementById('acceptance-draft');
+        if (!input) return false;
+        input.value = ${JSON.stringify(String(value))};
+        return true;
+      })()`);
+    },
+    activeWebContentsId() {
+      return tabs.get(getActiveTabId())?.view.webContents.id ?? null;
+    },
+    async probeFocusAfterTabBroadcast(id) {
+      const tab = tabs.get(id);
+      if (!tab) return { tabBlurCount: 0, chromeFocusCount: 0 };
+      // Let the Playwright main-process evaluate handoff settle, then establish
+      // page focus immediately before the product broadcast under test.
+      await new Promise((resolve) => setTimeout(resolve, 450));
+      tab.view.webContents.focus();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      const chrome = getChromeWebContents();
+      let tabBlurCount = 0;
+      let chromeFocusCount = 0;
+      const onTabBlur = () => { tabBlurCount += 1; };
+      const onChromeFocus = () => { chromeFocusCount += 1; };
+      tab.view.webContents.on('blur', onTabBlur);
+      chrome?.on('focus', onChromeFocus);
+      tab.title = `${tab.title || 'Tab'} · focus probe`;
+      broadcastTabs();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      tab.view.webContents.removeListener('blur', onTabBlur);
+      chrome?.removeListener('focus', onChromeFocus);
+      return {
+        tabBlurCount,
+        chromeFocusCount,
+      };
+    },
+    beginTabFocusObservation(id) {
+      clearFocusObservation();
+      const tab = tabs.get(id);
+      if (!tab) return false;
+      const observation = { wc: tab.view.webContents, count: 0, listener: null };
+      observation.listener = () => { observation.count += 1; };
+      observation.wc.on('focus', observation.listener);
+      focusObservation = observation;
+      return true;
+    },
+    finishTabFocusObservation() {
+      if (!focusObservation) return { count: 0 };
+      const result = { count: focusObservation.count };
+      clearFocusObservation();
+      return result;
+    },
+    injectRemoteDevices() {
+      pushRemoteDevices(remoteFixture);
+      return structuredClone(remoteFixture);
+    },
+    clearRemoteDevices() { pushRemoteDevices([]); },
+    async remoteStartPageRows() {
+      const rows = [];
+      for (const tab of tabs.values()) {
+        if (!urlOf(tab).startsWith('blanc://newtab')) continue;
+        try {
+          const rendered = await tab.view.webContents.executeJavaScript(
+            `[...document.querySelectorAll('#remoteList a')].map((row) => ({
+              title: row.querySelector('.name')?.textContent ?? '',
+              href: row.href
+            }))`
+          );
+          rows.push(...rendered);
+        } catch { /* page may still be committing; caller polls */ }
+      }
+      return rows;
+    },
+    nativeMenuLabels() {
+      const labels = [];
+      const visit = (menu) => {
+        for (const item of menu?.items ?? []) {
+          if (item.label) labels.push(item.label);
+          if (item.submenu) visit(item.submenu);
+        }
+      };
+      visit(Menu.getApplicationMenu());
+      return labels;
+    },
     openFavoritesSheet() { openInternalPage('blanc://bookmarks/'); },
 
     // ---- utility sheet drive helpers (acceptance) ----
@@ -282,9 +473,12 @@ function install(refs) {
 
     // ---- isolation between scenarios ----
     reset() {
+      clearFocusObservation();
       // No scenario inherits another's open surface.
       hideOverlay({ refocusContent: false });
       hideUtilitySheet();
+      pushRemoteDevices([]);
+      setWindowContentSize(1280, 800);
       // A fresh tab first so closing the rest never empties the window.
       const keep = createTab(newTabUrl());
       setActiveTab(keep, { focusContent: false });
@@ -298,12 +492,14 @@ function install(refs) {
         adblockEnabled: true,
         homePage: '',
         theme: 'system',
+        tabLayout: 'island',
         appIcon: 'paper',
         adblockExceptions: [],
       });
       settings.setSupporter(null);
       clearTestSearchSuggestionFixture();
       setTestSearchNavigationCapture(false);
+      broadcastTabs();
     },
   };
 }

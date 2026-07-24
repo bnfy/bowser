@@ -157,6 +157,426 @@ button svg {
   color: #f5f5f5;
 }
 
+/* ---------- Vertical tabs: optional trusted-chrome rail ----------
+   The rail starts below the strip, while the strip's resting Island stays
+   centered over the remaining page pane. Main uses the same width payload
+   for guest/sheet/overlay bounds. ---------- */
+
+:root[data-tab-layout="vertical"] #strip {
+  padding-left: var(--vertical-tabs-w);
+}
+
+:root[data-tab-layout="vertical"] #islandPill {
+  /* Non-mac window buttons remain at the page pane's right edge. */
+  max-width: calc((100vw - var(--vertical-tabs-w) - 150px) / var(--pill-zoom));
+}
+
+/* macOS traffic lights sit inside the reserved 248px rail, so subtracting the
+   Island layout's old 170px left clearance would unnecessarily crush the pill
+   at the 640px minimum window width. */
+:root[data-tab-layout="vertical"][data-platform="darwin"] #islandPill {
+  max-width: calc((100vw - var(--vertical-tabs-w) - 24px) / var(--pill-zoom));
+}
+
+/* In vertical mode the rail is the persistent tab presentation. The Island
+   keeps navigation, active-page context, search, and every expanded command
+   function without duplicating its resting dot switcher. */
+:root[data-tab-layout="vertical"] #pillDots {
+  display: none;
+}
+
+.vertical-tabs-rail {
+  position: fixed;
+  z-index: 5;
+  top: var(--strip-h);
+  bottom: 0;
+  left: 0;
+  width: var(--vertical-tabs-w);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+  color: var(--text);
+}
+
+.vertical-tabs-rail[hidden] {
+  display: none;
+}
+
+.vertical-tabs-toolbar {
+  min-height: 44px;
+  padding: 8px 10px 7px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.vertical-tabs-heading {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.vertical-tabs-layout-button {
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+.vertical-tabs-layout-button:hover {
+  border-color: var(--text-dim);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.vertical-tabs-layout-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.vertical-tabs-layout-button svg circle {
+  fill: currentColor;
+  stroke: none;
+}
+
+.vertical-tabs-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  padding: 7px 8px 12px;
+}
+
+.vertical-tabs-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vertical-tabs-section + .vertical-tabs-section {
+  margin-top: 8px;
+}
+
+.vertical-tabs-section-heading {
+  height: 24px;
+  margin: 0;
+  padding: 0 7px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.vertical-tabs-section-heading span {
+  opacity: 0.65;
+}
+
+.vertical-tabs-group-header {
+  width: 100%;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 7px;
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-align: left;
+}
+
+.vertical-tabs-group-header:hover,
+.vertical-tabs-group-header.contains-active {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.vertical-tabs-group-caret {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  transition: transform 120ms ease;
+}
+
+.vertical-tabs-group-caret svg {
+  width: 12px;
+  height: 12px;
+}
+
+.vertical-tabs-group-header:not(.collapsed) .vertical-tabs-group-caret {
+  transform: rotate(90deg);
+}
+
+.vertical-tabs-group-name {
+  max-width: 108px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: inherit;
+}
+
+.vertical-tabs-group-count {
+  opacity: 0.65;
+  flex: 0 0 auto;
+}
+
+.vertical-tabs-group-active {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: 0 0 auto;
+}
+
+.vertical-tabs-group-rule {
+  height: 1px;
+  min-width: 8px;
+  background: var(--border);
+  flex: 1 1 auto;
+}
+
+.vertical-tab-row {
+  position: relative;
+  min-width: 0;
+  min-height: 36px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 1px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+}
+
+.vertical-tab-row:hover {
+  background: var(--surface);
+}
+
+.vertical-tab-row.active {
+  background: var(--accent-dim);
+}
+
+.vertical-tab-row.private {
+  border-style: dashed;
+  border-color: var(--border);
+}
+
+.vertical-tab-row.private.active {
+  border-color: var(--text-dim);
+}
+
+.vertical-tab-primary {
+  width: 100%;
+  height: 34px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px 0 8px;
+  border-radius: calc(var(--radius) - 1px);
+  text-align: left;
+  cursor: grab;
+}
+
+.vertical-tab-primary:active {
+  cursor: grabbing;
+}
+
+.vertical-tab-primary:focus-visible,
+.vertical-tab-close:focus-visible,
+.vertical-tabs-group-header:focus-visible,
+.vertical-tabs-layout-button:focus-visible,
+.vertical-tabs-new:focus-visible {
+  position: relative;
+  z-index: 2;
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.vertical-tab-favicon {
+  width: 16px;
+  height: 16px;
+}
+
+.vertical-tab-title {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.vertical-tab-row.loading .vertical-tab-title {
+  color: var(--text-dim);
+}
+
+.vertical-tab-private {
+  max-width: 50px;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 0 1 auto;
+}
+
+.vertical-tab-state {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  flex: 0 0 auto;
+}
+
+.vertical-tab-state svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.35;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.vertical-tab-audio:not(.muted) {
+  color: var(--text);
+}
+
+.vertical-tab-audio.muted {
+  opacity: 0.75;
+}
+
+.vertical-tab-close {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 50%;
+  color: var(--text-dim);
+  opacity: 0;
+}
+
+.vertical-tab-row:hover .vertical-tab-close,
+.vertical-tab-row:focus-within .vertical-tab-close,
+.vertical-tab-row.active .vertical-tab-close {
+  opacity: 1;
+}
+
+.vertical-tab-close:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.vertical-tab-close svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 1.75;
+}
+
+.vertical-tab-row.dragging {
+  opacity: 0.45;
+}
+
+.vertical-tab-row.drop-before::before,
+.vertical-tab-row.drop-after::after {
+  content: '';
+  position: absolute;
+  z-index: 4;
+  left: 7px;
+  right: 7px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+  pointer-events: none;
+}
+
+.vertical-tab-row.drop-before::before {
+  top: -2px;
+}
+
+.vertical-tab-row.drop-after::after {
+  bottom: -2px;
+}
+
+.vertical-tabs-footer {
+  padding: 8px;
+  border-top: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.vertical-tabs-new {
+  width: 100%;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-align: left;
+}
+
+.vertical-tabs-new:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.vertical-tabs-new svg {
+  width: 14px;
+  height: 14px;
+}
+
+.vertical-tabs-new kbd {
+  margin-left: auto;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 400;
+  opacity: 0.65;
+}
+
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
 /* ---------- Island: resting pill ---------- */
 
 #islandPill {
@@ -305,7 +725,12 @@ button svg {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-dim);
-  flex: 0 0 auto;
+  flex: 0 1 12ch;
+  min-width: 0;
+  max-width: 12ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 #pillGroupName[hidden] { display: none; }
 
@@ -1047,6 +1472,7 @@ body:not(.mac) #permissionBar { right: 118px; } /* clear the window controls */
   /* Peek still appears on hover/focus, just without the fade + pop. */
   .dot-peek { transition: none; }
   .island-ghead svg.caret { transition: none; }
+  .vertical-tabs-group-caret { transition: none; }
   .island-row.tab-row .row-sub,
   .island-row.tab-row .row-tag,
   .island-row.tab-row .row-remote-pin { transition: none; }
