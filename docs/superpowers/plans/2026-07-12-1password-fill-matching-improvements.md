@@ -27,6 +27,7 @@
 - **One definition, two consumers:** `isVisible`, `isSearchLike`, `isNewsletterLike`, `loginEvidence`, `collectCandidates`, `selectFields` are defined once at module scope and embedded into both injected scripts via `.toString()`, so tested code == shipped code.
 - **Never guess a username field.** Login-positive evidence required; focus is only an in-scope tie-break; no lone-field fallback; search and newsletter fields are excluded.
 - **Unit tests stay pure** (`node --test`, no Electron/SDK/DOM). jsdom is deliberately not used — its no-layout `offsetParent`/`getBoundingClientRect` make visibility fixtures unreliable.
+- **Workspace + baseline.** Execute in the dedicated worktree `.claude/worktrees/1password-matching` (branch `feature/1password-fill`) — the primary checkout is shared with another session that switches branches. `origin/main` was merged in before execution, so the **baseline is 217 passing tests, 0 failures** (not the pre-merge 144). Every "full unit suite" step below means `npm run test:unit` staying at 217+ passing with 0 failures, growing as this plan's tests are added.
 
 ---
 
@@ -37,7 +38,7 @@
   - shared DOM helpers + pure `selectFields` (Task 3)
   - `buildInspectScript` (new) + rewritten `buildFillScript` (Task 4)
   - exports grow to include `selectFields`, `buildInspectScript`
-- **Modify `src/main/main.js`** — `FILL_WORLD_ID` constant and the rewritten `fillActiveTabFrom1Password` phase-2 block (currently lines 918–948) (Task 5)
+- **Modify `src/main/main.js`** — `FILL_WORLD_ID` constant and the rewritten `fillActiveTabFrom1Password` phase-2 block (currently lines 1127–1156) (Task 5)
 - **Modify `test/unit/onepassword-match.test.js`** (currently 13 tests) — updated matching cases + new `selectFields` behavioral fixtures (Tasks 2, 3)
 - **Modify `package.json` / `package-lock.json`** — direct pinned `tldts-experimental@7.4.6` (Task 1)
 
@@ -89,8 +90,8 @@ The two `github.io` lines differing is the whole point of `allowPrivateDomains`.
 
 - [ ] **Step 3: Probe the isolated-world return contract (throwaway)**
 
-**Placement matters:** `initSpikePackaging()` is called at `main.js:2280`, *before*
-`createMainWindow()` at `main.js:2334` — so there is no window yet at that point,
+**Placement matters:** `initSpikePackaging()` is called at `main.js:2670`, *before*
+`createMainWindow()` at `main.js:2750` — so there is no window yet at that point,
 and a probe there would find `BrowserWindow.getAllWindows()[0]` undefined and prove
 nothing. Put the probe **after** window creation and hang it off `did-finish-load`,
 and make a missing window a loud **failure**, never a silent skip.
@@ -832,7 +833,7 @@ git commit -m "feat(1password): credential-free inspect source + isolated-world 
 Rewires `fillActiveTabFrom1Password` to the inspect → reveal → re-validate → decide → fill flow, moving both injections into the dedicated isolated world. This is the first end-to-end runnable deliverable.
 
 **Files:**
-- Modify: `src/main/main.js` (add `FILL_WORLD_ID`; replace phase 2, currently lines 918–948)
+- Modify: `src/main/main.js` (add `FILL_WORLD_ID`; replace phase 2, currently lines 1127–1156)
 - Test: `test/unit/onepassword-match.test.js` (constant guard)
 
 **Interfaces:**
@@ -888,7 +889,7 @@ const FILL_WORLD_ID = 1001;
 
 - [ ] **Step 4: Replace phase 2 with the two-phase flow**
 
-In `src/main/main.js`, replace the whole phase-2 block — from the comment line `// ── PHASE 2 (reveal + fill): a credential is in memory from revealCredential` through the closing `}` of the `catch` (currently lines 918–947) — with:
+In `src/main/main.js`, replace the whole phase-2 block — from the comment line `// ── PHASE 2 (reveal + fill): a credential is in memory from revealCredential` through the closing `}` of the `catch` (currently lines 1127–1156) — with:
 
 ```js
   // ── PHASE 2 (inspect → reveal → fill). The inspect pass carries NO
