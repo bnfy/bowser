@@ -130,6 +130,11 @@ button svg {
   transition: background-color 160ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* A user-selected theme preview is an immediate handoff while Chromium's
+   prefers-color-scheme catches up. Keep the normal transition for page-derived
+   faux-header colors, but never add latency to this explicit interaction. */
+#strip.theme-optimistic { transition: none; }
+
 /* Keep window controls legible when the sampled page color is dark. */
 #strip.tint-dark #windowControls button { color: rgba(245, 245, 245, 0.75); }
 #strip.tint-dark #windowControls button:hover {
@@ -546,8 +551,13 @@ body[data-mode="palette"] #panelAnchor { top: 120px; }
   color: var(--text);
   flex: 1 1 auto;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+  /* Overflowing titles wash out at the right edge (into the hover-revealed
+     domain) instead of cutting to an ellipsis. The element is flex-grown to
+     fill the row, so the fade zone only ever touches glyphs when the text
+     genuinely overflows — short titles render untouched. */
+  -webkit-mask: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  mask: linear-gradient(to right, #000 calc(100% - 28px), transparent);
 }
 .island-row .row-sub {
   font-family: var(--font-mono);
@@ -558,6 +568,29 @@ body[data-mode="palette"] #panelAnchor { top: 120px; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Quiet rows: at rest a list row (overlay.js tabRow/remoteTabRow — .tab-row)
+   shows just favicon + title; the domain, remote pin marker, and group tag
+   join the actions on the row's hover/focus reveal. The active row keeps its
+   domain visible — it's the "you are here" context. Quick-Switcher and
+   command rows are exempt (no .tab-row): their subs are load-bearing while
+   matching typed input. Space stays reserved — reveal never shifts layout. */
+.island-row.tab-row .row-sub,
+.island-row.tab-row .row-tag,
+.island-row.tab-row .row-remote-pin {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.island-row.tab-row:hover .row-sub,
+.island-row.tab-row:focus-within .row-sub,
+.island-row.tab-row.active .row-sub,
+.island-row.tab-row:hover .row-tag,
+.island-row.tab-row:focus-within .row-tag {
+  opacity: 1;
+}
+/* The remote pin marker's designed at-reveal strength is its original 0.5. */
+.island-row.tab-row:hover .row-remote-pin,
+.island-row.tab-row:focus-within .row-remote-pin { opacity: 0.5; }
 
 .island-row .row-close {
   opacity: 0;
@@ -572,6 +605,7 @@ body[data-mode="palette"] #panelAnchor { top: 120px; }
   flex: 0 0 auto;
 }
 .island-row:hover .row-close,
+.island-row:focus-within .row-close,
 .island-row .row-close:focus-visible { opacity: 1; }
 .island-row .row-close:hover { background: var(--border); color: var(--text); }
 .island-row .row-close svg { width: 12px; height: 12px; stroke-width: 1.75; }
@@ -633,17 +667,19 @@ body[data-mode="palette"] #panelAnchor { top: 120px; }
   flex: 0 0 auto;
 }
 .island-row:hover .row-grp,
+.island-row:focus-within .row-grp,
 .row-grp.open,
 .row-grp:focus-visible { opacity: 1; }
 .row-grp:hover { color: var(--accent); border-color: var(--accent); }
 
 /* Pin row button — reserved-space/hover-reveal convention shared with
-   .row-close: always occupies layout width, opacity-faded until hovered/
-   focused, but stays visible and accent-filled (like .shield/.row-private)
-   whenever the tab is actually pinned. .row-mute has no reserved space —
-   overlay.js only renders it at all for tabs that are audible or muted,
-   so once it exists it's always shown (no hover-gating), and only its
-   .on (muted) state gets the accent treatment. */
+   .row-close: always occupies layout width, opacity-faded until the row is
+   hovered/focused; a pinned tab's .on state reveals accent-filled but no
+   longer shows at rest (quiet rows — the pinned header and group-leading
+   order carry pin state). .row-mute has no reserved space — overlay.js only
+   renders it at all for tabs that are audible or muted, so once it exists
+   it's always shown (no hover-gating), and only its .on (muted) state gets
+   the accent treatment. */
 .row-pin,
 .row-mute {
   width: 18px;
@@ -660,10 +696,13 @@ body[data-mode="palette"] #panelAnchor { top: 120px; }
 .row-pin svg,
 .row-mute svg { width: 14px; height: 14px; stroke-width: 1.25; }
 .island-row:hover .row-pin,
+.island-row:focus-within .row-pin,
 .row-pin:focus-visible { opacity: 1; }
 .row-pin:hover,
 .row-mute:hover { background: var(--border); color: var(--text); }
-.row-pin.on { opacity: 1; } /* a pinned tab shows its pin icon at rest, not just on hover */
+/* Remote tab rows (tab sync): non-interactive pin marker. */
+.row-remote-pin { display: inline-flex; opacity: 0.5; flex: none; color: var(--text-dim); }
+.row-remote-pin svg { width: 12px; height: 12px; stroke: currentColor; stroke-width: 1.25; fill: none; }
 .row-pin.on,
 .row-mute.on { color: var(--accent); background: var(--accent-dim); }
 
@@ -718,7 +757,15 @@ body[data-mode="palette"] #panelAnchor { top: 120px; }
 .group-picker-input:focus { outline: none; border-color: var(--accent); }
 
 /* Group results in the Quick Switcher use the mono voice. */
-.island-row .row-title.mono { font-family: var(--font-mono); font-size: 12.5px; flex: 0 0 auto; }
+/* Group results size to their text (flex 0 0 auto), so the overflow fade
+   above would wash out every name's tail — exempt them. */
+.island-row .row-title.mono {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  flex: 0 0 auto;
+  -webkit-mask: none;
+  mask: none;
+}
 
 .row-kbd {
   font-family: var(--font-mono);
@@ -752,6 +799,27 @@ body[data-mode="palette"] #panelAnchor { top: 120px; }
   color: var(--text-dim);
   opacity: 0.7;
   flex: 0 0 auto;
+}
+
+/* Default-engine autocomplete rows use a magnifier instead of pretending to
+   have a page favicon. */
+.row-search-icon {
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+.row-search-icon svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* "private" tag on private tabs in the switcher list */
@@ -964,5 +1032,8 @@ body:not(.mac) #permissionBar { right: 118px; } /* clear the window controls */
   /* Peek still appears on hover/focus, just without the fade + pop. */
   .dot-peek { transition: none; }
   .island-ghead svg.caret { transition: none; }
+  .island-row.tab-row .row-sub,
+  .island-row.tab-row .row-tag,
+  .island-row.tab-row .row-remote-pin { transition: none; }
   #strip { transition: none; }
 }

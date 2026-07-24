@@ -1,0 +1,27 @@
+---
+import BrandMark from './BrandMark.astro';
+const { variant = 'solid', current = null } = Astro.props;
+---
+{variant === 'legal' ? (
+  <header class="legal-top">
+    <a class="legal-home" href="/" aria-label="Blanc home">
+      <BrandMark class="mark" />
+      <span class="wordmark">Blanc</span>
+    </a>
+  </header>
+) : (
+  <header class={variant === 'solid' ? 'site-header site-header--solid' : 'site-header'}>
+    <nav class="site-nav" aria-label="Primary navigation">
+      <a class="site-brand" href="/" aria-label="Blanc Browser home">
+        <BrandMark class="site-brand-mark" />
+        <span>Blanc</span>
+      </a>
+      <div class="site-nav-links">
+        <a href="/features" class={current === 'features' ? 'is-current' : undefined} aria-current={current === 'features' ? 'page' : undefined}>features</a>
+        <a href="/about" class={current === 'about' ? 'is-current nav-secondary' : 'nav-secondary'} aria-current={current === 'about' ? 'page' : undefined}>about</a>
+        <a href="/changelog" class={current === 'changelog' ? 'is-current' : undefined} aria-current={current === 'changelog' ? 'page' : undefined}>changelog</a>
+      </div>
+      <a class={current === 'download' ? 'site-nav-cta is-current' : 'site-nav-cta'} href={current === 'download' ? '#download-options' : '/download'}>download blanc</a>
+    </nav>
+  </header>
+)}

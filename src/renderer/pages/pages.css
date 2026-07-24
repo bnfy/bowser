@@ -115,6 +115,12 @@ h1 {
   align-items: center;
   margin-bottom: 16px;
 }
+.toolbar-row > input[type="text"],
+.toolbar-row > input[type="url"],
+.toolbar-row > input[type="password"] {
+  flex: 1 1 160px;
+  min-width: 0;
+}
 /* Inline "also delete synced data" checkbox next to Turn-off-sync. */
 .inline-check {
   display: inline-flex;
@@ -123,6 +129,7 @@ h1 {
   font-size: 12.5px;
   color: var(--text-dim);
 }
+.toolbar-row > .inline-check { min-width: 0; white-space: normal; }
 input[type="text"], input[type="url"], input[type="password"], select {
   background: var(--surface-raised);
   border: 1px solid var(--border);
@@ -237,9 +244,22 @@ button.danger:hover { color: var(--on-danger); background: var(--danger); border
   padding: 16px 0;
   border-bottom: 1px solid var(--border);
 }
-.setting .label { display: flex; flex-direction: column; gap: 3px; min-width: 160px; }
+.setting .label {
+  flex: 1 1 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 160px;
+}
 .setting .label .hint { color: var(--text-dim); font-size: 12px; }
-.setting input[type="url"] { width: 280px; }
+.setting > select {
+  /* Native selects use their longest option as an intrinsic minimum. Let the
+     control shrink inside the row instead of widening the whole sheet. */
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(360px, 100%);
+}
+.setting input[type="url"] { width: 280px; max-width: 100%; min-width: 0; }
 
 /* Default-browser row: quiet confirmation once Blanc holds the role. */
 #defaultBrowserState {
@@ -373,9 +393,10 @@ button.danger:hover { color: var(--on-danger); background: var(--danger); border
 
 .settings-nav {
   position: sticky;
-  /* Sticks below the sticky top nav (~29px tall) with a little breathing room,
-     rather than sliding up underneath it. */
-  top: 52px;
+  /* The sheet's sticky top band is 69px tall: 32px top gutter + 24px close
+     row + 12px bottom padding + 1px divider. Keep another 16px between it
+     and this sidebar so the first link can never slide underneath. */
+  top: 85px;
   flex: 0 0 150px;
   display: flex;
   flex-direction: column;
@@ -427,7 +448,17 @@ button.danger:hover { color: var(--on-danger); background: var(--danger); border
    left-aligned column that reads like a well-kept notebook — date,
    "Where to?", favorites, tab groups — with a quiet margin-note footer. */
 
-.ledger-body { padding: 150px 120px 140px; }
+/* The page must survive overflowing (Tab Sync can add rows per device):
+   flex column + min-height pins the footer to the viewport bottom while
+   content is short, and lets it fall in flow below the content — never
+   overlapping it — once the ledger outgrows the window. The top gap
+   yields with the window height for the same reason. */
+.ledger-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: clamp(90px, 16vh, 150px) 120px 40px;
+}
 
 .ledger { max-width: 520px; }
 .ledger-date {
@@ -520,10 +551,11 @@ a.ledger-label:hover { color: var(--accent); }
 .ledger-empty { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-dim); }
 
 .ledger-footer {
-  position: fixed;
-  left: 120px;
-  right: 120px;
-  bottom: 40px;
+  /* Pinned to the viewport bottom by the auto margin while the ledger is
+     short; once it overflows, the padding keeps the footer one section's
+     worth of rhythm (.ledger-section) below the last row. */
+  margin-top: auto;
+  padding-top: 50px;
   display: flex;
   justify-content: space-between;
   align-items: baseline;
@@ -537,8 +569,7 @@ a.ledger-label:hover { color: var(--accent); }
 .ledger-version { opacity: 0.6; font-size: 11px; }
 
 @media (max-width: 720px) {
-  .ledger-body { padding: 90px 48px 140px; }
-  .ledger-footer { left: 48px; right: 48px; }
+  .ledger-body { padding: 90px 48px 40px; }
 }
 
 /* ---------- centered mark (error page) ---------- */
@@ -718,3 +749,126 @@ a.ledger-label:hover { color: var(--accent); }
 }
 .picker-item:hover { background: var(--surface); border-color: transparent; }
 .picker-new { margin-top: 4px; font-size: 11.5px; }
+
+/* ---------- Utility sheet presentation (body.sheet) ----------
+   The sheet WebContentsView is transparent; the page draws the scrim
+   (body) and the card (.page). The shared `html, body` rule paints an
+   OPAQUE var(--bg) root — without the :has override the translucent body
+   would composite over that, not over the web content behind the view.
+   The card owns its own scrolling — the scrim never scrolls — and must
+   stay usable at the 640×480 window minimum. */
+html:has(body.sheet) { background: transparent; }
+body.sheet {
+  background: rgba(14, 14, 14, 0.18);
+  height: 100vh;
+  min-height: 0; /* the shared rule's min-height:100% must not stretch the scrim */
+  overflow: hidden;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+body.sheet .page {
+  position: relative;
+  margin: 0;
+  width: 100%;
+  max-width: 900px;
+  max-height: 100%;
+  /* Put the top gutter inside the sticky nav instead of on this scrollport.
+     Sticky children stop at a scroll container's padding edge, which left
+     this gutter uncovered while settings cards passed underneath it. */
+  padding-top: 0;
+  /* The utility sheet itself is vertical-only. The app-icon picker keeps its
+     own intentional horizontal scrollport inside `.icon-grid`. */
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.22);
+}
+body.sheet .page-nav {
+  /* Preserves the original 32px breathing room while making the nav's opaque
+     box reach the top edge of the scrolling sheet. */
+  padding-top: 32px;
+}
+/* The programmatically-focused heading (sheet.js's initial-focus target,
+   tabindex=-1) must not wear Chromium's default focus ring — it isn't
+   tab-reachable, and screen readers announce it regardless. */
+body.sheet .page h1:focus { outline: none; }
+/* The ✕ lives INSIDE .page-nav (sheet.js appends it): the nav is already
+   position:sticky/z-index:5 with an opaque background, so the close
+   control stays visible while the card scrolls, gets reserved flex space,
+   and can never be occluded by the nav band itself. */
+.page-nav .sheet-close {
+  margin-left: auto;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+.page-nav .sheet-close:hover { color: var(--text); background: var(--surface); }
+/* 640×480 floor: stack the Settings sidebar over its content instead of
+   overflowing beside it (.settings-shell is flex with a 150px fixed rail),
+   and let controls shrink. Viewport == sheet view == window content area,
+   so a plain media query is correct. */
+@media (max-width: 719px) {
+  /* align-items must flip to stretch: in column direction the base rule's
+     flex-start is the CROSS axis, which would leave .settings-content at
+     its max-content width (~900px) inside the narrow card. */
+  body.sheet .settings-shell { flex-direction: column; align-items: stretch; gap: 16px; }
+  body.sheet .settings-nav { position: static; flex: none; flex-direction: row; flex-wrap: wrap; }
+  /* High zoom (level 3 ≈ 173%) squeezes even the top nav past the card
+     width — wrap it rather than letting the links + ✕ escape the card. */
+  body.sheet .page-nav { flex-wrap: wrap; row-gap: 6px; }
+  body.sheet .settings-content { width: 100%; max-width: 100%; min-width: 0; }
+  body.sheet .setting { flex-wrap: wrap; }
+  /* Toolbar rows (sync form, defaults bar) hold fixed-width controls too. */
+  body.sheet .toolbar-row { flex-wrap: wrap; }
+  /* ALL controls, not just text inputs — Settings has fixed-width url and
+     password fields (sync form) that would still overflow under zoom. */
+  body.sheet .setting input,
+  body.sheet .setting select,
+  body.sheet .toolbar-row input,
+  body.sheet .toolbar-row select { max-width: 100%; min-width: 0; }
+  /* Permission rows have three peers (site, decision, action), unlike the
+     simpler exception rows. Give them a second line before they can widen the
+     sheet at small widths or high zoom. */
+  body.sheet #permissionList .row { flex-wrap: wrap; }
+  body.sheet #permissionList .row .main { flex: 1 1 100%; }
+  body.sheet #permissionList .row .meta { flex: 1 1 auto; min-width: 0; }
+  body.sheet #permissionList .row .actions { margin-left: auto; }
+}
+/* Ultra-narrow = high zoom: the window minimum is 640 physical px, so a
+   CSS viewport this small only occurs zoomed (~2×+); the sheet must stay
+   inside its card all the way to ZOOM_MAX (level 8 ≈ 430%, ~99px card).
+   Release the remaining intrinsic minimums, spend less on gutters, and
+   break words as a last resort. */
+@media (max-width: 359px) {
+  body.sheet { padding: 8px; }
+  body.sheet .page { padding: 0 12px 24px; overflow-wrap: anywhere; }
+  body.sheet .page-nav { padding-top: 16px; }
+  body.sheet .settings-card { padding-inline: 12px; }
+  body.sheet .group-subsection { margin-left: 0; }
+  body.sheet .setting .label { min-width: 0; }
+  body.sheet .row .actions.bookmark-actions { min-width: 0; }
+  body.sheet .folder-section .row .meta { min-width: 0; }
+  body.sheet .folder-picker { min-width: 0; max-width: 100%; }
+  /* Shortcut rows are label ⟷ kbd with a nowrap chord — let the row wrap so
+     the kbd drops below the label, and let a long chord break as a last
+     resort rather than push the card wide. */
+  body.sheet .shortcut-row { flex-wrap: wrap; gap: 4px 12px; }
+  body.sheet .shortcut-row kbd { white-space: normal; }
+}
+@media (prefers-color-scheme: dark) {
+  body.sheet { background: rgba(0, 0, 0, 0.35); }
+}

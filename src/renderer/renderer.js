@@ -29,6 +29,12 @@
   /** Overlay mode mirrored from main — the pill hides while the command
    * bar is expanded in place ('panel'); the palette keeps it visible. */
   let islandMode = null;
+  /** Resolved app appearance pushed by main before prefers-color-scheme has
+   * propagated. Cleared as soon as the media query catches up so --bg remains
+   * the canonical steady-state color. */
+  let pendingThemeAppearance = null;
+  let themeHandoffPending = false;
+  const darkSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
   const ICONS = {
     close: '<svg viewBox="0 0 16 16"><path d="M4.75 4.75l6.5 6.5M11.25 4.75l-6.5 6.5"/></svg>',
@@ -163,16 +169,61 @@
    * color so it reads as a continuation of the site, not a chrome bar.
    * Private tabs keep the private theme untinted. */
   function applyStripTint(tab) {
-    const tint = (!tab?.private && (tab?.pageBg || tab?.themeColor)) || null;
+    // A theme handoff invalidates the previous website sample. Ignore any
+    // stale tabs:updated payload still in flight until main clears/resamples it.
+    const tint = (!themeHandoffPending && !tab?.private && (tab?.pageBg || tab?.themeColor)) || null;
     if (!tint) {
-      stripEl.style.removeProperty('--page-bg');
-      stripEl.classList.remove('tint-dark');
+      // Private keeps its dedicated token scope. For ordinary tabs, paint the
+      // newly selected theme immediately instead of waiting for Electron to
+      // propagate prefers-color-scheme into this renderer.
+      const optimisticBg = tab?.private
+        ? 'var(--bg)'
+        : ({ light: '#ffffff', dark: '#0e0e0e' }[pendingThemeAppearance] ?? 'var(--bg)');
+      // The normal strip transition is for site-to-site faux-header changes.
+      // A theme preview should land in this interaction frame, not animate
+      // for another 160ms after the command has already completed.
+      stripEl.classList.toggle('theme-optimistic', !tab?.private && themeHandoffPending);
+      stripEl.style.setProperty('--page-bg', optimisticBg);
+      // On Windows/Linux the window controls use the current theme tokens.
+      // Keep their dark-background treatment in step with the early strip
+      // paint while those tokens are still catching up.
+      stripEl.classList.toggle('tint-dark', pendingThemeAppearance === 'dark');
       return;
     }
+    stripEl.classList.remove('theme-optimistic');
     stripEl.style.setProperty('--page-bg', tint);
     const [r, g, b] = [1, 3, 5].map((i) => parseInt(tint.slice(i, i + 2), 16));
     stripEl.classList.toggle('tint-dark', 0.299 * r + 0.587 * g + 0.114 * b < 128);
   }
+
+  function themeAppearanceMatchesMedia(appearance) {
+    return darkSchemeQuery.matches === (appearance === 'dark');
+  }
+
+  function releaseOptimisticThemeAppearance() {
+    if (!pendingThemeAppearance || !themeAppearanceMatchesMedia(pendingThemeAppearance)) return;
+    pendingThemeAppearance = null;
+    themeHandoffPending = false;
+    applyStripTint(activeTab());
+  }
+
+  window.browserAPI.onThemeAppearance((appearance) => {
+    if (appearance === 'pending') {
+      // "System" cannot be resolved until main removes an explicit override.
+      // Disable the strip transition now; a resolved appearance follows.
+      pendingThemeAppearance = null;
+      themeHandoffPending = true;
+      applyStripTint(activeTab());
+      return;
+    }
+    if (appearance !== 'light' && appearance !== 'dark') return;
+    // If Chromium won the race, use the tokenized CSS immediately. Otherwise
+    // bridge only the gap until matchMedia's change event below releases it.
+    pendingThemeAppearance = themeAppearanceMatchesMedia(appearance) ? null : appearance;
+    themeHandoffPending = !!pendingThemeAppearance;
+    applyStripTint(activeTab());
+  });
+  darkSchemeQuery.addEventListener('change', releaseOptimisticThemeAppearance);
 
   const DOT_CAP = 8;
 

@@ -13,6 +13,7 @@ const supporter = require('./supporter');
 const sync = require('./sync');
 const telemetry = require('./telemetry');
 const { listDecisions, removeDecision } = require('./permissions');
+const { UTILITY_PAGES } = require('./utility-pages');
 
 // Internal chrome pages (bookmarks, history, downloads, settings, the new
 // tab page) are served over a dedicated `blanc://` scheme instead of
@@ -68,6 +69,21 @@ function setupPages(hooks = {}) {
       return fn(...args);
     });
   };
+
+  // Stricter than handle(): only the sheet view itself, on a utility page,
+  // may close the sheet (utility-sheet design §5) — handle()'s KNOWN_PAGES
+  // trust is too broad here; it would let the newtab page dismiss the sheet.
+  ipcMain.handle('pages:surface:close', (event) => {
+    let senderUrl = null;
+    try { senderUrl = new URL(event.senderFrame?.url ?? ''); } catch { /* denied below */ }
+    const trusted = event.senderFrame === event.sender.mainFrame &&
+      senderUrl?.protocol === 'blanc:' && UTILITY_PAGES.has(senderUrl.host) &&
+      hooks.utilitySheet?.isSheetSender(event.sender);
+    if (!trusted) {
+      throw new Error(`pages:surface:close: denied for ${event.senderFrame?.url ?? event.sender.getURL()}`);
+    }
+    hooks.utilitySheet.close();
+  });
 
   handle('pages:bookmarks:list', () => bookmarks.listBookmarks());
   handle('pages:bookmarks:remove', (id) => {
@@ -157,6 +173,9 @@ function setupPages(hooks = {}) {
   handle('pages:settings:sync-enable', (payload) => sync.enable(payload ?? {}));
   handle('pages:settings:sync-disable', (opts) => sync.disable(opts ?? {}));
   handle('pages:settings:sync-now', () => sync.syncNow().then(() => sync.status()));
+  // Per-device consent for publishing this device's open tabs (spec §3) —
+  // lives in sync.json, never settings.json, so it cannot cross sync.
+  handle('pages:settings:sync-tabs-set', (on) => sync.setSyncTabs(!!on));
 
   handle('pages:app-version', () => app.getVersion());
 
@@ -169,6 +188,7 @@ function setupPages(hooks = {}) {
   handle('pages:start:data', () => ({
     groups: hooks.startPage?.groups() ?? [],
     blockedThisWeek: hooks.startPage?.blockedThisWeek() ?? 0,
+    remoteDevices: hooks.startPage?.remoteDevices() ?? [],
   }));
   handle('pages:start:focus-group', (id) => hooks.startPage?.focusGroup(String(id)));
 

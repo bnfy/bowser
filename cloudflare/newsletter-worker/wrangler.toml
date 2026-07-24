@@ -1,0 +1,20 @@
+name = "blanc-newsletter"
+main = "src/index.js"
+compatibility_date = "2026-07-01"
+
+# Created by `wrangler kv namespace create SUBSCRIBERS` — paste the returned id below.
+kv_namespaces = [
+  { binding = "SUBSCRIBERS", id = "17fe04a02a7a4418b9097e0dd6ede5b9" }
+]
+
+# ADMIN_TOKEN is a secret, not a var — it lives in 1Password (vault Dev, item
+# "Blanc Newsletter Admin") and is piped into `wrangler secret put ADMIN_TOKEN`
+# via `op read`; see README.md for the exact commands. It gates GET /subscribers
+# (export) and DELETE /subscriber (removal). Without it those endpoints refuse
+# every request (fail closed); /subscribe still works.
+
+# Workers Logs — keeps a searchable history of invocations/exceptions in the
+# dashboard, so a runtime 500 can be diagnosed after the fact instead of
+# only while `wrangler tail` happens to be attached.
+[observability]
+enabled = true

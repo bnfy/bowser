@@ -51,9 +51,30 @@
   // Quick Switcher corpora, refreshed each time the panel opens.
   let favorites = [];
   let historyEntries = [];
+  // Other devices' tab snapshots (tab sync). Renderer-local fold state —
+  // devices start folded so the panel stays quiet (spec §2).
+  let remoteDevices = [];
+  const unfoldedDevices = new Set();
   // What Enter acts on — rebuilt on every list render.
   let visibleCommands = [];
   let visibleResults = [];
+  // Search-engine autocomplete is best-effort and asynchronous. The query
+  // token plus request generation prevent late responses from repainting a
+  // newer query (or a panel that was closed and reopened).
+  let providerSuggestions = [];
+  let providerSuggestionQuery = '';
+  let searchProviderId = null;
+  let searchProviderLabel = 'search';
+  let suggestionDebounce = null;
+  let suggestionRequestGeneration = 0;
+  let addressInputComposing = false;
+  // A paste/drop or text entered while a private tab is active can contain
+  // credentials or private prose. Once detected, keep provider autocomplete
+  // off for that edit session; Enter still submits the value normally.
+  let suppressProviderSuggestions = false;
+  // -1 means no explicit ArrowUp/ArrowDown choice; renderList still highlights
+  // the result that bare Enter would choose.
+  let selectedResultIndex = -1;
 
   const ICONS = {
     reload: '<svg viewBox="0 0 16 16"><path d="M12.42 10.35a5 5 0 1 1-4.42-7.35c1.4 0 2.74.56 3.74 1.53L13 5.78"/><path d="M13 3v2.78h-2.78"/></svg>',
@@ -61,6 +82,7 @@
     close: '<svg viewBox="0 0 16 16"><path d="M4.75 4.75l6.5 6.5M11.25 4.75l-6.5 6.5"/></svg>',
     pin: '<svg viewBox="0 0 16 16"><path d="M5 3h6l-1 5 2 2v1H4v-1l2-2z"/><path d="M8 11v3"/></svg>',
     mute: '<svg viewBox="0 0 16 16"><path d="M2 6h3l4-3.5v11L5 10H2z"/><path d="M11 5.5l3 5M14 5.5l-3 5"/></svg>',
+    search: '<svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.25"/><path d="m10.25 10.25 3 3"/></svg>',
   };
   reloadBtn.innerHTML = ICONS.reload;
 
@@ -127,13 +149,14 @@
     }
   }
 
-  /** Short label for a tab's location: host for web pages, page name for
-   * internal ones, empty for a blank new tab. */
+  /** Short label for a tab's location: host for web pages (sans the noise
+   * "www." carries in a list this dense), page name for internal ones,
+   * empty for a blank new tab. */
   function tabDomain(tab) {
     if (!tab?.url || tab.url.startsWith('blanc://newtab')) return '';
     try {
       const u = new URL(tab.url);
-      return u.protocol === 'blanc:' ? `blanc://${u.host}` : u.host;
+      return u.protocol === 'blanc:' ? `blanc://${u.host}` : u.host.replace(/^www\./, '');
     } catch {
       return tab.url;
     }
@@ -175,7 +198,9 @@
 
   function tabRow(tab) {
     const row = document.createElement('div');
-    row.className = 'island-row' + (tab.id === state.activeTabId ? ' active' : '');
+    // .tab-row scopes the at-rest quieting (metadata joins the hover/focus
+    // reveal) to list rows — Quick-Switcher/command rows keep their subs.
+    row.className = 'island-row tab-row' + (tab.id === state.activeTabId ? ' active' : '');
     row.dataset.tabId = tab.id;
 
     const faviconWrap = document.createElement('span');
@@ -206,14 +231,6 @@
       tag.className = 'row-private';
       tag.textContent = 'private';
       row.append(tag);
-    }
-
-    if (tab.blockedCount > 0) {
-      const shield = document.createElement('span');
-      shield.className = 'shield';
-      shield.textContent = String(tab.blockedCount);
-      shield.title = `Blanc blocked ${tab.blockedCount} ${tab.blockedCount === 1 ? 'ad or tracker' : 'ads & trackers'} on this page`;
-      row.append(shield);
     }
 
     const pin = document.createElement('button');
@@ -383,6 +400,89 @@
     return row;
   }
 
+  // --- Remote devices (tab sync) ---
+
+  const hostOfUrl = (url) => {
+    try { return new URL(url).host.replace(/^www\./, ''); } catch { return url; }
+  };
+
+  function timeAgo(ts) {
+    const mins = Math.max(1, Math.round((Date.now() - ts) / 60000));
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.round(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.round(hours / 24)}d ago`;
+  }
+
+  /** Remote presentation mirrors clusterList() (main.js): each group in
+   * group order with its pins leading, then loose tabs (pins first) —
+   * snapshot order preserved within each cluster (spec §2). */
+  function clusterRemoteTabs(device) {
+    const rows = [];
+    for (const g of device.groups) {
+      const members = device.tabs.filter((t) => t.groupId === g.id);
+      rows.push(...members.filter((t) => t.pinned), ...members.filter((t) => !t.pinned));
+    }
+    const loose = device.tabs.filter((t) => !device.groups.some((g) => g.id === t.groupId));
+    rows.push(...loose.filter((t) => t.pinned), ...loose.filter((t) => !t.pinned));
+    return rows;
+  }
+
+  /** "MacBook Air · 5 ——— 2h ago": click folds/unfolds. */
+  function remoteHeaderRow(device) {
+    const row = document.createElement('div');
+    row.className = 'island-ghead';
+    const open = unfoldedDevices.has(device.deviceId);
+    row.innerHTML = `${CARET}<span class="ghead-name"></span><span class="ghead-n"></span><span class="ghead-rule"></span><span class="ghead-n"></span>`;
+    row.querySelector('.caret').classList.toggle('open', open);
+    row.querySelector('.ghead-name').textContent = device.name;
+    const ns = row.querySelectorAll('.ghead-n');
+    ns[0].textContent = String(device.tabs.length);
+    ns[1].textContent = timeAgo(device.updatedAt);
+    row.title = open ? 'Fold device' : 'Unfold device';
+    row.addEventListener('click', () => {
+      if (open) unfoldedDevices.delete(device.deviceId);
+      else unfoldedDevices.add(device.deviceId);
+      renderList();
+    });
+    return row;
+  }
+
+  /** A remote tab row: opens the url as a plain new local tab (ungrouped —
+   * no group reconstruction in v1, spec §2). */
+  function remoteTabRow(tab, device) {
+    const row = document.createElement('div');
+    row.className = 'island-row tab-row';
+    const favicon = document.createElement('span');
+    setFavicon(favicon, tab);
+    const title = document.createElement('span');
+    title.className = 'row-title';
+    title.textContent = tab.title || tab.url;
+    if (tab.title) title.title = tab.title;
+    const sub = document.createElement('span');
+    sub.className = 'row-sub';
+    sub.textContent = hostOfUrl(tab.url);
+    row.append(favicon, title, sub);
+    if (tab.pinned) {
+      const pin = document.createElement('span');
+      pin.className = 'row-remote-pin';
+      pin.innerHTML = ICONS.pin;
+      row.append(pin);
+    }
+    const g = device.groups.find((x) => x.id === tab.groupId);
+    if (g) {
+      const tag = document.createElement('span');
+      tag.className = 'row-tag';
+      tag.textContent = g.name;
+      row.append(tag);
+    }
+    row.addEventListener('click', () => {
+      window.browserAPI.createTab(tab.url, { focusAddress: false });
+      window.browserAPI.closeOverlay();
+    });
+    return row;
+  }
+
   // --- Slash commands ---
 
   const COMMANDS = [
@@ -414,7 +514,10 @@
     { cmd: '/find', hint: 'Find in page', run: () => window.browserAPI.openFindBar(), keepOverlay: true },
     { cmd: '/block-ads', hint: 'Toggle ad & tracker blocking', run: () => window.browserAPI.toggleAdblock() },
     { cmd: '/allow-ads', hint: 'Allow ads on this site', run: () => window.browserAPI.allowAdsOnActiveSite() },
-    { cmd: '/theme', hint: 'Cycle appearance (system → light → dark)', run: () => window.browserAPI.cycleTheme() },
+    { cmd: '/theme', hint: 'Cycle appearance, or choose system / light / dark', run: (input) => {
+      const requested = (input ?? '').replace(/^\/theme\s*/, '').trim();
+      window.browserAPI.cycleTheme(requested || null);
+    } },
   ];
 
   function runCommand(command) {
@@ -495,7 +598,7 @@
     }
   }
 
-  const stripUrl = (u) => (u || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
+  const stripUrl = (u) => (u || '').replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
 
   /** True when the typed text is a real navigation target rather than a search
    * query — mirrors the navigate branches of normalizeAddressInput (main.js)
@@ -505,20 +608,23 @@
    * steal Enter away from actually opening getbowser.com. Kept in hand-sync
    * with those sources.
    *
-   * Main can also navigate existing local .htm/.html/.xhtml paths. Paths
-   * without whitespace are covered by the domain-shaped fallback below.
-   * Whitespace-bearing local paths cannot be distinguished here from
-   * multi-word searches without filesystem access, so they remain an accepted
-   * narrow false negative. */
+   * Main can also navigate existing local .htm/.html/.xhtml paths. The
+   * extension guard below intentionally errs on the private side even though
+   * this sandboxed renderer cannot check whether a whitespace-bearing path
+   * actually exists. */
   function looksLikeAddress(input) {
     const trimmed = (input || '').trim();
     if (!trimmed) return false;
     const scheme = trimmed.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//)?.[1]?.toLowerCase();
     if (scheme) return !['javascript', 'data', 'vbscript'].includes(scheme);
     if (/^(mailto|tel|facetime|sms):/i.test(trimmed)) return true;       // OS-handoff URIs (no "://")
-    if (/^localhost(:\d+)?(\/|$)/.test(trimmed)) return true;
-    if (/^(\d{1,3}\.){3}\d{1,3}(:\d+)?(\/|$)/.test(trimmed)) return true; // bare IPv4
-    return /^[^\s]+\.[a-zA-Z]{2,}(\/[^\s]*)?$/.test(trimmed);             // bare domain
+    if (/^(?:\.{1,2}[\\/]|~[\\/]|[a-z]:[\\/])/i.test(trimmed)) return true;
+    if (/\.(?:x?html?)(?:[?#].*)?$/i.test(trimmed)) return true;
+    if (/^localhost(:\d+)?([/?#]|$)/.test(trimmed)) return true;
+    if (/^(\d{1,3}\.){3}\d{1,3}(:\d+)?([/?#]|$)/.test(trimmed)) return true; // bare IPv4
+    if (/^\[[0-9a-z:.%_-]+\](?::\d+)?([/?#]|$)/i.test(trimmed)) return true;
+    if (/^[0-9a-f]*:[0-9a-f:]+([/?#]|$)/i.test(trimmed)) return true;
+    return /^(?!\.)[^\s./?#:]+(?:\.[^\s./?#:]+)+(?::\d+)?([/?#][^\s]*)?$/u.test(trimmed);
   }
 
   function switcherResults(query) {
@@ -539,6 +645,15 @@
       const s = matchScore(query, matchableText(f.title, f.url));
       if (s) results.push({ kind: 'favorite', title: f.title, sub: stripUrl(f.url), url: f.url, score: s + 0.1 });
     }
+    // Remote tabs rank below local tabs (+0.2) and favorites (+0.1), above
+    // history (+0) — spec §2. The url-keyed dedup below keeps the
+    // higher-ranked favorite row when both match.
+    for (const device of remoteDevices) {
+      for (const t of device.tabs) {
+        const s = matchScore(query, matchableText(t.title, t.url));
+        if (s) results.push({ kind: 'remote', title: t.title || t.url, sub: `${hostOfUrl(t.url)} · ${device.name}`, url: t.url, tab: t, score: s + 0.05 });
+      }
+    }
     for (const h of historyEntries) {
       const s = matchScore(query, matchableText(h.title, h.url));
       if (s) results.push({ kind: 'history', title: h.title, sub: stripUrl(h.url), url: h.url, score: s });
@@ -555,27 +670,100 @@
       .slice(0, 6);
   }
 
+  function searchResults(query) {
+    const results = [{
+      kind: 'search',
+      title: query,
+      query,
+      // The exact text is a fresh submission, so main must resolve it against
+      // the default engine at click/Enter time. Completions retain provider
+      // provenance for their label, but main rejects stale routing metadata.
+      providerId: null,
+      providerLabel: searchProviderLabel,
+      exact: true,
+    }];
+    if (providerSuggestionQuery.toLowerCase() !== query.toLowerCase()) return results;
+    const seen = new Set([query.toLowerCase()]);
+    for (const suggestion of providerSuggestions) {
+      const key = suggestion.toLowerCase();
+      if (!suggestion || seen.has(key)) continue;
+      seen.add(key);
+      results.push({
+        kind: 'search',
+        title: suggestion,
+        query: suggestion,
+        providerId: searchProviderId,
+        providerLabel: searchProviderLabel,
+        exact: false,
+      });
+    }
+    return results;
+  }
+
+  /** Keep six rows total. A confident local match retains the established
+   * Quick-Switcher top slot; otherwise exact search leads, followed by engine
+   * completions and then the weaker local guesses. */
+  function blendedResults(query) {
+    const local = switcherResults(query.toLowerCase());
+    const search = searchResults(query);
+    if (local[0]?.score >= STRONG_MATCH_SCORE) {
+      return [
+        ...local.slice(0, 3),
+        ...search.slice(0, 3),
+        // Provider suggestions are optional. Let additional local matches fill
+        // any of their unused slots instead of leaving the six-row list short.
+        ...local.slice(3),
+        ...search.slice(3),
+      ].slice(0, 6);
+    }
+    return [
+      ...search.slice(0, 4),
+      ...local.slice(0, 2),
+      // Private/pasted/disabled/offline autocomplete normally leaves only the
+      // exact-search row, so backfill the remainder from the local switcher.
+      ...local.slice(2),
+      ...search.slice(4),
+    ].slice(0, 6);
+  }
+
+  function resultKey(result) {
+    if (!result) return '';
+    if (result.kind === 'group') return `group:${result.group.id}`;
+    if (result.kind === 'tab') return `tab:${result.tab.id}`;
+    if (result.kind === 'search') return `search:${result.query.toLowerCase()}`;
+    return `${result.kind}:${result.url}`;
+  }
+
   function pickResult(result) {
     if (result.kind === 'group') window.browserAPI.focusGroup(result.group.id);
     else if (result.kind === 'tab') window.browserAPI.switchTab(result.tab.id);
+    else if (result.kind === 'remote') window.browserAPI.createTab(result.url, { focusAddress: false });
+    else if (result.kind === 'search' && state.activeTabId) {
+      window.browserAPI.search(state.activeTabId, result.query, result.providerId);
+    }
     else if (state.activeTabId) window.browserAPI.navigate(state.activeTabId, result.url);
     window.browserAPI.closeOverlay();
   }
 
-  // isTop: the best-ranked result — always visually highlighted, so the
-  // list keeps a consistent "here's our best guess" cue. isEnterTarget:
-  // whether bare Enter actually acts on it (only a strong match, see
-  // STRONG_MATCH_SCORE) — separate from isTop so the ↵ glyph, which
-  // promises specific behavior, never appears when that promise is false.
-  function resultRow(result, isTop, isEnterTarget) {
+  // isActive follows either explicit arrow selection or the bare-Enter target.
+  // isEnterTarget controls the ↵ glyph separately so it always tells the truth.
+  function resultRow(result, isActive, isEnterTarget) {
     const row = document.createElement('div');
-    row.className = 'island-row' + (isTop ? ' active' : '');
+    row.className = 'island-row' + (isActive ? ' active' : '');
 
-    // Group results lead with their dot cluster instead of a favicon.
-    const favicon = result.kind === 'group'
-      ? miniDotCluster(Math.min(result.count, 4), true)
-      : document.createElement('span');
-    if (result.kind !== 'group') setFavicon(favicon, result.tab ?? null);
+    // Groups lead with their dot cluster; search completions use a magnifier;
+    // every page-like result keeps the shared favicon treatment.
+    let leading;
+    if (result.kind === 'group') {
+      leading = miniDotCluster(Math.min(result.count, 4), true);
+    } else if (result.kind === 'search') {
+      leading = document.createElement('span');
+      leading.className = 'row-search-icon';
+      leading.innerHTML = ICONS.search;
+    } else {
+      leading = document.createElement('span');
+      setFavicon(leading, result.tab ?? null);
+    }
 
     const title = document.createElement('span');
     title.className = 'row-title' + (result.kind === 'group' ? ' mono' : '');
@@ -587,9 +775,9 @@
 
     const tag = document.createElement('span');
     tag.className = 'row-tag';
-    tag.textContent = result.kind;
+    tag.textContent = result.kind === 'search' ? result.providerLabel : result.kind;
 
-    row.append(favicon, title, sub, tag);
+    row.append(leading, title, sub, tag);
     if (isEnterTarget) row.append(enterGlyph());
     row.addEventListener('click', () => pickResult(result));
     return row;
@@ -599,10 +787,14 @@
 
   function renderList() {
     const value = addressInput.value;
+    const selectedKey = selectedResultIndex >= 0
+      ? resultKey(visibleResults[selectedResultIndex])
+      : '';
     visibleCommands = [];
     visibleResults = [];
 
     if (inputTouched && value.startsWith('/')) {
+      selectedResultIndex = -1;
       const slashWord = value.trim().split(/\s+/)[0];
       visibleCommands = COMMANDS.filter((c) => c.cmd.startsWith(slashWord) || slashWord === '/');
       islandList.replaceChildren(
@@ -611,17 +803,36 @@
           : [emptyRow('no matching command')])
       );
     } else if (inputTouched && value.trim()) {
-      visibleResults = switcherResults(value.trim().toLowerCase());
+      const query = value.trim();
       // When the input is itself an address, Enter navigates (see the keydown
-      // handler) — so no result is the Enter target, and the ↵ glyph (which
-      // promises Enter acts on that row) must not appear on any of them.
+      // handler), and no provider request/result should see it.
       const enterNavigates = looksLikeAddress(value);
+      visibleResults = enterNavigates
+        ? switcherResults(query.toLowerCase())
+        : blendedResults(query);
+
+      if (selectedKey) {
+        selectedResultIndex = visibleResults.findIndex((result) => resultKey(result) === selectedKey);
+      } else if (selectedResultIndex >= visibleResults.length) {
+        selectedResultIndex = -1;
+      }
+      const defaultEnterIndex = !enterNavigates
+        && visibleResults.length
+        && (visibleResults[0].kind === 'search' || visibleResults[0].score >= STRONG_MATCH_SCORE)
+        ? 0
+        : -1;
+      // An address has no implicit result target: leave every row neutral until
+      // the user presses an arrow. Search text and strong local matches retain
+      // their truthful bare-Enter highlight.
+      const activeIndex = selectedResultIndex >= 0 ? selectedResultIndex : defaultEnterIndex;
+      const enterIndex = selectedResultIndex >= 0 ? selectedResultIndex : defaultEnterIndex;
       islandList.replaceChildren(
         ...(visibleResults.length
-          ? visibleResults.map((r, i) => resultRow(r, i === 0, i === 0 && !enterNavigates && r.score >= STRONG_MATCH_SCORE))
+          ? visibleResults.map((r, i) => resultRow(r, i === activeIndex, i === enterIndex))
           : [emptyRow('no matches — ↵ opens as address or search')])
       );
     } else {
+      selectedResultIndex = -1;
       // The list re-renders on every tabs:updated broadcast (frequent while
       // any tab is loading) — a half-typed group name must survive that.
       const prevPickerInput = islandList.querySelector('.group-picker-input');
@@ -643,6 +854,12 @@
         if (group?.collapsed) rows.push(foldedGroupRow(group, gtabs));
         else rows.push(...gtabs.map(tabRow));
       }
+      for (const device of remoteDevices) {
+        rows.push(remoteHeaderRow(device));
+        if (unfoldedDevices.has(device.deviceId)) {
+          rows.push(...clusterRemoteTabs(device).map((t) => remoteTabRow(t, device)));
+        }
+      }
       islandList.replaceChildren(...rows);
 
       const pickerInput = islandList.querySelector('.group-picker-input');
@@ -659,10 +876,10 @@
     }
 
     islandHint.textContent = activeTab()?.private
-      ? 'private · nothing here is saved to history · esc to dismiss'
+      ? 'private · nothing here is saved to history'
       : state.groups.length
-        ? `esc to dismiss · /group moves this tab · ${modKey}1–9 jumps between sections`
-        : `esc to dismiss · ${modKey}L summons · / for commands`;
+        ? `/group moves this tab · ${modKey}1–9 jumps between sections`
+        : `${modKey}L summons · / for commands`;
   }
 
   function renderPanel() {
@@ -671,6 +888,58 @@
     else delete document.documentElement.dataset.theme;
     renderPanelChrome();
     renderList();
+  }
+
+  function resetSearchSuggestions() {
+    if (suggestionDebounce) clearTimeout(suggestionDebounce);
+    suggestionDebounce = null;
+    suggestionRequestGeneration += 1;
+    providerSuggestions = [];
+    providerSuggestionQuery = '';
+    searchProviderId = null;
+    searchProviderLabel = 'search';
+  }
+
+  function scheduleSearchSuggestions() {
+    resetSearchSuggestions();
+    const query = addressInput.value.trim();
+    // Provider autocomplete is intentionally off in private tabs: typed
+    // prefixes stay local until the user explicitly submits a search.
+    if (
+      !inputTouched
+      || query.length < 2
+      || query.startsWith('/')
+      || looksLikeAddress(query)
+      || activeTab()?.private
+      || addressInputComposing
+      || suppressProviderSuggestions
+    ) return;
+
+    const generation = suggestionRequestGeneration;
+    suggestionDebounce = setTimeout(async () => {
+      suggestionDebounce = null;
+      let response;
+      try {
+        response = await window.browserAPI.searchSuggestions(query);
+      } catch {
+        return;
+      }
+      if (
+        generation !== suggestionRequestGeneration
+        || (mode !== 'panel' && mode !== 'palette')
+        || addressInput.value.trim() !== query
+        || activeTab()?.private
+      ) return;
+      searchProviderId = typeof response?.engine === 'string' ? response.engine : null;
+      searchProviderLabel = typeof response?.label === 'string' && response.label
+        ? response.label
+        : 'search';
+      providerSuggestionQuery = query;
+      providerSuggestions = Array.isArray(response?.suggestions)
+        ? response.suggestions.filter((item) => typeof item === 'string')
+        : [];
+      renderList();
+    }, 200);
   }
 
   // --- Mode switching (driven by main via overlay:show / overlay:hide) ---
@@ -684,22 +953,26 @@
     findBar.hidden = next !== 'find';
 
     if (next === 'panel' || next === 'palette') {
-      if (!reshow) pickingTabId = null;
-      refreshSwitcherData();
-      renderPanel();
+      if (!reshow) {
+        pickingTabId = null;
+        addressInputComposing = false;
+        suppressProviderSuggestions = false;
+      }
+      if (!reshow) resetSearchSuggestions();
       if (prefill) {
         // A menu-triggered command (e.g. "New Group…") arrives pre-typed —
         // land the cursor at the end, ready to type the rest, rather than
         // selecting the whole string the way a fresh open does below.
         inputTouched = true;
         addressInput.value = prefill;
-        renderList();
       } else if (!reshow || !inputTouched) {
         // A reassert (main re-focusing the same open panel) must not
         // clobber what the user already typed.
         inputTouched = false;
         addressInput.value = addressDisplayValue(activeTab());
       }
+      refreshSwitcherData();
+      renderPanel();
       addressInput.focus();
       if (prefill) addressInput.setSelectionRange(prefill.length, prefill.length);
       else addressInput.select();
@@ -725,8 +998,12 @@
     panelAnchor.hidden = true;
     findBar.hidden = true;
     inputTouched = false;
+    addressInputComposing = false;
+    suppressProviderSuggestions = false;
     pickingTabId = null;
     chipFocusTabId = null;
+    selectedResultIndex = -1;
+    resetSearchSuggestions();
   });
 
   // Click on the backdrop (anywhere outside the panel) dismisses.
@@ -777,24 +1054,78 @@
   footerDownloads.addEventListener('click', () => openPageFromFooter('downloads'));
   footerSettings.addEventListener('click', () => openPageFromFooter('settings'));
 
-  addressInput.addEventListener('input', () => {
+  addressInput.addEventListener('compositionstart', () => {
+    addressInputComposing = true;
+    if (activeTab()?.private) suppressProviderSuggestions = true;
+    selectedResultIndex = -1;
+    resetSearchSuggestions();
+    renderList();
+  });
+  addressInput.addEventListener('compositionend', () => {
+    addressInputComposing = false;
     inputTouched = true;
+    selectedResultIndex = -1;
+    scheduleSearchSuggestions();
+    renderList();
+  });
+  addressInput.addEventListener('input', (e) => {
+    inputTouched = true;
+    selectedResultIndex = -1;
+    if (!addressInput.value.trim()) {
+      // Do not clear a paste/drop taint here. Delete followed by Undo restores
+      // the original private text with historyUndo, so provider autocomplete
+      // must stay off until this overlay edit session ends.
+      resetSearchSuggestions();
+    } else if (
+      activeTab()?.private
+      || e.inputType === 'insertFromPaste'
+      || e.inputType === 'insertFromDrop'
+    ) {
+      suppressProviderSuggestions = true;
+      resetSearchSuggestions();
+    } else if (!e.isComposing && !addressInputComposing) {
+      scheduleSearchSuggestions();
+    }
     renderList();
   });
   addressInput.addEventListener('keydown', (e) => {
-    if (e.key !== 'Enter') return;
-    // See STRONG_MATCH_SCORE: weak matches stay visible and clickable,
-    // just not auto-selected — there's no keyboard way to move selection
-    // off the top result anyway (observed: a dead one-shot Google OAuth
-    // link stayed ranked #1 for "gemini.google.com", "www.google.com",
-    // etc. via the weak in-order fallback, making the whole domain look
-    // unreachable).
+    if (e.isComposing) return;
+    const unmodifiedArrow = !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey;
+    if (
+      unmodifiedArrow
+      && (e.key === 'ArrowDown' || e.key === 'ArrowUp')
+      && visibleResults.length
+    ) {
+      e.preventDefault();
+      if (selectedResultIndex < 0) {
+        selectedResultIndex = e.key === 'ArrowDown'
+          // Search text already highlights its bare-Enter target, so Down moves
+          // past it. Address-shaped input has no such target and starts at row 0.
+          ? (looksLikeAddress(addressInput.value) ? 0 : Math.min(1, visibleResults.length - 1))
+          : visibleResults.length - 1;
+      } else {
+        const delta = e.key === 'ArrowDown' ? 1 : -1;
+        selectedResultIndex = (selectedResultIndex + delta + visibleResults.length) % visibleResults.length;
+      }
+      renderList();
+      return;
+    }
+    if (e.key !== 'Enter' || e.isComposing) return;
     if (visibleCommands.length) {
       runCommand(visibleCommands[0]);
-    } else if (visibleResults.length && visibleResults[0].score >= STRONG_MATCH_SCORE && !looksLikeAddress(addressInput.value)) {
+    } else if (selectedResultIndex >= 0 && visibleResults[selectedResultIndex]) {
+      // Arrow navigation is an explicit choice, so it may select a completion,
+      // weak local match, or local result while address-shaped text is typed.
+      pickResult(visibleResults[selectedResultIndex]);
+    } else if (
+      visibleResults.length
+      && !looksLikeAddress(addressInput.value)
+      && (visibleResults[0].kind === 'search' || visibleResults[0].score >= STRONG_MATCH_SCORE)
+    ) {
       // A strong switcher match claims Enter — UNLESS what was typed is itself
       // an address (getbowser.com), in which case navigation wins over a tab
-      // that merely mentions it. Falls through to the navigate branch below.
+      // that merely mentions it. With no strong local match, the exact-query
+      // search row leads and preserves normal typed-search behavior.
       pickResult(visibleResults[0]);
     } else if (inputTouched && addressInput.value.startsWith('/')) {
       // "no matching command" — do nothing rather than search for "/typo"
@@ -843,18 +1174,32 @@
   // --- State sync ---
 
   async function refreshSwitcherData() {
-    [favorites, historyEntries] = await Promise.all([
+    [favorites, historyEntries, remoteDevices] = await Promise.all([
       window.browserAPI.listFavorites(),
       window.browserAPI.listHistory({ limit: 300 }),
+      window.browserAPI.listRemoteTabs(),
     ]);
+    // Data lands after the panel already rendered — refresh it.
+    if (mode === 'panel' || mode === 'palette') renderList();
   }
 
   window.browserAPI.onTabsUpdated((payload) => {
+    const activeTabChanged = payload.activeTabId !== state.activeTabId;
     state = payload;
     if (mode === 'panel' || mode === 'palette') {
-      renderPanel();
       if (!inputTouched) addressInput.value = addressDisplayValue(activeTab());
+      if (activeTabChanged) {
+        selectedResultIndex = -1;
+        scheduleSearchSuggestions();
+      }
+      renderPanel();
     }
+  });
+  // Cached-first: the panel renders the cache instantly, and this repaints
+  // when the panel-open refresh's pull lands (tab sync).
+  window.browserAPI.onRemoteTabsUpdated((devices) => {
+    remoteDevices = devices;
+    if (mode === 'panel' || mode === 'palette') renderList();
   });
   window.browserAPI.getAllTabs().then((payload) => {
     state = payload;

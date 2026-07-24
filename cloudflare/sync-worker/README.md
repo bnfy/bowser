@@ -23,7 +23,10 @@ data — no IPs, no ids, no browsing data, consistent with `../ping-worker`.
 - `PUT /v1/blob/:accountId/:store` `{ ifVersion, blob }` → `{ version }` | 409 | 400 | 413
 - `DELETE /v1/blob/:accountId` → 204 (account wipe)
 
-`accountId` is 64 hex chars; `store` is one of `bookmarks`, `settings`. No
+`accountId` is 64 hex chars; `store` is one of `bookmarks`, `settings`,
+`session` (tab sync — per-device open-tab snapshots), or `icons` (optional
+source-rasterized tab favicons, kept separate for mixed-client compatibility
+and budget isolation). Every store is ciphertext like the rest. No
 secrets or tokens: possession of the (unguessable) `accountId` is the
 capability. A per-client-IP limit (120/min, all methods) is the anti-guessing
 throttle — each passphrase guess derives a fresh `accountId`, so the

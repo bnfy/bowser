@@ -27,6 +27,7 @@
   ],
   "defaults": {
     "searchEngine": "duckduckgo",
+    "searchSuggestions": true,
     "adblockEnabled": true,
     "homePage": "",
     "theme": "system",
@@ -42,6 +43,7 @@
   "internalDefaults": ["_syncMeta"],
   "settings": [
     { "key": "searchEngine", "type": "enum", "enum": "searchEngines", "default": "duckduckgo" },
+    { "key": "searchSuggestions", "type": "boolean", "default": true, "note": "device-local; not synced; private tabs override off" },
     { "key": "adblockEnabled", "type": "boolean", "default": true },
     { "key": "homePage", "type": "string", "default": "", "note": "trimmed on write; empty = blanc://newtab" },
     { "key": "theme", "type": "enum", "enum": "themes", "default": "system", "note": "drives nativeTheme.themeSource" },

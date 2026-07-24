@@ -65,10 +65,12 @@ the page — they never push content around.
 | `/allow-ads` | allow ads on the current site |
 | `/theme` | cycle appearance (system → light → dark) |
 
-**Quick switcher** — type anything else and it matches loosely (substring
-or in-order characters, so `hnews` finds "Hacker News") across open tabs,
-favorites, and history; Enter jumps to the top result, and no match falls
-through to a normal navigate/search.
+**Quick switcher + search** — type anything else and the island blends
+loose local matches (tabs, favorites, history, and groups) with live
+autocomplete from the search engine selected in Settings. Arrow keys move
+through the six-row result list; Enter keeps the existing confident-local
+match behavior, otherwise it searches the exact text you typed. Provider
+suggestions can be disabled in Settings.
 
 **Private tabs** (`/private` or `Cmd/Ctrl+Shift+N`): nothing is saved to
 history, they're excluded from session restore and reopen-closed-tab, and
@@ -112,6 +114,7 @@ src/main/downloads.js    Download tracking (will-download), open/show/cancel act
 src/main/bookmarks.js    Favorites store
 src/main/history.js      Visit recording + search
 src/main/settings.js     Search engine / adblock / theme / home page settings
+src/main/search-suggestions.js  Bounded default-engine autocomplete providers
 src/main/store.js        Tiny debounced JSON-file persistence used by all of the above
 src/main/context-menu.js Right-click menu for web content
 src/main/auth-dialog.js  HTTP basic/digest auth prompt
@@ -191,7 +194,11 @@ internal pages, and web content all follow one switch, no restart.
 
 **Address input** is normalized in `main.js` — "has a scheme," "looks
 like a domain," or "treat as a search query" (engine selectable in
-Settings: DuckDuckGo, Google, Bing, Brave).
+Settings: DuckDuckGo, Google, Bing, Brave). Search-like input also gets
+best-effort autocomplete from that engine; URLs, input typed in private
+tabs, pasted values, and sensitive-looking text stay local. The separate
+Search suggestions toggle is device-local and can disable provider requests
+entirely.
 
 ## Keyboard shortcuts
 
@@ -221,10 +228,6 @@ Settings: DuckDuckGo, Google, Bing, Brave).
   credential-manager passkeys still await Apple's grant of the
   `com.apple.developer.web-browser.public-key-credential` entitlement
   (requested).
-- **Inline address autocomplete** — the quick switcher covers search
-  across tabs/favorites/history, but the input doesn't complete as you
-  type.
-
 ## Rebrand cleanup still pending
 
 This app was renamed from "Bowser" to Blanc — the code, package identity,
@@ -232,11 +235,10 @@ and visual assets are done, but a few infra steps are deliberately not yet
 live:
 
 - The marketing site (`site/`) is live on the Cloudflare Pages project
-  `blancbrowser` (direct upload: `npx wrangler pages deploy site
-  --project-name=blancbrowser`), which serves `blancbrowser.com` and
-  `getbowser.com` from the same deployment. The page's canonical tag points
-  search engines at `blancbrowser.com`; an actual 301 redirect from
-  `getbowser.com` hasn't been set up.
+  `blancbrowser` (direct upload: `npm run site:deploy`, which builds the
+  Astro site and uploads `site/dist`), served at the canonical domain
+  `blancbrowser.com`. `getbowser.com` 301-redirects there path-for-path
+  (live since 2026-07-11), so search consolidates onto the canonical domain.
 - This file's still-old-name architecture references were updated, but a
   fuller pass to make sure nothing else in the repo (scripts, docs, comments)
   assumes "Bowser" would be worth a final sweep before the first real

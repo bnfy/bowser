@@ -1,0 +1,53 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+<BaseLayout
+  title="About Blanc Browser — Independent by design"
+  description="Blanc Browser is built independently by Bananify, without venture funding, investors, or an advertising business."
+  path="/about"
+  page="about"
+  current="about"
+  ogTitle="About Blanc Browser — Independent by design"
+  ogDescription="Learn how the independent browser is built and funded."
+>
+<main class="about-page">
+  <section class="about-hero" aria-labelledby="about-title">
+    <p class="section-kicker">independent by design</p>
+    <h1 id="about-title">A browser with a studio accountable for it.</h1>
+    <p>Blanc is built by Bananify, an independent software studio. Product decisions, design, development, and support all lead back to the same small team.</p>
+  </section>
+
+  <section class="about-proof-list" aria-label="How Blanc is built and funded">
+    <article class="about-proof-row">
+      <p class="about-label">the studio</p>
+      <div>
+        <h2>A direct line to the people building it.</h2>
+        <p>Bananify designs and develops Blanc, writes its release notes, and answers its support email. Being small means feedback does not travel through departments before it reaches someone who can act on it.</p>
+      </div>
+    </article>
+
+    <article class="about-proof-row">
+      <p class="about-label">the model</p>
+      <div>
+        <h2>Independently controlled, without an ads business.</h2>
+        <p>Blanc has no venture funding and no investors setting its product agenda or exit timetable. It is not funded by selling ads or turning browsing activity into an audience product. That keeps the incentives simple: make a browser people want to keep using.</p>
+      </div>
+    </article>
+
+    <article class="about-proof-row about-supporter">
+      <p class="about-label">supporters</p>
+      <div>
+        <h2>The browser is complete without a purchase.</h2>
+        <p>Every browser feature is free. A one-time $19 Supporter purchase helps fund the work and unlocks three extra app-icon colorways—a cosmetic thank-you, not a subscription or a feature gate.</p>
+        <a class="text-link" data-track="supporter_click" data-cta-position="about-supporter" href="https://buy.polar.sh/polar_cl_TIxBNsxaZ7uTNG9fuCKrS1PnSQdu6ispJRgWH19Tx8p" target="_blank" rel="noopener">become a supporter <span aria-hidden="true">↗</span></a>
+      </div>
+    </article>
+  </section>
+
+  <section class="about-close" aria-labelledby="about-close-title">
+    <p class="section-kicker">support is human</p>
+    <h2 id="about-close-title">Questions reach a human.</h2>
+    <p>Email <a href="mailto:support@blancbrowser.com">support@blancbrowser.com</a>, or see the <a href="/changelog" data-track="feature_cta_click" data-feature="changelog" data-cta-position="about-close">public changelog</a> for what shipped most recently.</p>
+  </section>
+</main>
+</BaseLayout>

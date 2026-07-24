@@ -36,6 +36,17 @@ function install(refs) {
     openFindBar,
     getOverlayMode,
     showOverlay,
+    hideOverlay,
+    showUtilityPage,
+    hideUtilitySheet,
+    getUtilitySheetState,
+    getUtilitySheetWebContents,
+    getOverlayWebContents,
+    setTestSearchSuggestionFixture,
+    clearTestSearchSuggestionFixture,
+    getTestSearchSuggestionRequests,
+    setTestSearchNavigationCapture,
+    getTestSearchSubmission,
     getPrivateBrowsingSession,
     attemptChromeNavigation,
     getChromeUrl,
@@ -141,6 +152,9 @@ function install(refs) {
     adblockEnabled() { return settings.getSettings().adblockEnabled; },
     setSearchEngine(x) { settings.setSettings({ searchEngine: x }); },
     searchEngine() { return settings.getSettings().searchEngine; },
+    setSearchSuggestions(on) { settings.setSettings({ searchSuggestions: !!on }); },
+    searchSuggestions() { return settings.getSettings().searchSuggestions; },
+    settingsSyncValues() { return settings.exportForSync().values; },
     setAppIcon(x) { settings.setSettings({ appIcon: x }); },
     appIcon() { return settings.getSettings().appIcon; },
     secureDns() { return settings.getSettings().secureDns; },
@@ -163,12 +177,114 @@ function install(refs) {
     openDownloads() { openInternalPage('blanc://downloads/'); },
     openFind() { openFindBar(); },
     openPalette() { showOverlay('palette'); },
+    closeOverlay() { hideOverlay({ refocusContent: false }); },
     overlayMode() { return getOverlayMode(); },
+    setSearchSuggestionFixture(suggestions) {
+      setTestSearchSuggestionFixture(suggestions);
+    },
+    searchSuggestionRequests() {
+      return getTestSearchSuggestionRequests();
+    },
+    captureSearchNavigation(enabled) {
+      setTestSearchNavigationCapture(enabled);
+    },
+    capturedSearchSubmission() {
+      return getTestSearchSubmission();
+    },
+    async editAddressInput(value, inputType = 'insertText') {
+      const wc = getOverlayWebContents();
+      if (!wc) throw new Error('overlay is not open');
+      return wc.executeJavaScript(`(() => {
+        const input = document.getElementById('addressInput');
+        if (!input) return false;
+        input.value = ${JSON.stringify(String(value))};
+        input.dispatchEvent(new InputEvent('input', {
+          bubbles: true,
+          inputType: ${JSON.stringify(String(inputType))},
+          data: null
+        }));
+        return true;
+      })()`);
+    },
+    async pressAddressKey(key, modifiers = {}) {
+      const wc = getOverlayWebContents();
+      if (!wc) throw new Error('overlay is not open');
+      const init = {
+        key: String(key),
+        bubbles: true,
+        altKey: !!modifiers.altKey,
+        ctrlKey: !!modifiers.ctrlKey,
+        metaKey: !!modifiers.metaKey,
+        shiftKey: !!modifiers.shiftKey,
+      };
+      return wc.executeJavaScript(`(() => {
+        const input = document.getElementById('addressInput');
+        if (!input) return false;
+        input.dispatchEvent(new KeyboardEvent('keydown', ${JSON.stringify(init)}));
+        return true;
+      })()`);
+    },
+    async addressResultRows() {
+      const wc = getOverlayWebContents();
+      if (!wc) return [];
+      return wc.executeJavaScript(`[...document.querySelectorAll('#islandList .island-row')].map((row) => ({
+        title: row.querySelector('.row-title')?.textContent ?? '',
+        tag: row.querySelector('.row-tag')?.textContent ?? '',
+        active: row.classList.contains('active'),
+        enter: !!row.querySelector('.row-enter')
+      }))`);
+    },
+    async overlayRendererMode() {
+      const wc = getOverlayWebContents();
+      if (!wc) return null;
+      return wc.executeJavaScript('document.body.dataset.mode || null');
+    },
+    utilitySurface() { return getUtilitySheetState(); },
+    openFavoritesSheet() { openInternalPage('blanc://bookmarks/'); },
+
+    // ---- utility sheet drive helpers (acceptance) ----
+    // Both click helpers ASSERT the anchor exists — an optional-chained
+    // click would silently no-op and turn a rendering regression into a
+    // downstream timeout instead of a pointed failure.
+    async followNewtabFavoritesLink() {
+      const t = tabs.get(getActiveTabId());
+      const clicked = await t.view.webContents.executeJavaScript(
+        `(() => { const a = document.querySelector('a[href="blanc://bookmarks/"]'); if (a) a.click(); return !!a; })()`);
+      if (!clicked) throw new Error('newtab ledger has no favorites link');
+    },
+    seedFavorite(url, title) {
+      if (!bookmarks.isBookmarked(url)) bookmarks.toggleBookmark(url, title || url);
+    },
+    // F16-6 attack drivers: run the hostile expression in the ACTIVE tab's
+    // real page context and resolve only after it executed — a scenario
+    // must never pass because an inline script silently failed to run.
+    async attemptNavigateActiveTab(url) {
+      const t = tabs.get(getActiveTabId());
+      const ran = await t.view.webContents.executeJavaScript(
+        `(() => { location.href = ${JSON.stringify(String(url))}; return true; })()`);
+      if (ran !== true) throw new Error('navigation attempt did not execute');
+    },
+    async attemptWindowOpenActiveTab(url) {
+      const t = tabs.get(getActiveTabId());
+      const ran = await t.view.webContents.executeJavaScript(
+        `(() => { window.open(${JSON.stringify(String(url))}); return true; })()`);
+      if (ran !== true) throw new Error('window.open attempt did not execute');
+    },
+    async clickFirstSheetLink() {
+      const wc = getUtilitySheetWebContents();
+      if (!wc) throw new Error('sheet not open');
+      const clicked = await wc.executeJavaScript(
+        `(() => { const a = document.querySelector('a[href^="https"], a[href^="http"]'); if (a) a.click(); return !!a; })()`);
+      if (!clicked) throw new Error('no outbound link rendered in sheet');
+    },
     attemptChromeNavigation(url) { return attemptChromeNavigation(String(url)); },
     chromeUrl() { return getChromeUrl(); },
 
     // ---- isolation between scenarios ----
     reset() {
+      // No scenario inherits another's open surface.
+      hideOverlay({ refocusContent: false });
+      hideUtilitySheet();
       // A fresh tab first so closing the rest never empties the window.
       const keep = createTab(newTabUrl());
       setActiveTab(keep, { focusContent: false });
@@ -178,6 +294,7 @@ function install(refs) {
       for (const b of bookmarks.listBookmarks()) bookmarks.removeBookmark(b.id);
       settings.setSettings({
         searchEngine: 'duckduckgo',
+        searchSuggestions: true,
         adblockEnabled: true,
         homePage: '',
         theme: 'system',
@@ -185,6 +302,8 @@ function install(refs) {
         adblockExceptions: [],
       });
       settings.setSupporter(null);
+      clearTestSearchSuggestionFixture();
+      setTestSearchNavigationCapture(false);
     },
   };
 }

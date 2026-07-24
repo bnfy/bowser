@@ -27,6 +27,33 @@ Feature: Address input, search, and link handling
     Then the OS mail handler is invoked
     And no tab treats "mailto:a@b.com" as a search query
 
+  @F5-4 @F5 @all
+  Scenario: Autocomplete follows the current default search engine
+    Given the autocomplete provider returns "blanc browser release notes"
+    And the search engine is "google"
+    When I type "blanc browser probe" in the autocomplete palette
+    Then autocomplete requests "blanc browser probe" from "google"
+    And the completion "blanc browser release notes" is shown
+    When the search engine is "brave"
+    And I submit the command-bar text
+    Then the search submission uses "brave" for "blanc browser probe"
+
+  @F5-5 @F5 @all
+  Scenario: Autocomplete keeps opted-out, private, and pasted text local
+    Given the autocomplete provider returns "should never appear"
+    When I turn search suggestions off
+    And I type "opted out autocomplete probe" in the autocomplete palette
+    Then the autocomplete provider has not received a request
+    When I turn search suggestions on
+    And the active tab is private
+    And I type "private autocomplete probe" in the autocomplete palette
+    Then the autocomplete provider has not received a request
+    When I open a new tab
+    And I paste "confidential quarterly notes" into the autocomplete palette
+    And I delete the command-bar text
+    And I undo the command-bar deletion
+    Then the autocomplete provider has not received a request
+
   @F19-1 @F19 @all @D4 @D7
   Scenario: Open link in a background tab inherits the opener's group
     Given the active tab is in a group named "work"

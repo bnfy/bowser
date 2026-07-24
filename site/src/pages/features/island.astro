@@ -1,0 +1,70 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+<BaseLayout
+  title={"A Minimal Browser UI That Stays Out of Your Way | Blanc"}
+  description={"Blanc replaces a traditional tab strip and toolbar with one floating Island for web search, tabs, navigation, blocking status, and page actions."}
+  path="/features/island"
+  page="feature-island"
+  current="features"
+  ogDescription={"One floating Island for web search, tabs, navigation, blocking status, and page actions."}
+  ogImage="/feature-island.png"
+  ogImageAlt={"Blanc's floating Island over a GitHub page, showing tabs, the current site, and the blocking count."}
+>
+  <script type="application/ld+json" is:inline slot="head">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://blancbrowser.com/" },
+    { "@type": "ListItem", "position": 2, "name": "Features", "item": "https://blancbrowser.com/features" },
+    { "@type": "ListItem", "position": 3, "name": "The Blanc Island", "item": "https://blancbrowser.com/features/island" }
+  ]
+}
+</script>
+
+<main class="feature-page feature-detail-page">
+  <nav class="breadcrumb" aria-label="Breadcrumb"><a href="/">home</a><span aria-hidden="true">/</span><a href="/features">features</a><span aria-hidden="true">/</span><span aria-current="page">the Island</span></nav>
+  <section class="feature-hero feature-hero--detail" aria-labelledby="island-title">
+    <p class="section-kicker">the blanc island</p>
+    <h1 id="island-title">One small Island. The whole browser.</h1>
+    <p>Search, tabs, navigation, the current site, and page controls live together—so the page stays in front.</p>
+  </section>
+  <figure class="product-capture feature-capture">
+    <div class="demo-stage island-figure" data-page-tone="github" role="img" aria-label="Blanc's floating Island resting over the GitHub website, showing tab dots, back and forward navigation, and the current domain github.com.">
+      <div class="demo-page" aria-hidden="true"><div class="bar w1"></div><div class="bar w2"></div><div class="bar w3"></div><div class="bar w4"></div></div>
+      <picture>
+        <source media="(max-width: 560px)" srcset="/shots/mobile/github.jpg">
+        <img class="demo-shot show" src="/shots/desktop/github.jpg" loading="lazy" alt="" aria-hidden="true">
+      </picture>
+      <div class="demo-island" aria-hidden="true">
+        <div class="pill">
+          <div class="pnav">
+            <span class="pbtn"><svg viewBox="0 0 16 16"><path d="M9.75 3.5 5.25 8l4.5 4.5"/></svg></span>
+            <span class="pbtn off"><svg viewBox="0 0 16 16"><path d="M6.25 3.5 10.75 8l-4.5 4.5"/></svg></span>
+          </div>
+          <div class="dots"><span></span><span class="cur"></span><span></span><span></span></div>
+          <span class="pill-fav" style="background-image:url('https://icons.duckduckgo.com/ip3/github.com.ico')"></span>
+          <span class="domain">github.com</span>
+          <span class="psep"></span>
+          <div class="pacts">
+            <span class="pbtn"><svg viewBox="0 0 16 16"><path d="M12.42 10.35a5 5 0 1 1-4.42-7.35c1.4 0 2.74.56 3.74 1.53L13 5.78"/><path d="M13 3v2.78h-2.78"/></svg></span>
+            <span class="pbtn heart"><svg viewBox="0 0 16 16"><path d="M8 13.25C4.6 11 2.75 8.9 2.75 6.6a2.85 2.85 0 0 1 5.25-1.54A2.85 2.85 0 0 1 13.25 6.6c0 2.3-1.85 4.4-5.25 6.65z"/></svg></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <figcaption>The Island floats above the web page instead of reserving a permanent toolbar.</figcaption>
+  </figure>
+  <section class="feature-copy-grid" aria-labelledby="room-title">
+    <div><p class="section-kicker">the page gets the room</p><h2 id="room-title">The controls are close, not constantly present.</h2></div>
+    <div class="feature-copy-list">
+      <article><h3>Keep the web in front.</h3><p>Blanc does not pin a traditional tab strip and toolbar above every page. The Island leaves the web with more of its own room.</p></article>
+      <article><h3>See the essentials at a glance.</h3><p>At rest, the Island shows your active tab group, the current domain, and the page's blocking count in one compact surface.</p></article>
+      <article><h3>Search without leaving the Island.</h3><p>Start typing and Blanc blends your open tabs, favorites, history, and groups with live suggestions from the search engine you chose in Settings. Press Enter to search exactly what you typed.</p></article>
+      <article><h3>Open your whole session in one place.</h3><p>Open the Island to switch tabs, navigate, favorite a page, start a private tab, or use the browser's commands—without moving the page underneath.</p></article>
+    </div>
+  </section>
+  <section class="feature-close" aria-labelledby="island-close-title"><p class="section-kicker">see less browser</p><h2 id="island-close-title">Leave the chrome behind. Keep the controls.</h2><a class="cta" href="/download" data-track="feature_cta_click" data-feature="island" data-cta-position="feature-close">download blanc</a></section>
+</main>
+</BaseLayout>

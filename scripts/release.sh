@@ -43,6 +43,7 @@ RELEASE_SOURCES=(
   package-lock.json
   scripts/release.sh
   scripts/preflight-mac-signing.mjs
+  scripts/after-pack-app-icons.js
   scripts/after-sign-verify.js
   .github/workflows/release-windows-linux.yml
   scripts/generate-site-changelog.mjs
@@ -64,16 +65,6 @@ LOCAL_HEAD="$(git rev-parse HEAD)"
 if [ "$LOCAL_HEAD" != "$(git rev-parse origin/main)" ]; then
   echo "HEAD is not on origin/main. Push the release commit first: git push origin main" >&2
   exit 1
-fi
-
-# Keep the marketing site's release metadata in sync: the JSON-LD
-# softwareVersion in site/index.html and the sitemap's lastmod are the only
-# version-dated bits (download links point at /releases/latest, always fresh).
-echo "==> Syncing site metadata to $VERSION"
-sed -i '' -E "s/\"softwareVersion\": \"[^\"]*\"/\"softwareVersion\": \"$VERSION\"/" site/index.html
-sed -i '' -E "s|<lastmod>[^<]*</lastmod>|<lastmod>$(date +%F)</lastmod>|" site/sitemap.xml
-if ! git diff --quiet -- site/index.html site/sitemap.xml; then
-  echo "==> site/ metadata updated — commit and redeploy the site after this release."
 fi
 
 NEWER_ELECTRON=$(npm view electron version 2>/dev/null || true)
@@ -135,9 +126,9 @@ if ! GENERATED="$(gh api "repos/$REPO/releases/generate-notes" -f tag_name="$TAG
   exit 1
 fi
 {
-  echo "Blanc v$VERSION sharpens the everyday chrome. The resting Island pill is larger and easier to read, and each tab dot now blooms into a small disc showing that tab's favicon when you hover or focus it — so you can see which tab you're switching to before you click."
+  echo "Blanc v$VERSION turns the Island into a full search surface. Start typing in ⌘L and Blanc now blends your open tabs, groups, Favorites, and history with live suggestions from the search engine you chose in Settings; arrow through the six-row list or press Enter to search exactly what you typed. Suggestions can be switched off, and private tabs, pasted text, addresses, local paths, and sensitive-looking input never leave the device for autocomplete."
   echo
-  echo "The Favorites page gets a quieter, ledger-style layout: row and folder actions become understated text revealed on hover or focus, folder names move into their section headers, and dates line up in a right-aligned column."
+  echo "Tabs synced from your other Blanc devices now carry their site icons too. The source device converts each favicon into a tiny inert PNG inside a separate end-to-end-encrypted sidecar, so another device never contacts a remote tab's site just to draw its row; strict budgets, cancellation, mixed-version compatibility, and graceful fallback keep this cosmetic layer from interfering with tab sync."
   echo
   printf '%s\n' "$GENERATED"
 } > "$NOTES_FILE"

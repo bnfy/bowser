@@ -23,6 +23,6 @@
     { "command": "/find", "hint": "Find in page" },
     { "command": "/block-ads", "hint": "Toggle ad & tracker blocking" },
     { "command": "/allow-ads", "hint": "Allow ads on this site" },
-    { "command": "/theme", "hint": "Cycle appearance (system → light → dark)" }
+    { "command": "/theme", "hint": "Cycle appearance, or choose system / light / dark", "doc": { "command": "/theme [system|light|dark]", "hint": "Cycle appearance, or switch directly to system, light, or dark" } }
   ]
 }

@@ -46,6 +46,7 @@ enum class BlancAppIcon(val id: String, val label: String, val isSupporterOnly: 
 
 object BlancSettingsDefaults {
     val searchEngine = BlancSearchEngine.DUCKDUCKGO
+    const val searchSuggestions = true
     const val adblockEnabled = true
     const val homePage = ""
     val theme = BlancThemePreference.SYSTEM

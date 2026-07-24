@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=JetBrains+Mono:wght@400;500;700&display=swap" />
   <link rel="stylesheet" href="pages.css" />
 </head>
-<body>
+<body class="sheet">
   <div class="page">
     <nav class="page-nav">
       <a href="blanc://settings/" class="current">Settings</a>
@@ -45,7 +45,7 @@
             <div class="setting" id="appIconSetting">
               <div class="label">
                 <span>App icon</span>
-                <span class="hint">Changes the Dock icon; Finder keeps the standard one</span>
+                <span class="hint">Follows macOS Icon &amp; Widget Style; Finder keeps Paper</span>
               </div>
               <div class="icon-scroller">
                 <button id="appIconPrev" class="icon-caret" type="button" aria-label="Scroll colorways left"><svg width="10" height="10" viewBox="0 0 12 12"><path d="M7.5 2 3.5 6l4 4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -69,6 +69,17 @@
                 <span class="hint">Used when the address bar input isn't a URL</span>
               </div>
               <select id="searchEngine"></select>
+            </div>
+
+            <div class="setting">
+              <div class="label">
+                <span>Search suggestions</span>
+                <span class="hint">Send typed search prefixes to your selected engine; always off in private tabs</span>
+              </div>
+              <label class="toggle">
+                <input id="searchSuggestions" type="checkbox" />
+                <span class="track"></span>
+              </label>
             </div>
 
             <div class="setting">
@@ -181,9 +192,10 @@
           <h2 class="group-title">Sync</h2>
           <div class="settings-card">
             <p class="section-hint">
-              Sync your favorites and settings across devices. Blanc encrypts everything on this
-              device with your passphrase and stores only unreadable data — we can’t read it, and
-              can’t recover it if you forget your passphrase.
+              Sync your favorites and settings across devices — and, if you turn it on below, this
+              device’s open tabs. Blanc encrypts everything on this device with your passphrase and
+              stores only unreadable data — we can’t read it, and can’t recover it if you forget
+              your passphrase.
             </p>
             <div id="syncSetup">
               <div class="toolbar-row">
@@ -199,6 +211,9 @@
                 <button id="syncNow">Sync now</button>
                 <button id="syncDisable" class="danger">Turn off sync</button>
                 <label class="inline-check"><input id="syncWipe" type="checkbox" /> also delete synced data</label>
+              </div>
+              <div class="toolbar-row">
+                <label class="inline-check"><input id="syncTabsShare" type="checkbox" /> share this device’s open tabs with your other devices</label>
               </div>
             </div>
           </div>
@@ -221,6 +236,7 @@
       </div>
     </div>
   </div>
+  <script src="sheet.js"></script>
   <script src="settings.js"></script>
 </body>
 </html>

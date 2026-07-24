@@ -21,6 +21,34 @@ const SEARCH_PREFIX = {
   brave: 'https://search.brave.com/search?q=',
 };
 
+async function waitForValue(read, predicate, label, timeout = 5000) {
+  const deadline = Date.now() + timeout;
+  let last;
+  for (;;) {
+    last = await read();
+    if (predicate(last)) return last;
+    if (Date.now() > deadline) {
+      throw new Error(`timed out waiting for ${label}; last: ${JSON.stringify(last)}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
+async function openAutocompletePalette(world) {
+  await world.call('closeOverlay');
+  await waitForValue(
+    () => world.call('overlayRendererMode'),
+    (mode) => mode == null,
+    'overlay renderer to leave its previous edit session'
+  );
+  await world.call('openPalette');
+  await waitForValue(
+    () => world.call('overlayRendererMode'),
+    (mode) => mode === 'palette',
+    'overlay renderer to enter palette mode'
+  );
+}
+
 // ---------- F5: address input & search ----------
 
 Given('the search engine is {string}', async function (engine) {
@@ -51,6 +79,76 @@ Then('no tab treats {string} as a search query', async function (uri) {
   assert.strictEqual(await this.call('wouldHandOff', uri), true);
 });
 
+Given('the autocomplete provider returns {string}', async function (suggestion) {
+  await this.call('setSearchSuggestionFixture', [suggestion]);
+  await this.call('captureSearchNavigation', true);
+});
+
+When('I type {string} in the autocomplete palette', async function (query) {
+  ctx.enteredInput = query;
+  await openAutocompletePalette(this);
+  assert.strictEqual(await this.call('editAddressInput', query, 'insertText'), true);
+});
+
+Then('autocomplete requests {string} from {string}', async function (query, engine) {
+  const requests = await waitForValue(
+    () => this.call('searchSuggestionRequests'),
+    (items) => items.some((item) => item.query === query && item.engine === engine),
+    `${engine} autocomplete request for ${query}`
+  );
+  const match = requests.find((item) => item.query === query && item.engine === engine);
+  assert.strictEqual(match.credentials, 'omit');
+});
+
+Then('the completion {string} is shown', async function (completion) {
+  await waitForValue(
+    () => this.call('addressResultRows'),
+    (rows) => rows.some((row) => row.title === completion),
+    `completion ${completion}`
+  );
+});
+
+When('I submit the command-bar text', async function () {
+  assert.strictEqual(await this.call('pressAddressKey', 'Enter'), true);
+});
+
+Then('the search submission uses {string} for {string}', async function (engine, query) {
+  const submission = await waitForValue(
+    () => this.call('capturedSearchSubmission'),
+    (value) => value?.engine === engine && value?.query === query,
+    `${engine} search submission for ${query}`
+  );
+  assert.strictEqual(submission.url, SEARCH_PREFIX[engine] + encodeURIComponent(query));
+});
+
+When('I turn search suggestions on', async function () {
+  await this.call('setSearchSuggestions', true);
+});
+
+Then('the autocomplete provider has not received a request', async function () {
+  // The renderer debounce is 200 ms. Wait beyond it so a privacy leak cannot
+  // pass merely because the provider call had not fired yet.
+  await new Promise((resolve) => setTimeout(resolve, 450));
+  assert.deepStrictEqual(await this.call('searchSuggestionRequests'), []);
+});
+
+When('I paste {string} into the autocomplete palette', async function (value) {
+  ctx.pastedInput = value;
+  await openAutocompletePalette(this);
+  assert.strictEqual(await this.call('editAddressInput', value, 'insertFromPaste'), true);
+});
+
+When('I delete the command-bar text', async function () {
+  assert.strictEqual(await this.call('editAddressInput', '', 'deleteContentBackward'), true);
+});
+
+When('I undo the command-bar deletion', async function () {
+  assert.strictEqual(
+    await this.call('editAddressInput', ctx.pastedInput, 'historyUndo'),
+    true
+  );
+});
+
 // ---------- F7-2: slash-command effects ----------
 // (The `When I run the slash command` step lives in runnable.steps.js.)
 
@@ -65,9 +163,9 @@ Then('a new ungrouped tab opens on the new-tab page', async function () {
   });
 });
 
-Then('the downloads page opens', async function () {
-  await this.waitForState((s) => s.tabs.some((t) => t.url.startsWith('blanc://downloads')));
-});
+// "the downloads page opens in the utility sheet" is bound by the generic
+// `the {word} page opens in the utility sheet` step in runnable.steps.js —
+// utility pages present as the sheet, never as tabs (utility-sheet design).
 
 Then('the find bar is shown', async function () {
   assert.strictEqual(await this.call('overlayMode'), 'find');

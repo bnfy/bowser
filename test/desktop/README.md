@@ -60,30 +60,32 @@ for the deterministic Electron contract and opt-in live-site canary.
 The **`runnable`** profile is the subset wired to real assertions today — the
 scenarios drivable purely through main-process state or pure app logic:
 
-| Implemented (23 rows) | |
+| Implemented (30 stable IDs) | |
 |---|---|
 | F2-1..F2-4 | tab reopen / duplicate / pin-order / new-tab-ungrouped |
-| F3-1, F3-4 | group create+move / prune-on-empty |
-| F5-1, F5-2, F5-3 | address normalization / search routing (4 engines) / OS hand-off |
+| F3-1, F3-4, F3-5 | group create+move / prune-on-empty / grouped-pin ordering |
+| F4-4, F4-5 | private-session isolation / private start-page load |
+| F5-1..F5-5 | address routing / 4 engines / OS hand-off / autocomplete routing + privacy |
 | F7-2 | slash-command effects (/new, /downloads, /find) |
 | F9-1, F9-2 | favorite active page / add-all-tabs |
 | F10-2 | clear history |
 | F12-3 | ad-block global toggle |
-| F14-1..F14-3 | settings validation (engine / supporter-icon fallback / exception normalization) |
+| F14-1..F14-4 | settings validation + device-local search-suggestion opt-out |
+| F16-2..F16-7 | utility-sheet routing, isolation, actions, and toggle behavior |
 | F17-1 | supporter unlock → app icon applied |
 
-Run `npm run test:acceptance:dry` — **23 scenarios, 79 steps, 0 undefined**
+Run `npm run test:acceptance:dry` — **35 scenarios, 169 steps, 0 undefined**
 (Scenario Outlines expand per example: F5-2 → 4 rows, F7-2 → 3).
 
 The **`default`** profile (`not @mobile`) selects the whole desktop-applicable
-set — **51 scenarios** (Scenario Outlines expand per example). The other **28 are
-backlog**: they report as `undefined` until their step definitions are written.
-They fall into three groups, by what they additionally need:
+set. Scenarios outside the explicit `RUNNABLE` ID list are backlog: they report
+as `undefined` until their step definitions are written. They fall into three
+groups, by what they additionally need:
 
-1. **Overlay / WebContentsView DOM automation** — the command palette, Quick
-   Switcher, find-in-page, internal-page and theming assertions read the overlay
-   or tab web contents, which aren't the main `BrowserWindow` page. Needs a
-   Playwright page handle for those views (or added `__blanc` readers).
+1. **Further overlay / WebContentsView DOM automation** — autocomplete now uses
+   test-only overlay readers, but broader Quick Switcher, find-in-page,
+   internal-page, and theming assertions still need purpose-built `__blanc`
+   readers or guest-view handles.
 2. **Real navigation / external fixtures** — address-bar search routing, history
    recording on visit, downloads, permissions, basic-auth. Extend the fixtures
    server (search stubs, a basic-auth route, a downloadable file) and drive real

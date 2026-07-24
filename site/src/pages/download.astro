@@ -1,0 +1,92 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+<BaseLayout
+  title={"Download Blanc Browser for macOS, Windows, and Linux"}
+  description={"Download the free Blanc desktop browser for macOS, Windows, or Linux. Built-in ad and tracker blocking, private tabs, and a minimal Island interface."}
+  path="/download"
+  page="download"
+  current="download"
+  ogDescription={"A minimal desktop browser with built-in ad and tracker blocking, private tabs, and a floating Island interface."}
+>
+<main class="download-page">
+  <section class="download-hero" aria-labelledby="download-title">
+    <p class="section-kicker">get blanc</p>
+    <h1 id="download-title">Ready for a browser with less in the way?</h1>
+    <p>Choose your desktop. Blanc is free, and installed builds keep themselves up to date.</p>
+  </section>
+
+  <section class="download-options" id="download-options" data-download-options aria-label="Choose a Blanc download">
+    <a class="platform-card" id="dl-mac" data-download-link data-platform="mac" data-track="download_click" data-cta-position="platform-card" href="https://github.com/bnfy/blanc/releases/latest">
+      <span class="platform-label">macos</span>
+      <strong>Download for macOS</strong>
+      <span>DMG or ZIP · signed and notarized</span>
+    </a>
+    <a class="platform-card" id="dl-win" data-download-link data-platform="win" data-track="download_click" data-cta-position="platform-card" href="https://github.com/bnfy/blanc/releases/latest">
+      <span class="platform-label">windows</span>
+      <strong>Download for Windows</strong>
+      <span>NSIS installer</span>
+    </a>
+    <a class="platform-card" id="dl-linux" data-download-link data-platform="linux" data-track="download_click" data-cta-position="platform-card" href="https://github.com/bnfy/blanc/releases/latest">
+      <span class="platform-label">linux</span>
+      <strong>Download for Linux</strong>
+      <span>AppImage</span>
+    </a>
+  </section>
+
+  <p class="download-whatsnew"><a href="/changelog" data-track="feature_cta_click" data-feature="changelog" data-cta-position="download-options">See what changed in the latest release</a></p>
+
+  <section class="download-details" aria-labelledby="trust-title">
+    <div>
+      <p class="section-kicker">before you install</p>
+      <h2 id="trust-title">What you're actually downloading.</h2>
+    </div>
+    <div class="download-detail-list">
+      <article>
+        <h3>macOS, signed and notarized</h3>
+        <p>Every macOS build is code-signed and notarized with Apple, so Gatekeeper verifies it before first launch. This applies to the macOS builds specifically.</p>
+      </article>
+      <article>
+        <h3>Updates arrive in place</h3>
+        <p>Installed release builds check GitHub Releases and update themselves automatically — no separate updater, no account.</p>
+      </article>
+      <article>
+        <h3>One launch ping, with an off switch</h3>
+        <p>At launch, Blanc sends one ping: a random install ID, a random session ID, the app version, platform, and architecture. It carries no browsing history, URLs, searches, or page content. Turn it off in Settings → Privacy &amp; Security under &ldquo;Help improve Blanc,&rdquo; or <a href="/privacy">read the privacy policy</a>.</p>
+      </article>
+    </div>
+  </section>
+
+  <aside class="truth-note download-note" aria-labelledby="windows-note-title">
+    <p class="section-kicker">a note for windows</p>
+    <h2 id="windows-note-title">Why might Windows warn about Blanc?</h2>
+    <p>The current Windows installer is not yet code-signed, so Microsoft Defender SmartScreen may show an &ldquo;unknown publisher&rdquo; or &ldquo;Windows protected your PC&rdquo; notice while Windows signing is completed. Take that warning seriously wherever you see it: download Blanc only from this page or the <a href="https://github.com/bnfy/blanc/releases/latest" target="_blank" rel="noopener">official GitHub release</a>, and skip copies hosted anywhere else.</p>
+  </aside>
+
+  <section class="download-details" aria-labelledby="details-title">
+    <div>
+      <p class="section-kicker">what comes with it</p>
+      <h2 id="details-title">A smaller browser surface. The browser essentials, built in.</h2>
+    </div>
+    <div class="download-detail-list">
+      <article>
+        <h3>One floating Island</h3>
+        <p>Tabs, navigation, and page controls stay close without taking permanent space from the page.</p>
+      </article>
+      <article>
+        <h3>Built-in blocking</h3>
+        <p>Blanc can block ads and known trackers without asking you to start with an extension.</p>
+      </article>
+      <article>
+        <h3>Private tabs</h3>
+        <p>Private activity stays out of Blanc history, session restore, and reopen-closed.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="download-footnote" aria-label="Download details">
+    <p>Every download button points to the latest Blanc release on GitHub. If your download does not start, <a href="https://github.com/bnfy/blanc/releases/latest" target="_blank" rel="noopener">open the release page</a>.</p>
+    <p><a href="/privacy">Read how Blanc handles your data</a> or email <a href="mailto:support@blancbrowser.com">support@blancbrowser.com</a> if you need a hand.</p>
+  </section>
+</main>
+</BaseLayout>

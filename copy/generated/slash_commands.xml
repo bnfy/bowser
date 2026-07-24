@@ -17,5 +17,5 @@
     <string name="slash_find">Find in page</string>
     <string name="slash_block_ads">Toggle ad &amp; tracker blocking</string>
     <string name="slash_allow_ads">Allow ads on this site</string>
-    <string name="slash_theme">Cycle appearance (system → light → dark)</string>
+    <string name="slash_theme">Cycle appearance, or choose system / light / dark</string>
 </resources>

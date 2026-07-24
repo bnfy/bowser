@@ -94,6 +94,7 @@ When('I add all open tabs to favorites', async function () {
 });
 
 When('I attempt to set the search engine to {string}', async function (x) { await this.call('setSearchEngine', x); });
+When('I turn search suggestions off', async function () { await this.call('setSearchSuggestions', false); });
 When('settings contain the app icon {string}', async function (x) { await this.call('setAppIcon', x); });
 When('I add {string} to the ad-block exceptions', async function (h) { await this.call('addException', h); });
 
@@ -225,6 +226,15 @@ Then('the search engine remains unchanged', async function () {
   assert.strictEqual(await this.call('searchEngine'), 'duckduckgo');
 });
 
+Then('search suggestions are disabled', async function () {
+  assert.strictEqual(await this.call('searchSuggestions'), false);
+});
+
+Then('the search-suggestions preference remains device-local', async function () {
+  const values = await this.call('settingsSyncValues');
+  assert.ok(!Object.hasOwn(values, 'searchSuggestions'));
+});
+
 Then('the effective app icon is {string}', async function (x) {
   assert.strictEqual(await this.call('appIcon'), x);
 });
@@ -241,4 +251,141 @@ Then('the ad-block exceptions do not contain {string}', async function (h) {
 
 Then('browser chrome remains on its trusted local document', async function () {
   assert.match(await this.call('chromeUrl'), /^file:\/\/.*\/src\/renderer\/index\.html$/);
+});
+
+// ---------- Utility sheet (F16-2, F16-4, F16-5) ----------
+
+/** Poll the sheet state — fixed sleeps turn slow CI into flakes; a missing
+ * state change must time out loudly. */
+async function untilSurface(world, predicate, what, ms = 5000) {
+  const deadline = Date.now() + ms;
+  for (;;) {
+    const surf = await world.call('utilitySurface');
+    if (predicate(surf)) return surf;
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}; last: ${JSON.stringify(surf)}`);
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
+
+const sheetHostFor = (name) => (name === 'favorites' ? 'bookmarks' : name);
+
+Given('the new-tab page is open', async function () {
+  await this.call('newTab'); // opens blanc://newtab as the active tab
+});
+
+Given('a favorite for {string} exists', async function (host) {
+  await this.call('seedFavorite', `https://${host}/`, host);
+});
+
+Given('the favorites page is open in the utility sheet', async function () {
+  await this.call('openFavoritesSheet');
+  await untilSurface(this, (s) => s.visible, 'favorites sheet to open');
+  this.tabStateBefore = await this.call('state');
+});
+
+When('I follow its {string} navigation link', async function (label) {
+  assert.strictEqual(label, 'Favorites', 'the ledger has exactly one nav link');
+  this.tabStateBefore = await this.call('state');
+  await this.call('followNewtabFavoritesLink');
+  await untilSurface(this, (s) => s.visible, 'sheet to open from ledger link');
+});
+
+When('I open the downloads page', async function () {
+  this.tabStateBefore = await this.call('state');
+  await this.call('openDownloads');
+  await untilSurface(this, (s) => s.visible, 'downloads sheet to open');
+});
+
+When('I activate that favorite', async function () {
+  await this.call('clickFirstSheetLink');
+  await this.waitForState((s) => s.tabs.length === this.tabStateBefore.tabs.length + 1);
+});
+
+Then('the {word} page opens in the utility sheet', async function (name) {
+  const surf = await untilSurface(this, (s) => s.visible, `${name} sheet`);
+  assert.strictEqual(surf.url, `blanc://${sheetHostFor(name)}/`);
+});
+
+Then('the {word} page opens in the utility sheet under the blanc scheme', async function (name) {
+  const surf = await untilSurface(this, (s) => s.visible, `${name} sheet`);
+  assert.ok(surf.url.startsWith(`blanc://${sheetHostFor(name)}/`),
+    `sheet url ${surf.url} should be blanc://${sheetHostFor(name)}/`);
+});
+
+Then('no new tab is created', async function () {
+  const now = await this.call('state');
+  assert.strictEqual(now.tabs.length, this.tabStateBefore.tabs.length);
+});
+
+Then('the active tab and tab order are unchanged', async function () {
+  const now = await this.call('state');
+  assert.strictEqual(now.activeTabId, this.tabStateBefore.activeTabId);
+  assert.deepStrictEqual(now.tabOrder, this.tabStateBefore.tabOrder);
+});
+
+Then('exactly one new tab opens on {string}', async function (host) {
+  const now = await this.call('state');
+  assert.strictEqual(now.tabs.length, this.tabStateBefore.tabs.length + 1);
+  assert.ok(now.tabs.some((t) => t.url.includes(host)),
+    `a tab should be on ${host}: ${JSON.stringify(now.tabs.map((t) => t.url))}`);
+});
+
+Then('the utility sheet is dismissed', async function () {
+  await untilSurface(this, (s) => !s.visible, 'sheet to dismiss');
+});
+
+// F16-6: the P1 regression class this guards — utility routing running
+// BEFORE the web→blanc denial in a navigation handler — is an ordering
+// bug, so the coverage must drive the real handlers from a real committed
+// web document, with execution PROOF: the test-hook attack drivers resolve
+// only after the hostile expression ran in the page (a scenario must never
+// pass because an inline script silently failed to load).
+
+/** Negative assertions can't poll for success — give a mis-routed summon a
+ * bounded window to land before declaring the sheet stayed closed. */
+const settle = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// A data: URL is an OPAQUE origin — the vector that actually reaches the
+// blanc:// navigation handlers. http content cannot: Chromium blocks
+// http→blanc:// upstream, so will-navigate never fires from it (verified by
+// mutation — an http-origin attack can't summon the sheet even with the
+// trust gate removed, so an http fixture would make this test vacuous).
+const UNTRUSTED_DOC = 'data:text/html,<title>untrusted</title><body>x</body>';
+
+Given('a tab open on untrusted web content', async function () {
+  const id = await this.call('openTab', UNTRUSTED_DOC);
+  ctx.tabByName.hostile = id;
+  // The attack only exercises the handlers if the document actually
+  // committed — gate on the tab's committed URL, not just creation.
+  await this.waitForState((s) => {
+    const t = s.tabs.find((x) => x.id === id);
+    return t && t.loadedUrl.startsWith('data:') && !t.loading;
+  });
+});
+
+When('the page navigates itself to the settings page', async function () {
+  await this.call('attemptNavigateActiveTab', 'blanc://settings/');
+  await settle(500);
+});
+
+When('the page window-opens the settings page', async function () {
+  await this.call('attemptWindowOpenActiveTab', 'blanc://settings/');
+  await settle(500);
+});
+
+Then('the utility sheet remains closed', async function () {
+  const surf = await this.call('utilitySurface');
+  assert.strictEqual(surf.visible, false,
+    `web content summoned the sheet: ${JSON.stringify(surf)}`);
+});
+
+// F16-7: toggle must compare page identity, not URL spelling — typed
+// addresses arrive without the trailing slash the menu items carry.
+Given('the settings page is open in the utility sheet via a typed address', async function () {
+  await this.call('openTab', 'blanc://settings'); // typed spelling, no trailing slash
+  await untilSurface(this, (s) => s.visible, 'settings sheet (typed spelling)');
+});
+
+When('the settings page is invoked again by the menu', async function () {
+  await this.call('openTab', 'blanc://settings/'); // canonical menu spelling
 });

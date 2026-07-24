@@ -1,0 +1,5 @@
+{
+  "name": "blanc-newsletter-worker",
+  "private": true,
+  "type": "module"
+}

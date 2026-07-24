@@ -20,7 +20,7 @@ const SLASH_COMMANDS = [
   ['/find', 'Find in page'],
   ['/block-ads', 'Toggle ad & tracker blocking'],
   ['/allow-ads', 'Allow ads on this site'],
-  ['/theme', 'Cycle appearance (system → light → dark)'],
+  ['/theme [system|light|dark]', 'Cycle appearance, or switch directly to system, light, or dark'],
 ];
 
 /** One titled section of label/keys rows. */

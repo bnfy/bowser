@@ -33,9 +33,17 @@ if (window.location.protocol === 'blanc:') {
     start: {
       data: () => ipcRenderer.invoke('pages:start:data'),
       focusGroup: (id) => ipcRenderer.invoke('pages:start:focus-group', id),
+      // Subscribe-only: main pushes fresh remote-device tabs when a sync
+      // pull lands after the page first painted (tab sync).
+      onRemoteTabs: (callback) => {
+        ipcRenderer.on('pages:start:remote-tabs', (_event, devices) => callback(devices));
+      },
     },
     shortcuts: {
       list: () => ipcRenderer.invoke('pages:shortcuts:list'),
+    },
+    surface: {
+      close: () => ipcRenderer.invoke('pages:surface:close'),
     },
     settings: {
       get: () => ipcRenderer.invoke('pages:settings:get'),
@@ -45,6 +53,7 @@ if (window.location.protocol === 'blanc:') {
       syncEnable: (payload) => ipcRenderer.invoke('pages:settings:sync-enable', payload),
       syncDisable: (opts) => ipcRenderer.invoke('pages:settings:sync-disable', opts),
       syncNow: () => ipcRenderer.invoke('pages:settings:sync-now'),
+      syncTabsSet: (on) => ipcRenderer.invoke('pages:settings:sync-tabs-set', on),
     },
     permissions: {
       list: () => ipcRenderer.invoke('pages:permissions:list'),

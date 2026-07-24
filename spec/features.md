@@ -97,6 +97,14 @@ toolbar (Bowser Design System "Island Chrome").
   the selected engine.
 - **Search engines:** `duckduckgo` (default), `google`, `bing`, `brave`. → substrate
   (engine table).
+- Search-like input blends the local Quick Switcher with best-effort autocomplete
+  from the selected engine. Engine completions never claim bare Enter: the existing
+  confident-local-match rule still applies, otherwise the exact typed query remains
+  the search target. A completion only wins after explicit pointer/arrow selection.
+  URL-like text, slash commands, sensitive-looking or pasted values, and input
+  typed in private tabs are never sent for autocomplete. The device-local
+  `searchSuggestions` setting (default `true`) lets the user turn provider
+  requests off entirely; provider failure falls back to local results + Enter.
 - **OS hand-off** (`handOffToOs`) is checked *before* normalization for bare
   `mailto:` / `tel:` / `facetime:` / `sms:` URIs and page-initiated navigations to
   them — handed to the OS instead of treated as a query (D4).
@@ -141,11 +149,11 @@ copy → substrate):
 | `/find` | Find in page |
 | `/block-ads` | Toggle ad & tracker blocking |
 | `/allow-ads` | Allow ads on this site |
-| `/theme` | Cycle appearance (system → light → dark) |
+| `/theme [system\|light\|dark]` | Cycle appearance, or switch directly to system, light, or dark |
 
 - Prefix filtering: typing `/gr` narrows to `/group`; typing `/` alone lists all.
-- **Acceptance:** Typing `/the` then Return cycles the theme; `/group work` moves
-  the active tab into `work`.
+- **Acceptance:** Typing `/the` then Return cycles the theme; `/theme dark`
+  selects dark directly; `/group work` moves the active tab into `work`.
 
 ## F8 — Find in page
 
@@ -218,6 +226,7 @@ From the desktop `DEFAULTS`:
 | Key | Default | Values / rule |
 |-----|---------|---------------|
 | `searchEngine` | `duckduckgo` | one of duckduckgo/google/bing/brave |
+| `searchSuggestions` | `true` | boolean; device-local, never synced, private tabs override off |
 | `adblockEnabled` | `true` | boolean |
 | `homePage` | `""` | empty = `blanc://newtab`; else a URL |
 | `theme` | `system` | system/light/dark |
@@ -247,13 +256,21 @@ From the desktop `DEFAULTS`:
 
 - Pages: **newtab** (the "ledger" start page), **favorites** (`blanc://bookmarks/`),
   **history**, **downloads**, **settings**, **shortcuts**, **error**, **auth**.
+- **Presentation split:** the five *utility* pages (favorites, history, downloads,
+  settings, shortcuts) present as a **transient chrome surface** — on desktop a
+  sheet over a scrim — **never as tabs**; `newtab` and `error` remain tab content
+  (`auth` is a dialog). Outbound activations (a history entry, a favorite) open
+  real tabs and dismiss the surface. This is platform-neutral and maps to native
+  sheet presentation on mobile — no divergence entry needed.
 - The newtab ledger: date line, "Where to?", favorites, tab groups ("pick up where
   you left off" — clicking one focuses that group), footer with the weekly blocked
   count + palette hint. **No mascot** (retired in the rebrand — do not reintroduce).
 - **Strong reuse opportunity:** ship these as **one shared web bundle** rendered in
   a web view on every platform, so they stay pixel-identical for free (→ substrate).
 - **Acceptance:** newtab shows today's date, favorites, resumable groups, and the
-  weekly blocked count; each page's nav links resolve within `blanc://`.
+  weekly blocked count; each page's nav links resolve within `blanc://`; utility
+  pages open in the transient surface leaving the tab set untouched, and
+  activating a favorite from the surface opens exactly one real tab.
 
 ## F17 — Supporter & app icons
 
@@ -372,3 +389,22 @@ From the desktop `DEFAULTS`:
 - **Acceptance:** On a WebRTC test page, Standard reveals no local/multi-homed
   private addresses; with an application proxy configured, Disable-direct-UDP
   removes direct UDP candidates.
+
+## F27 — Tab Sync (open tabs from your other devices)
+
+- With Profile Sync enabled and the per-device **"share this device's open
+  tabs"** toggle on (**off by default** — a device's tabs never upload without
+  an explicit act on that device), each device publishes an E2EE snapshot of
+  its open tabs (url, title, group, pinned; http(s) only, bounded) plus a
+  separately-budgeted E2EE sidecar of source-rasterized, bounded PNG favicons
+  under the sync account. Favicon source URLs never cross devices and remote
+  surfaces never load them. Other devices browse it **read-only** — ⌘L panel (folded
+  per-device sections), Quick Switcher (ranked below local tabs and
+  favorites), start page — and open individual tabs locally. Never a merged
+  live session: nothing force-opens or closes remotely. Private tabs never
+  enter the snapshot. Toggle-off publishes a retraction; entries prune after
+  30 days; a 24 h heartbeat keeps live devices present. Design:
+  `docs/superpowers/specs/2026-07-21-tab-sync-design.md`.
+- **Acceptance:** With sharing on on device A, device B lists A's tabs after a
+  focus refresh and opens one as a new ungrouped local tab; toggling sharing
+  off on A removes A's section from B after the next sync.

@@ -16,6 +16,8 @@ const { setupPermissionPolicy, setPermissionPrompter } = require('./permissions'
 const { setupAutoUpdater, checkForUpdatesManually } = require('./updater');
 const { sendLaunchPing } = require('./telemetry');
 const sync = require('./sync');
+const tabsync = require('./tabsync');
+const tabicons = require('./tabicons');
 const { setupDownloads, downloadsActivity, acknowledgeDownloads } = require('./downloads');
 const { attachContextMenu } = require('./context-menu');
 const { promptForCredentials } = require('./auth-dialog');
@@ -24,15 +26,23 @@ const bookmarks = require('./bookmarks');
 const { groupFavoritesForMenu } = require('./bookmark-data');
 const history = require('./history');
 const { JsonStore } = require('./store');
+const { persistableEntries } = require('./session-snapshot');
+const { filterRestoredSession } = require('./session-restore');
+const { isUtilityUrl } = require('./utility-pages');
 const { shouldClearFaviconOnNavigate } = require('./favicon-policy');
 const { setupWebAuthn } = require('./webauthn');
 const { HANDOFF_PROTOCOLS, classifyExternalNavigation } = require('./external-protocols');
 const { isTrustedSender } = require('./ipc-trust');
+const { applyDockAppIcon } = require('./app-icon');
+const { createSearchSuggestionService } = require('./search-suggestions');
 
 const NEW_TAB_URL = 'blanc://newtab/';
 const newTabUrl = () => settings.getSettings().homePage || NEW_TAB_URL;
 // The query flag tells the newtab page to show private copy + theme.
 const PRIVATE_NEW_TAB_URL = 'blanc://newtab/?private=1';
+// Exact, unpackaged-only gate for the Electron acceptance harness. A stray
+// BLANC_TEST=0/false in a real launch must not weaken normal chrome behavior.
+const acceptanceTestMode = !app.isPackaged && process.env.BLANC_TEST === '1';
 
 // Dev runs (`npm start`) get their own userData so a dev instance never
 // shares — and corrupts — the installed app's profile: two Chromium
@@ -303,29 +313,111 @@ function lockPrivilegedNavigation(wc, trustedUrl) {
   wc.setWindowOpenHandler(() => ({ action: 'deny' }));
 }
 
-// Window background behind everything, matching the CSS --bg tokens so
-// resizes and load flashes stay in-theme.
-const chromeBackgroundColor = () => (nativeTheme.shouldUseDarkColors ? '#0e0e0e' : '#f4f4f1');
+// Window background behind everything so resizes and load flashes stay
+// in-theme. The renderer gets the resolved appearance at the same time: a
+// nativeTheme source change reaches prefers-color-scheme asynchronously, and
+// without the push the untinted strip behind the Island visibly trails the
+// Settings control.
+const chromeBackgroundColor = (
+  appearance = nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
+) =>
+  (appearance === 'dark' ? '#0e0e0e' : '#f4f4f1');
+const resolvedThemeAppearance = () =>
+  (nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
+let lastNativeThemeAppearance = resolvedThemeAppearance();
+let appliedThemeSource = null;
+let themeTintRefreshGeneration = 0;
+
+function applyChromeThemeAppearance(appearance) {
+  if (!hasLiveWindow()) return;
+  const resolved = appearance === 'dark' || appearance === 'light'
+    ? appearance
+    : resolvedThemeAppearance();
+  win.setBackgroundColor(chromeBackgroundColor(resolved));
+  win.webContents.send(
+    'chrome:theme-appearance',
+    resolved
+  );
+}
+
+function beginChromeThemeAppearance(appearance) {
+  if (!hasLiveWindow()) return;
+  // An explicit target can paint immediately. "system" has no trustworthy
+  // cross-platform resolved value until Electron removes the prior override,
+  // but the renderer can still disable its transition before that happens.
+  if (appearance === 'dark' || appearance === 'light') {
+    win.setBackgroundColor(chromeBackgroundColor(appearance));
+  }
+  win.webContents.send('chrome:theme-appearance', appearance ?? 'pending');
+}
+
+function refreshActivePageTintForThemeChange() {
+  const generation = ++themeTintRefreshGeneration;
+  const tab = activeTabId ? tabs.get(activeTabId) : null;
+  if (!tab || tab.private || !/^https?:\/\//.test(tab.url)) return;
+
+  // The captured top-edge pixels and meta theme-color both describe the old
+  // color scheme. Drop them before the page repaints so the strip cannot keep
+  // showing a stale site color during the handoff.
+  const hadTint = !!(tab.pageBg || tab.themeColor);
+  tab.pageBg = null;
+  tab.themeColor = null;
+  if (hadTint) broadcastTabs();
+
+  // Color-scheme media queries repaint asynchronously in the tab renderer.
+  // Sample across the likely repaint/transition window: the first gets the
+  // common case quickly, while later passes let a site with its own CSS
+  // transition settle. The generation guard prevents an older theme change's
+  // captures from winning after a newer one.
+  for (const delay of [32, 160, 400, 800]) {
+    setTimeout(() => {
+      if (generation !== themeTintRefreshGeneration) return;
+      samplePageTint(tab, {
+        immediate: true,
+        shouldApply: () => generation === themeTintRefreshGeneration,
+      });
+    }, delay);
+  }
+}
 
 // nativeTheme.themeSource drives prefers-color-scheme in every renderer —
 // chrome UI, internal pages, and the web content itself see one theme.
 function applyTheme() {
-  nativeTheme.themeSource = settings.getSettings().theme;
+  const source = settings.getSettings().theme;
+  // The settings listener runs for every preference write. Only a real theme
+  // source change should invalidate and re-sample the active website tint.
+  if (source === appliedThemeSource) return;
+  appliedThemeSource = source;
+  // Explicit choices are known before Electron does any native-theme work:
+  // push them first so the strip can paint in the same interaction frame.
+  // "system" must be resolved after removing the prior override.
+  const explicitAppearance = source === 'dark' || source === 'light' ? source : null;
+  beginChromeThemeAppearance(explicitAppearance);
+  refreshActivePageTintForThemeChange();
+  nativeTheme.themeSource = source;
+  if (!explicitAppearance) applyChromeThemeAppearance();
 }
 
-// Swap the macOS Dock icon to the chosen colorway. Runtime-only by design:
-// the bundle's .icns (what Finder shows) is inside the code-signing seal and
-// can't be rewritten per-user, so this runs on every launch instead.
+function handleNativeThemeUpdated() {
+  const appearance = resolvedThemeAppearance();
+  applyChromeThemeAppearance(appearance);
+  if (appearance === lastNativeThemeAppearance) return;
+  lastNativeThemeAppearance = appearance;
+  // Covers live OS appearance changes while the setting is "system". Explicit
+  // app theme changes already invalidated before assigning themeSource; doing
+  // it again here is harmless and keeps this path self-contained.
+  refreshActivePageTintForThemeChange();
+}
+
+// Swap the macOS Dock icon to the chosen colorway. Packaged macOS 26+ builds
+// use a named Icon Composer stack, leaving Default/Dark/Clear/Tinted rendering
+// (and tint color) to macOS. Dev/older systems retain the flat PNG fallback.
 function applyAppIcon() {
-  if (process.platform !== 'darwin' || !app.dock) return;
   // getSettings() already falls back an unauthorized/stale supporter icon
   // (hand-edited or copied settings.json) to the default — nothing further
   // to validate here.
   const { appIcon } = settings.getSettings();
-  const icon = nativeImage.createFromPath(
-    path.join(__dirname, '../renderer/pages', `icon-${appIcon}.png`)
-  );
-  if (!icon.isEmpty()) app.dock.setIcon(icon);
+  applyDockAppIcon({ app, nativeImage, appIcon });
 }
 
 const hasLiveWindow = () => !!win && !win.isDestroyed();
@@ -341,6 +433,36 @@ let activeTabId = null;
  * @type {{ id: string, name: string, collapsed: boolean }[]} */
 let groups = [];
 const tabsWantingAddressBarFocus = new Set();
+const searchSuggestionService = createSearchSuggestionService();
+// One live provider request per trusted chrome surface. A newer query aborts
+// the older one even before the renderer's generation guard discards it.
+const searchSuggestionRequests = new WeakMap();
+// Deterministic, network-free hooks for the Electron acceptance run. They are
+// reachable only through test-hook.js under acceptanceTestMode; production
+// builds always use the active tab's session.
+let testSearchSuggestionFixture = null;
+let testSearchSuggestionRequests = [];
+let testSearchNavigationCapture = false;
+let testSearchSubmission = null;
+
+function setTestSearchSuggestionFixture(suggestions) {
+  if (!acceptanceTestMode) return;
+  testSearchSuggestionFixture = Array.isArray(suggestions)
+    ? suggestions.filter((value) => typeof value === 'string')
+    : [];
+  testSearchSuggestionRequests = [];
+}
+
+function clearTestSearchSuggestionFixture() {
+  testSearchSuggestionFixture = null;
+  testSearchSuggestionRequests = [];
+}
+
+function setTestSearchNavigationCapture(enabled) {
+  if (!acceptanceTestMode) return;
+  testSearchNavigationCapture = !!enabled;
+  testSearchSubmission = null;
+}
 
 // Outstanding permission prompts awaiting the user's Allow/Block, keyed by
 // prompt id → the Promise resolver. Flushed if the window dies mid-prompt
@@ -425,6 +547,10 @@ function createOverlay() {
   // would leave a stale panel floating over the page. Find mode survives
   // blur deliberately — users click around the page between matches.
   overlayView.webContents.on('blur', () => {
+    // Playwright's Electron main-process evaluate calls steal focus from the
+    // guest view while the acceptance harness inspects it. Keep the real blur
+    // policy in production; tests dismiss explicitly between edit sessions.
+    if (acceptanceTestMode) return;
     if (!overlayMode || overlayMode === 'find') return;
     // A freshly attached blank tab's view can momentarily grab focus while
     // its address-focus reclaim is still pending — that's not a dismissal;
@@ -436,6 +562,12 @@ function createOverlay() {
 
 function showOverlay(mode, { prefill } = {}) {
   if (!hasLiveWindow() || !overlayView) return;
+  // One floating layer at a time: summoning the island dismisses the sheet
+  // (the overlay takes focus itself — no tab refocus in between).
+  hideUtilitySheet({ refocusContent: false });
+  // Opening the panel is a freshness signal: pull other devices' tabs
+  // (throttled to 1/min inside refreshSession — tab-sync spec §6).
+  if (mode === 'panel' || mode === 'palette') sync.refreshSession();
   overlayMode = mode;
   overlayPrefill = prefill ?? null;
   // (Re-)adding moves the overlay to the top of the child-view stack.
@@ -456,6 +588,92 @@ function hideOverlay({ refocusContent = true } = {}) {
     win.contentView.removeChildView(overlayView);
     overlayView.webContents.send('overlay:hide');
     win.webContents.send('chrome:island-state', { mode: null });
+    if (refocusContent) tabs.get(activeTabId)?.view.webContents.focus();
+  }
+}
+
+// --- Utility sheet (design: 2026-07-22-utility-sheet-design.md) ---
+// The five utility pages render here, never as tabs. One lazy transparent
+// view; the page draws its own scrim + card (body.sheet in pages.css).
+let utilitySheetView = null;
+/** Currently shown utility URL; null = hidden. The single mode flag. */
+let utilitySheetUrl = null;
+
+function createUtilitySheet() {
+  utilitySheetView = new WebContentsView({ webPreferences: TAB_WEB_PREFERENCES });
+  utilitySheetView.setBackgroundColor('#00000000');
+  const wc = utilitySheetView.webContents;
+  // Esc dismisses no matter what inside the page holds focus (mirrors the
+  // island overlay's handler).
+  wc.on('before-input-event', (event, input) => {
+    if (utilitySheetUrl && input.type === 'keyDown' && input.key === 'Escape') {
+      event.preventDefault();
+      hideUtilitySheet();
+    }
+  });
+  // A crashed sheet renderer is dismissed and destroyed; the next open
+  // lazily recreates it. Close the dead webContents — dropping the
+  // reference alone leaks the crashed guest. Default refocus: nothing else
+  // will hand focus back after a crash.
+  wc.on('render-process-gone', () => {
+    hideUtilitySheet();
+    wc.close();
+    utilitySheetView = null;
+  });
+  // Default-deny (design §4): utility→utility stays in-sheet; http(s)
+  // opens a real tab (createTab's dismissal covers the sheet); approved
+  // handoff protocols go to the OS; everything else — and every
+  // window.open — dies.
+  wc.on('will-navigate', (event, targetUrl) => {
+    if (isUtilityUrl(targetUrl)) {
+      utilitySheetUrl = targetUrl; // keep the toggle honest across in-sheet nav
+      return;
+    }
+    event.preventDefault();
+    if (/^https?:\/\//i.test(targetUrl)) {
+      const id = createTab(targetUrl);
+      if (id) setActiveTab(id);
+    } else {
+      handOffToOs(targetUrl);
+    }
+  });
+  wc.setWindowOpenHandler(() => ({ action: 'deny' }));
+}
+
+/** Page identity, not URL spelling: each utility page is one document per
+ * blanc:// host, and accepted spellings differ (typed "blanc://settings"
+ * vs the menu's "blanc://settings/"). */
+function sameUtilityPage(a, b) {
+  try { return new URL(a).host === new URL(b).host; } catch { return false; }
+}
+
+function showUtilityPage(url) {
+  if (!hasLiveWindow()) return;
+  // Toggle: a direct re-invocation (menu/accelerator) of the shown page
+  // closes it. Overlay-hosted entry points can never hit this — summoning
+  // the overlay already dismissed the sheet.
+  if (utilitySheetUrl && sameUtilityPage(utilitySheetUrl, url)) return hideUtilitySheet();
+  // One floating layer at a time, in both directions.
+  hideOverlay({ refocusContent: false });
+  if (!utilitySheetView) createUtilitySheet();
+  utilitySheetUrl = url;
+  // Rapid page swaps abort the in-flight load — loadURL rejects with
+  // ERR_ABORTED; that's routine, not an error.
+  utilitySheetView.webContents.loadURL(url).catch(() => {});
+  // Mirror tabs: a detached view's document still reports visibilityState
+  // 'visible' and never background-throttles — toggle real visibility.
+  utilitySheetView.setVisible(true);
+  win.contentView.addChildView(utilitySheetView);
+  resizeActiveView();
+  utilitySheetView.webContents.focus();
+}
+
+function hideUtilitySheet({ refocusContent = true } = {}) {
+  if (!utilitySheetUrl) return;
+  utilitySheetUrl = null;
+  if (hasLiveWindow() && utilitySheetView) {
+    win.contentView.removeChildView(utilitySheetView);
+    utilitySheetView.setVisible(false);
     if (refocusContent) tabs.get(activeTabId)?.view.webContents.focus();
   }
 }
@@ -520,27 +738,11 @@ function persistSession() {
   // Teardown closes tabs one by one; saving then would erode the session
   // file down to whatever closed last before the process exits.
   if (isQuitting || tabs.size === 0) return;
-  // Private tabs leave no trail — they never enter the session file.
-  const persistable = tabOrder.filter((id) => !tabs.get(id)?.private);
   ensureSessionStore().update((d) => {
-    // Build url/groupId pairs before filtering so the two arrays can't
-    // fall out of alignment when a tab has no persistable url.
-    const entries = persistable
-      .map((id) => {
-        const tab = tabs.get(id);
-        let url = tab?.url;
-        // Persist the address that failed, not the error page wrapping it,
-        // so the next launch retries the real destination.
-        if (url?.startsWith('blanc://error')) {
-          try {
-            url = new URL(url).searchParams.get('url') || url;
-          } catch {
-            /* keep the error url */
-          }
-        }
-        return url ? { id, url, groupId: tab.groupId ?? null, pinned: !!tab.pinned } : null;
-      })
-      .filter(Boolean);
+    // Private tabs leave no trail, error pages persist their real
+    // destination, url-less tabs drop — all in session-snapshot.js so tab
+    // sync shares the exact same filter.
+    const entries = persistableEntries(tabOrder.map((id) => tabs.get(id)));
     d.urls = entries.map((e) => e.url);
     d.groupIds = entries.map((e) => e.groupId);
     d.pinned = entries.map((e) => e.pinned);
@@ -562,6 +764,7 @@ function persistSession() {
 
 function broadcastTabs() {
   persistSession();
+  tabsync.noteTabsChanged();
   if (!win || win.isDestroyed()) return;
   const payload = { tabs: serializeTabs(), activeTabId, groups };
   win.webContents.send('tabs:updated', payload);
@@ -597,6 +800,10 @@ function resizeActiveView() {
     });
   }
   if (overlayMode && overlayView) overlayView.setBounds(overlayBounds());
+  if (utilitySheetUrl && utilitySheetView) {
+    const b = win.getContentBounds();
+    utilitySheetView.setBounds({ x: 0, y: chromeHeight, width: b.width, height: Math.max(0, b.height - chromeHeight) });
+  }
 }
 
 /** Pick the sharpest favicon from a page's declared icon links. The pill
@@ -646,6 +853,7 @@ async function upgradeFavicon(tab) {
       tab.favicon = best;
       if (tab.bookmarked) bookmarks.updateFavicon(tab.url, best);
       scheduleBroadcastTabs();
+      sync.captureTabIcon(tab).catch(() => {});
     }
   } catch {
     /* page gone mid-query — Chromium's default pick stands */
@@ -678,7 +886,7 @@ function dominantColor(image) {
 /** Sample the top two pixel rows of a tab's rendered page — the edge that
  * visually abuts the chrome strip. Fails harmlessly for hidden views;
  * setActiveTab resamples on activation. */
-async function samplePageTint(tab) {
+async function samplePageTint(tab, { immediate = false, shouldApply = () => true } = {}) {
   if (!tabs.has(tab.id) || tab.view.webContents.isDestroyed()) return;
   if (tab.private || !/^https?:\/\//.test(tab.url)) {
     if (tab.pageBg) {
@@ -692,9 +900,10 @@ async function samplePageTint(tab) {
   try {
     const image = await tab.view.webContents.capturePage({ x: 0, y: 0, width, height: 2 });
     const color = dominantColor(image);
-    if (color && color !== tab.pageBg) {
+    if (shouldApply() && color && color !== tab.pageBg) {
       tab.pageBg = color;
-      scheduleBroadcastTabs();
+      if (immediate) broadcastTabs();
+      else scheduleBroadcastTabs();
     }
   } catch {
     /* view hidden or gone — nothing to paint from */
@@ -1004,6 +1213,23 @@ async function initSpikePackaging() {
 // ─── end SPIKE ────────────────────────────────────────────────────────────
 
 function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = null, view = null, pinned = false, muted = false, restoreHistory = null } = {}) {
+  if (isUtilityUrl(url)) {
+    // Utility pages never become tabs regardless of caller (external
+    // open-url handoff, future call sites). Session restore filters
+    // first and never trips this. Callers tolerate null: setActiveTab
+    // no-ops on unknown ids.
+    showUtilityPage(url);
+    return null;
+  }
+  // Creating any real tab dismisses the sheet (design §5) — including
+  // BACKGROUND creation (cmd-click arrives as disposition 'background-tab'
+  // and never calls setActiveTab, so setActiveTab's dismissal alone has a
+  // hole). DEFAULT refocus: background creation activates nothing, so the
+  // current active tab must take focus back or it strands in the detached
+  // sheet; when foreground creation follows with setActiveTab, that call
+  // immediately re-focuses the new tab — the transient refocus is harmless.
+  // No-ops during session restore and window creation (sheet hidden).
+  hideUtilitySheet();
   const id = crypto.randomUUID();
   // An adopted view (window.open child, see the window-open handler) arrives
   // already constructed by Chromium with the opener relationship wired up;
@@ -1095,10 +1321,19 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
     tab.favicon = favicons[0] ?? null; // immediate, possibly low-res
     if (tab.bookmarked) bookmarks.updateFavicon(tab.url, tab.favicon);
     broadcastTabs();
+    sync.captureTabIcon(tab).catch(() => {});
     upgradeFavicon(tab); // async refinement to the sharpest declared icon
   });
   wc.on('did-start-loading', () => { tab.isLoading = true; broadcastTabs(); });
-  wc.on('did-stop-loading', () => { tab.isLoading = false; syncNavState(); broadcastTabs(); scheduleSampleTint(tab); });
+  wc.on('did-stop-loading', () => {
+    tab.isLoading = false;
+    syncNavState();
+    broadcastTabs();
+    scheduleSampleTint(tab);
+    // Same-origin navigations can retain their favicon without firing
+    // page-favicon-updated; associate the already-known icon with the new URL.
+    sync.captureTabIcon(tab).catch(() => {});
+  });
   wc.on('did-change-theme-color', (_e, color) => {
     // Chromium reports '#rrggbb' or null; validated because it feeds chrome CSS.
     tab.themeColor = typeof color === 'string' && /^#[0-9a-fA-F]{6}$/.test(color) ? color : null;
@@ -1138,6 +1373,7 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
     syncNavState();
     if (isMainFrame && tab.historyEligible) history.addVisit(url, wc.getTitle());
     broadcastTabs();
+    if (isMainFrame) sync.captureTabIcon(tab).catch(() => {});
     // Deliberately no scheduleMenuRebuild() here — unlike did-navigate,
     // this fires on every hash change/pushState and can be sustained and
     // frequent on SPA-heavy sites (exactly the rebuild-storm case Task 1
@@ -1168,6 +1404,17 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
   // loads (address bar, commands, error pages) go through loadURL, which
   // doesn't fire will-navigate, so only page-initiated hops are caught.
   wc.on('will-navigate', (event, targetUrl) => {
+    // Utility pages never load in a tab — the newtab ledger links to
+    // blanc://bookmarks/ and blanc:→blanc: hops are otherwise legal. Only
+    // an INTERNAL page may summon the sheet: for web content this is a
+    // plain denial, same as any other web → blanc:// attempt below —
+    // otherwise any page could pop (and focus-steal via) privileged chrome
+    // with location.href = "blanc://settings/".
+    if (isUtilityUrl(targetUrl)) {
+      event.preventDefault();
+      if (wc.getURL().startsWith('blanc://')) openInternalPage(targetUrl);
+      return;
+    }
     if (/^blanc:/i.test(targetUrl) && !wc.getURL().startsWith('blanc://')) {
       event.preventDefault();
     }
@@ -1248,6 +1495,16 @@ function createTab(url = newTabUrl(), { private: isPrivate = false, groupId = nu
   // tabs instead of falling through to bare Electron windows.
   const applyWindowOpenPolicy = (targetWc) => {
     targetWc.setWindowOpenHandler(({ url: targetUrl, disposition }) => {
+      // Utility pages never become tabs — and an adopted child must never
+      // reach createTab's guard: by createWindow time the guest webContents
+      // already exists, and a null return would leave it half-built and
+      // unmanaged. Deny the child outright, and route to the sheet ONLY
+      // for an internal opener — web content asking for a blanc:// child
+      // gets the same silent denial it always did, never a focused sheet.
+      if (isUtilityUrl(targetUrl)) {
+        if (targetWc.getURL().startsWith('blanc://')) openInternalPage(targetUrl);
+        return { action: 'deny' };
+      }
       // Web content must not mint privileged internal pages (Chrome blocks
       // web → chrome:// the same way). Only blanc:// pages themselves may
       // open blanc:// children.
@@ -1342,6 +1599,10 @@ function setActiveTab(id, { focusContent = true, focusAddress = false } = {}) {
   // Re-selecting the active tab is a no-op.
   if (id === activeTabId) return;
 
+  // Tab switches dismiss the sheet; the switched-to tab takes focus via
+  // the existing flow below.
+  hideUtilitySheet({ refocusContent: false });
+
   lastActiveByCluster.set(clusterKeyForTab(next), id);
 
   // No window to attach to (quitting, or macOS with all windows closed):
@@ -1379,7 +1640,10 @@ function setActiveTab(id, { focusContent = true, focusAddress = false } = {}) {
   }
   if (shouldFocusAddress) next.view.setVisible(false);
   win.contentView.addChildView(next.view);
-  // The freshly attached tab view must not stack above an open overlay.
+  // The freshly attached tab view must not stack above an open overlay —
+  // nor above the sheet (defensive: §5 means they shouldn't coexist here,
+  // but a race must never paint a tab over either floating layer).
+  if (utilitySheetUrl && utilitySheetView) win.contentView.addChildView(utilitySheetView);
   if (overlayMode && overlayView) win.contentView.addChildView(overlayView);
   resizeActiveView();
   // Focusing the tab's WebContentsView gives it OS keyboard focus. For a
@@ -1510,6 +1774,7 @@ function cycleCluster(direction) {
 
 /** Focus an existing tab already on this internal page, or open one. */
 function openInternalPage(url) {
+  if (isUtilityUrl(url)) return showUtilityPage(url);
   const existing = tabOrder.find((id) => tabs.get(id)?.url.startsWith(url));
   if (existing) {
     setActiveTab(existing);
@@ -1565,15 +1830,21 @@ const ZOOM_STEP = 0.5;
 const ZOOM_MIN = -8;
 const ZOOM_MAX = 8;
 
+/** Zoom acts on what the user is looking at: the sheet when open, else the active tab. */
+function zoomTargetWebContents() {
+  if (utilitySheetUrl && utilitySheetView) return utilitySheetView.webContents;
+  return tabs.get(activeTabId)?.view.webContents ?? null;
+}
+
 function zoomActiveTab(delta) {
-  const wc = tabs.get(activeTabId)?.view.webContents;
+  const wc = zoomTargetWebContents();
   if (!wc) return;
   const level = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, wc.getZoomLevel() + delta));
   wc.setZoomLevel(level);
 }
 
 function resetZoomForActiveTab() {
-  tabs.get(activeTabId)?.view.webContents.setZoomLevel(0);
+  zoomTargetWebContents()?.setZoomLevel(0);
 }
 
 function openFindBar() {
@@ -1671,8 +1942,35 @@ function registerIpcHandlers() {
     // — a bare mailto:/tel: URI has no "://" and would otherwise fall
     // through its domain-guessing heuristic into an unreachable https:// URL.
     if (handOffToOs(url, { trusted: true })) return;
+    const target = normalizeAddressInput(url);
+    // A typed utility address opens the sheet, never navigates the tab.
+    if (isUtilityUrl(target)) return openInternalPage(target);
     tabsWantingAddressBarFocus.delete(id);
-    tab.view.webContents.loadURL(normalizeAddressInput(url));
+    tab.view.webContents.loadURL(target);
+  });
+  // Search completions are query text, not navigation targets: a suggestion
+  // such as "example.com" must search for that text instead of being
+  // reclassified as a bare domain by normalizeAddressInput().
+  chromeHandle('tabs:search', (_e, id, query, _requestedEngine) => {
+    const tab = tabs.get(id);
+    if (!tab || typeof query !== 'string' || !query.trim()) return;
+    // The renderer may still be showing completions returned by the previous
+    // default after Settings or Profile Sync changes it. Treat its provider id
+    // as display metadata only: submission always honors the current default.
+    const currentEngine = settings.getSettings().searchEngine;
+    const engine = settings.SEARCH_ENGINES[currentEngine]
+      ?? settings.SEARCH_ENGINES.duckduckgo;
+    const target = engine.url(query.trim());
+    tabsWantingAddressBarFocus.delete(id);
+    if (testSearchNavigationCapture) {
+      testSearchSubmission = {
+        engine: settings.SEARCH_ENGINES[currentEngine] ? currentEngine : 'duckduckgo',
+        query: query.trim(),
+        url: target,
+      };
+      return target;
+    }
+    return tab.view.webContents.loadURL(target);
   });
   chromeHandle('tabs:back', (_e, id) => tabs.get(id)?.view.webContents.navigationHistory.goBack());
   chromeHandle('tabs:forward', (_e, id) => tabs.get(id)?.view.webContents.navigationHistory.goForward());
@@ -1716,6 +2014,70 @@ function registerIpcHandlers() {
   // Data + actions behind the island's slash commands and Quick Switcher.
   chromeHandle('chrome:history-list', (_e, opts) => history.listHistory(opts ?? {}));
   chromeHandle('chrome:favorites-list', () => bookmarks.listBookmarks());
+  chromeHandle('chrome:remote-tabs-list', () => sync.listRemoteDevices());
+  chromeHandle('chrome:search-suggestions', async (event, query) => {
+    const currentSettings = settings.getSettings();
+    const configuredEngine = currentSettings.searchEngine;
+    const engineId = settings.SEARCH_ENGINES[configuredEngine] ? configuredEngine : 'duckduckgo';
+    const engine = settings.SEARCH_ENGINES[engineId];
+    const response = { engine: engineId, label: engine.label, suggestions: [] };
+
+    searchSuggestionRequests.get(event.sender)?.abort();
+
+    // The opt-out, private tabs, and local document paths are hard stops at
+    // the trusted main-process boundary. Exact-query search still works; only
+    // live provider suggestions pause.
+    const tab = activeTabId ? tabs.get(activeTabId) : null;
+    const localDoc = typeof query === 'string' ? localDocumentUrl(query.trim()) : null;
+    if (!currentSettings.searchSuggestions || !tab || tab.private || localDoc) return response;
+
+    const controller = new AbortController();
+    searchSuggestionRequests.set(event.sender, controller);
+
+    try {
+      response.suggestions = await searchSuggestionService.get({
+        engine: engineId,
+        query,
+        locale: app.getLocale(),
+        fetchImpl: testSearchSuggestionFixture
+          ? async (url, options) => {
+            testSearchSuggestionRequests.push({
+              engine: engineId,
+              query: typeof query === 'string' ? query.trim() : '',
+              url,
+              credentials: options?.credentials ?? null,
+            });
+            return {
+              ok: true,
+              headers: { get: () => null },
+              text: async () => JSON.stringify([query, testSearchSuggestionFixture]),
+            };
+          }
+          : tab.view.webContents.session.fetch.bind(tab.view.webContents.session),
+        signal: controller.signal,
+      });
+      // A sync merge can change the default engine while this request is in
+      // flight. Never label old-provider completions as if they belong to the
+      // newly selected engine; the next keystroke will fetch the fresh set.
+      const latestSettings = settings.getSettings();
+      const latestConfiguredEngine = latestSettings.searchEngine;
+      const latestEngineId = settings.SEARCH_ENGINES[latestConfiguredEngine]
+        ? latestConfiguredEngine
+        : 'duckduckgo';
+      if (!latestSettings.searchSuggestions || latestEngineId !== engineId) {
+        return {
+          engine: latestEngineId,
+          label: settings.SEARCH_ENGINES[latestEngineId].label,
+          suggestions: [],
+        };
+      }
+      return response;
+    } finally {
+      if (searchSuggestionRequests.get(event.sender) === controller) {
+        searchSuggestionRequests.delete(event.sender);
+      }
+    }
+  });
   chromeHandle('chrome:history-clear', () => history.clearHistory());
   chromeHandle('chrome:adblock-toggle', () => {
     const next = !settings.getSettings().adblockEnabled;
@@ -1738,11 +2100,19 @@ function registerIpcHandlers() {
       return null;
     }
   });
-  chromeHandle('chrome:cycle-theme', () => {
+  chromeHandle('chrome:cycle-theme', (_event, requestedTheme) => {
     const order = ['system', 'light', 'dark'];
     const current = settings.getSettings().theme;
-    const next = order[(order.indexOf(current) + 1) % order.length];
-    settings.setSettings({ theme: next });
+    const requested = typeof requestedTheme === 'string'
+      ? requestedTheme.trim().toLowerCase()
+      : '';
+    // Bare /theme keeps the original cycle behavior. An explicit argument is
+    // authoritative; invalid arguments are a no-op instead of unexpectedly
+    // advancing to some other appearance.
+    const next = requested
+      ? (order.includes(requested) ? requested : current)
+      : order[(order.indexOf(current) + 1) % order.length];
+    if (next !== current) settings.setSettings({ theme: next });
     return next;
   });
 
@@ -1894,7 +2264,7 @@ const SLASH_COMMANDS = [
   ['/find', 'Find in page'],
   ['/block-ads', 'Toggle ad & tracker blocking'],
   ['/allow-ads', 'Allow ads on this site'],
-  ['/theme', 'Cycle appearance (system → light → dark)'],
+  ['/theme [system|light|dark]', 'Cycle appearance, or switch directly to system, light, or dark'],
 ];
 
 // A hand-picked subset of the full inventory (blanc://shortcuts/, via
@@ -2098,6 +2468,11 @@ function createMainWindow() {
     overlayMode = null;
     if (overlayView && !overlayView.webContents.isDestroyed()) overlayView.webContents.close();
     overlayView = null;
+    // The sheet doesn't outlive its window either — dropping the reference
+    // without closing would leak the webContents.
+    if (utilitySheetView && !utilitySheetView.webContents.isDestroyed()) utilitySheetView.webContents.close();
+    utilitySheetView = null;
+    utilitySheetUrl = null;
     flushPermissionPrompts();
   });
 
@@ -2204,11 +2579,11 @@ app.whenReady().then(async () => {
   }
 
   applyTheme();
+  lastNativeThemeAppearance = resolvedThemeAppearance();
   applyAppIcon();
   if (settings.getSettings().usagePing) sendLaunchPing();
-  nativeTheme.on('updated', () => {
-    if (win && !win.isDestroyed()) win.setBackgroundColor(chromeBackgroundColor());
-  });
+  // Also follow a live OS appearance change while the preference is "system".
+  nativeTheme.on('updated', handleNativeThemeUpdated);
 
   setupPermissionPolicy(ses);
   setupPermissionPolicy(privateSes, { persistDecisions: false });
@@ -2236,6 +2611,12 @@ app.whenReady().then(async () => {
     onDataChanged: refreshBookmarkFlags,
     // Parent for the favorites-import file dialog (evaluated lazily at click).
     getMainWindow: () => (hasLiveWindow() ? win : undefined),
+    // Utility sheet: only the sheet view itself may close the sheet — the
+    // strict pages:surface:close guard verifies the sender against this.
+    utilitySheet: {
+      isSheetSender: (wc) => !!utilitySheetView && wc === utilitySheetView.webContents,
+      close: () => hideUtilitySheet(),
+    },
     // The start page's ledger sections read live tab-group state and the
     // rolling blocked counter, both owned here.
     startPage: {
@@ -2251,6 +2632,7 @@ app.whenReady().then(async () => {
         .filter((g) => g.count > 0),
       focusGroup,
       blockedThisWeek: () => adblockWeekStats().data.blocked,
+      remoteDevices: () => sync.listRemoteDevices(),
     },
     shortcuts: { list: listShortcuts },
   });
@@ -2260,13 +2642,21 @@ app.whenReady().then(async () => {
   // the test-only main-process surface instead. Gate is airtight — only an
   // UNPACKAGED dev run with BLANC_TEST exactly "1"; never a packaged build, and
   // BLANC_TEST=0/false stays off.
-  const isAcceptanceTest = !app.isPackaged && process.env.BLANC_TEST === '1';
-  if (isAcceptanceTest) {
+  if (acceptanceTestMode) {
     require('./test-hook').install({
       tabs, getTabOrder: () => tabOrder, getGroups: () => groups, getActiveTabId: () => activeTabId, clusterSlots,
       createTab, setActiveTab, closeTab, duplicateTab, toggleTabPinned, groupTabByName, reopenClosedTab, newTabUrl,
       normalizeAddressInput, handoffProtocols: HANDOFF_PROTOCOLS, openInternalPage, openFindBar,
-      getOverlayMode: () => overlayMode, showOverlay, getPrivateBrowsingSession,
+      getOverlayMode: () => overlayMode, showOverlay, hideOverlay, getPrivateBrowsingSession,
+      showUtilityPage, hideUtilitySheet,
+      getUtilitySheetState: () => ({ visible: !!utilitySheetUrl, url: utilitySheetUrl }),
+      getUtilitySheetWebContents: () => utilitySheetView?.webContents ?? null,
+      getOverlayWebContents: () => overlayView?.webContents ?? null,
+      setTestSearchSuggestionFixture,
+      clearTestSearchSuggestionFixture,
+      getTestSearchSuggestionRequests: () => structuredClone(testSearchSuggestionRequests),
+      setTestSearchNavigationCapture,
+      getTestSearchSubmission: () => structuredClone(testSearchSubmission),
       attemptChromeNavigation: (url) => win?.webContents.executeJavaScript(
         `location.href = ${JSON.stringify(String(url))}`
       ),
@@ -2310,10 +2700,36 @@ app.whenReady().then(async () => {
     }
   });
 
+  // Live tab state for tab sync's snapshot builder. Must be registered
+  // before sync.init() so the launch sync can publish.
+  tabsync.setSnapshotProvider(() => ({
+    tabList: tabOrder.map((id) => tabs.get(id)).filter(Boolean),
+    groups,
+  }));
+  tabicons.setSnapshotProvider(() => ({
+    tabList: tabOrder.map((id) => tabs.get(id)).filter(Boolean),
+  }));
+  // A pull changed the cached device map: push the fresh list to the open
+  // surfaces (overlay panel; any tab currently on the start page).
+  const pushRemoteDevices = () => {
+    const devices = sync.listRemoteDevices();
+    overlayView?.webContents.send('chrome:remote-tabs-updated', devices);
+    for (const tab of tabs.values()) {
+      if (tab.url?.startsWith('blanc://newtab')) {
+        tab.view.webContents.send('pages:start:remote-tabs', devices);
+      }
+    }
+  };
+  tabsync.onRemoteChanged(pushRemoteDevices);
+  tabicons.onRemoteChanged(pushRemoteDevices);
   // Profile sync: sync-on-launch if configured, then follow local changes.
   // Runs after stores + setupPages so its triggers see a live app; failures
   // are swallowed and surfaced only in Settings (never block startup).
   sync.init();
+  // Freshness pull when Blanc regains focus (tab-sync spec §6; throttled inside).
+  app.on('browser-window-focus', () => sync.refreshSession());
+  // Best-effort final push — fire-and-forget, never blocks quit (spec §6).
+  app.on('before-quit', () => { sync.syncNow().catch(() => {}); });
   // A sync pull that merged in favorites from another device refreshes the
   // pill's favorite state; open internal pages still pull on their next load,
   // as with any cross-surface bookmark change.
@@ -2339,6 +2755,14 @@ app.whenReady().then(async () => {
   // did-start-loading in the same tick), which would overwrite activeIndex
   // before it's read.
   const saved = structuredClone(ensureSessionStore().data);
+  // Stale sessions from before the utility sheet may hold utility-page
+  // tabs; drop them (zipped — groupIds/pinned/activeIndex stay aligned)
+  // so the createTab replay never routes through the sheet guard.
+  const cleaned = filterRestoredSession(saved, isUtilityUrl);
+  saved.urls = cleaned.urls;
+  saved.groupIds = cleaned.groupIds;
+  saved.pinned = cleaned.pinned;
+  saved.activeIndex = cleaned.activeIndex;
   // Groups first, so createTab's groupId validation sees them.
   groups = (Array.isArray(saved.groups) ? saved.groups : [])
     .filter((g) => g && typeof g.id === 'string' && typeof g.name === 'string')

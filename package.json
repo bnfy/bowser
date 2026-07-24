@@ -1,7 +1,7 @@
 {
   "name": "blanc",
   "productName": "Blanc",
-  "version": "0.18.0",
+  "version": "0.22.0",
   "description": "Minimal Electron browser shell: custom chrome UI + built-in ad/tracker blocking, no extension-store dependency.",
   "main": "src/main/main.js",
   "type": "commonjs",
@@ -14,6 +14,9 @@
     "release": "scripts/release.sh",
     "site:changelog": "node scripts/generate-site-changelog.mjs",
     "site:changelog:check": "node scripts/generate-site-changelog.mjs --check",
+    "site:dev": "npm --prefix site run dev",
+    "site:build": "npm --prefix site run build",
+    "site:deploy": "npm --prefix site run build && npx wrangler pages deploy site/dist --project-name=blancbrowser",
     "test:unit": "node --test test/unit/*.test.js",
     "test:oauth:desktop": "node --test test/oauth/desktop.test.js",
     "test:oauth:live": "node scripts/oauth-canary.js",
@@ -34,10 +37,10 @@
   "license": "UNLICENSED",
   "private": true,
   "devDependencies": {
-    "@cucumber/cucumber": "^11.0.0",
+    "@cucumber/cucumber": "^13.1.1",
     "@ghostery/adblocker": "^2.18.1",
-    "electron": "^43.1.0",
-    "electron-builder": "^26.0.12",
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3",
     "playwright": "^1.49.0"
   },
   "dependencies": {
@@ -71,9 +74,11 @@
       "src/**/*",
       "package.json"
     ],
+    "afterPack": "scripts/after-pack-app-icons.js",
     "afterSign": "scripts/after-sign-verify.js",
     "mac": {
       "category": "public.app-category.productivity",
+      "icon": "build/app-icons/Icon.icon",
       "hardenedRuntime": true,
       "identity": "55283A84D3706D5A22386D5F002A0CD4845ECFD4",
       "entitlements": "build/entitlements.mac.plist",

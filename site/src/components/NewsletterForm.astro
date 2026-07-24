@@ -1,0 +1,52 @@
+---
+// Footer newsletter signup. Posts to the blanc-newsletter Worker
+// (cloudflare/newsletter-worker/ in the main repo) — the list lives in
+// Workers KV there; see its README for the deploy/export/unsubscribe runbook.
+// The "website" field is a honeypot: visually hidden, skipped by keyboard and
+// screen readers, and any bot that fills it is silently dropped server-side.
+---
+<form class="foot-news" data-newsletter>
+  <label class="foot-news-label" for="newsletterEmail">release notes by email, occasional —</label>
+  <span class="foot-news-controls">
+    <input id="newsletterEmail" name="email" type="email" required maxlength="254" placeholder="you@example.com" autocomplete="email">
+    <input class="foot-news-hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+    <button type="submit" data-track="newsletter_subscribe">subscribe</button>
+  </span>
+  <span class="foot-news-status" role="status" aria-live="polite"></span>
+</form>
+<script>
+  const NEWSLETTER_ENDPOINT = 'https://blanc-newsletter.bnfy-441.workers.dev/subscribe';
+
+  document.querySelectorAll('form[data-newsletter]').forEach((form) => {
+    const status = form.querySelector('.foot-news-status');
+    const button = form.querySelector('button');
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      status.textContent = '';
+      button.disabled = true;
+      try {
+        const response = await fetch(NEWSLETTER_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: form.elements.email.value.trim(),
+            website: form.elements.website.value,
+          }),
+        });
+        if (response.ok) {
+          form.querySelector('.foot-news-controls').hidden = true;
+          form.querySelector('.foot-news-label').hidden = true;
+          status.textContent = 'subscribed — see you at the next release';
+        } else if (response.status === 400) {
+          status.textContent = 'that address didn’t look right — try again?';
+        } else {
+          status.textContent = 'couldn’t subscribe just now — try again later';
+        }
+      } catch {
+        status.textContent = 'couldn’t subscribe just now — try again later';
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+</script>

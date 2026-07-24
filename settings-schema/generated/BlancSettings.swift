@@ -75,6 +75,7 @@ public enum BlancAppIcon: String, CaseIterable {
 
 public struct BlancSettingsDefaults {
     public static let searchEngine: BlancSearchEngine = .duckduckgo
+    public static let searchSuggestions: Bool = true
     public static let adblockEnabled: Bool = true
     public static let homePage: String = ""
     public static let theme: BlancThemePreference = .system

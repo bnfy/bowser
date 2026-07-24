@@ -16,4 +16,4 @@
 "slash_find" = "Find in page";
 "slash_block_ads" = "Toggle ad & tracker blocking";
 "slash_allow_ads" = "Allow ads on this site";
-"slash_theme" = "Cycle appearance (system → light → dark)";
+"slash_theme" = "Cycle appearance, or choose system / light / dark";

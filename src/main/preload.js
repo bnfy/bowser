@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('browserAPI', {
   closeTab: (id) => ipcRenderer.invoke('tabs:close', id),
   switchTab: (id) => ipcRenderer.invoke('tabs:switch', id),
   navigate: (id, url) => ipcRenderer.invoke('tabs:navigate', id, url),
+  search: (id, query, engine) => ipcRenderer.invoke('tabs:search', id, query, engine),
   goBack: (id) => ipcRenderer.invoke('tabs:back', id),
   goForward: (id) => ipcRenderer.invoke('tabs:forward', id),
   reload: (id) => ipcRenderer.invoke('tabs:reload', id),
@@ -42,10 +43,22 @@ contextBridge.exposeInMainWorld('browserAPI', {
 
   listHistory: (opts) => ipcRenderer.invoke('chrome:history-list', opts),
   listFavorites: () => ipcRenderer.invoke('chrome:favorites-list'),
+  listRemoteTabs: () => ipcRenderer.invoke('chrome:remote-tabs-list'),
+  searchSuggestions: (query) => ipcRenderer.invoke('chrome:search-suggestions', query),
+  onRemoteTabsUpdated: (callback) => {
+    const listener = (_event, devices) => callback(devices);
+    ipcRenderer.on('chrome:remote-tabs-updated', listener);
+    return () => ipcRenderer.removeListener('chrome:remote-tabs-updated', listener);
+  },
   clearHistory: () => ipcRenderer.invoke('chrome:history-clear'),
   toggleAdblock: () => ipcRenderer.invoke('chrome:adblock-toggle'),
   allowAdsOnActiveSite: () => ipcRenderer.invoke('chrome:adblock-exempt-active'),
-  cycleTheme: () => ipcRenderer.invoke('chrome:cycle-theme'),
+  cycleTheme: (theme) => ipcRenderer.invoke('chrome:cycle-theme', theme),
+  onThemeAppearance: (callback) => {
+    const listener = (_event, appearance) => callback(appearance);
+    ipcRenderer.on('chrome:theme-appearance', listener);
+    return () => ipcRenderer.removeListener('chrome:theme-appearance', listener);
+  },
 
   minimizeWindow: () => ipcRenderer.send('window:minimize'),
   maximizeWindow: () => ipcRenderer.send('window:maximize'),

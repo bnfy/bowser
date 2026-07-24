@@ -20,6 +20,12 @@ Feature: Settings and theming
     Then the ad-block exceptions contain "example.com"
     And the ad-block exceptions do not contain "www.example.com"
 
+  @F14-4 @F14 @all
+  Scenario: Search suggestions can be disabled without syncing the preference
+    When I turn search suggestions off
+    Then search suggestions are disabled
+    And the search-suggestions preference remains device-local
+
   @F15-1 @F15 @all
   Scenario: Switching to dark recolors chrome and internal pages live
     Given an internal blanc page is open
