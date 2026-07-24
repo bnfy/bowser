@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { _electron } from 'playwright';
+import { evaluateElectronAppWithRetry } from './support/electron-evaluate.mjs';
 
 const stableExecutable = process.env.BLANC_STABLE_EXECUTABLE;
 const candidateExecutable =
@@ -42,8 +43,10 @@ const waitForRestoredUrls = async () => {
   const deadline = Date.now() + 15_000;
   let urls = [];
   while (Date.now() < deadline) {
-    urls = await app.evaluate(({ webContents }) =>
-      webContents.getAllWebContents().map((candidate) => candidate.getURL())
+    urls = await evaluateElectronAppWithRetry(
+      app,
+      ({ webContents }) =>
+        webContents.getAllWebContents().map((candidate) => candidate.getURL())
     );
     if (sessionUrls.every((expected) => urls.includes(expected))) return urls;
     await new Promise((resolve) => setTimeout(resolve, 100));

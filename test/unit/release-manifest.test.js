@@ -97,6 +97,9 @@ test('detects checksum tampering', () => {
 
 test('release policy stages a draft and refuses unsigned or unexpected Windows publishers', () => {
   const releaseScript = fs.readFileSync(path.join(root, 'scripts/release.sh'), 'utf8');
+  const packageConfig = JSON.parse(
+    fs.readFileSync(path.join(root, 'package.json'), 'utf8')
+  );
   const releaseWorkflow = fs.readFileSync(
     path.join(root, '.github/workflows/release-windows-linux.yml'),
     'utf8'
@@ -112,6 +115,10 @@ test('release policy stages a draft and refuses unsigned or unexpected Windows p
   assert.match(releaseWorkflow, /Refusing to build an unsigned press artifact/);
   assert.match(releaseWorkflow, /Unexpected Windows publisher/);
   assert.match(releaseWorkflow, /Get-AuthenticodeSignature/);
+  assert.deepEqual(packageConfig.build.mac.target, ['dmg', 'zip']);
+  assert.match(releaseScript, /MAC_BUILD_ARGS=\(\)/);
+  assert.match(releaseScript, /MAC_BUILD_ARGS\+=\(--arm64\)/);
+  assert.match(releaseScript, /MAC_BUILD_ARGS\+=\(--x64\)/);
   assert.doesNotMatch(allWorkflows, /actions\/(?:checkout|setup-node)@v7/);
   assert.match(allWorkflows, /actions\/checkout@v6/);
   assert.match(allWorkflows, /actions\/setup-node@v6/);
