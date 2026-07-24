@@ -4,14 +4,22 @@ Feature: Platform services — telemetry, updates, zoom, autofill
   scenarios carry platform tags instead of @all.
 
   @F21-1 @F21 @all
-  Scenario: The usage ping is off by default and single when enabled
-    Given this is a packaged build
-    And the usage ping setting is off
+  Scenario: A fresh profile sends nothing before its usage-ping choice is committed
+    Given this is a packaged build with a fresh profile
     When the app launches
     Then no usage ping is sent
-    When I enable the usage ping
-    And the app launches
-    Then exactly one anonymous usage ping is sent
+    When I commit the enabled usage ping choice
+    Then exactly one launch ping is sent
+    And it contains only an install id, session id, version, platform, and architecture
+    And it contains no browsing data
+
+  @F21-2 @F21 @all
+  Scenario: Declining the usage ping persists without minting an install id
+    Given this is a packaged build with a fresh profile
+    When I commit the disabled usage ping choice
+    And the app launches again
+    Then no usage ping is sent
+    And no telemetry install id exists
 
   @F22-1 @F22 @desktop @D9
   Scenario: Desktop updates through the in-app updater

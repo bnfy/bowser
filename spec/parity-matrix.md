@@ -33,7 +33,7 @@ See [`README.md`](./README.md#status-legend) for meanings.
 | F18 | Session persistence & restore | SHIPPED | PARTIAL | PLANNED | Restore tabs + groups; private tabs excluded; same `session.json` shape (adapted per platform store). | D8 |
 | F19 | Context menu (link/page actions) | SHIPPED | PLANNED | PLANNED | Same actions (open in new/background tab, copy link, etc.); OS hand-off honored. | D4, D7 |
 | F20 | Basic-auth dialog | SHIPPED | PLANNED | PLANNED | Same modal auth prompt behaviour. | — |
-| F21 | Telemetry (usage ping) | SHIPPED | PLANNED | PLANNED | Opt-in, off by default, packaged-only, anonymous `{version,platform,arch}`, fire-and-forget. | — |
+| F21 | Telemetry (usage ping) | SHIPPED | PLANNED | PLANNED | A fresh profile must commit its on/off choice before any ping; the choice is presented on by default and remains device-local. When enabled, packaged builds send one fire-and-forget launch ping with `{installId,sessionId,version,platform,arch}` and no browsing data. | — |
 | F22 | Distribution & updates | SHIPPED | N/A | N/A | User gets updates; no in-app updater fighting the OS store. | D9 |
 | F23 | Zoom / page scaling | SHIPPED | DIVERGENT (D10) | DIVERGENT (D10) | Page can be scaled; desktop discrete zoom vs mobile pinch/native reflow. | D10 |
 | F24 | Password AutoFill / passkeys | N/A | PLANNED | PLANNED | On mobile, native credential provider + platform passkeys work in-webview. | D12 |

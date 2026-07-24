@@ -17,10 +17,15 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   </section>
 
   <section class="download-options" id="download-options" data-download-options aria-label="Choose a Blanc download">
-    <a class="platform-card" id="dl-mac" data-download-link data-platform="mac" data-track="download_click" data-cta-position="platform-card" href="https://github.com/bnfy/blanc/releases/latest">
+    <a class="platform-card" id="dl-mac-arm64" data-download-link data-platform="mac-arm64" data-track="download_click" data-cta-position="platform-card" href="https://github.com/bnfy/blanc/releases/latest">
       <span class="platform-label">macos</span>
-      <strong>Download for macOS</strong>
-      <span>DMG or ZIP · signed and notarized</span>
+      <strong>Mac — Apple Silicon</strong>
+      <span>arm64 DMG · signed and notarized</span>
+    </a>
+    <a class="platform-card" id="dl-mac-x64" data-download-link data-platform="mac-x64" data-track="download_click" data-cta-position="platform-card" href="https://github.com/bnfy/blanc/releases/latest">
+      <span class="platform-label">macos</span>
+      <strong>Mac — Intel</strong>
+      <span>x64 DMG · signed and notarized</span>
     </a>
     <a class="platform-card" id="dl-win" data-download-link data-platform="win" data-track="download_click" data-cta-position="platform-card" href="https://github.com/bnfy/blanc/releases/latest">
       <span class="platform-label">windows</span>

@@ -1,10 +1,12 @@
 name: Release Windows & Linux
+run-name: Release ${{ inputs.tag }} (${{ inputs.platform }})
 
 # electron-builder's Windows (NSIS) and Linux (AppImage) targets are built
 # here rather than locally, since `scripts/release.sh` runs on a macOS dev
 # machine. This is dispatched by that script right after it publishes the
-# macOS build, targeting the same tag/version, so all three platforms land
-# on one GitHub release. Release assets are immutable; duplicate uploads fail.
+# notarized macOS assets enter an authenticated draft, targeting the same
+# tag/version, so all platforms stage on one unpublished GitHub release.
+# Release assets are immutable; duplicate uploads fail.
 on:
   workflow_dispatch:
     inputs:
@@ -29,17 +31,26 @@ jobs:
     if: ${{ inputs.platform == 'all' || inputs.platform == 'windows' }}
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.tag }}
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
 
       - run: npm ci
 
-      - name: Build (Azure Trusted Signing, else CSC_LINK, else unsigned)
+      - name: Verify tag matches package version
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          [ "v$VERSION" = "${{ inputs.tag }}" ] || {
+            echo "Tag/version mismatch: ${{ inputs.tag }} vs package $VERSION" >&2
+            exit 1
+          }
+
+      - name: Build signed Windows installer
         shell: bash
         env:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -49,22 +60,33 @@ jobs:
           AZURE_CODE_SIGNING_ACCOUNT: ${{ vars.AZURE_CODE_SIGNING_ACCOUNT_NAME }}
           AZURE_CERT_PROFILE: ${{ vars.AZURE_CERTIFICATE_PROFILE_NAME }}
           AZURE_PUBLISHER_NAME: ${{ vars.AZURE_PUBLISHER_NAME }}
+          EXPECTED_WINDOWS_PUBLISHER: ${{ vars.WINDOWS_EXPECTED_PUBLISHER || vars.AZURE_PUBLISHER_NAME }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
         run: |
-          if [ -n "$AZURE_CLIENT_ID" ] && [ -n "$AZURE_CODE_SIGNING_ACCOUNT" ] && [ -n "$AZURE_CERT_PROFILE" ]; then
+          if [ -z "$EXPECTED_WINDOWS_PUBLISHER" ]; then
+            echo "::error::WINDOWS_EXPECTED_PUBLISHER (or AZURE_PUBLISHER_NAME) is required for publisher verification."
+            exit 1
+          fi
+          if [ -n "$AZURE_TENANT_ID" ] &&
+             [ -n "$AZURE_CLIENT_ID" ] &&
+             [ -n "$AZURE_CLIENT_SECRET" ] &&
+             [ -n "$AZURE_ENDPOINT" ] &&
+             [ -n "$AZURE_CODE_SIGNING_ACCOUNT" ] &&
+             [ -n "$AZURE_CERT_PROFILE" ] &&
+             [ -n "$AZURE_PUBLISHER_NAME" ]; then
             echo "==> Signing via Azure Trusted Signing ($AZURE_CODE_SIGNING_ACCOUNT/$AZURE_CERT_PROFILE)"
             npx electron-builder --win --publish never \
               --config.win.azureSignOptions.publisherName="$AZURE_PUBLISHER_NAME" \
               --config.win.azureSignOptions.endpoint="$AZURE_ENDPOINT" \
               --config.win.azureSignOptions.certificateProfileName="$AZURE_CERT_PROFILE" \
               --config.win.azureSignOptions.codeSigningAccountName="$AZURE_CODE_SIGNING_ACCOUNT"
-          elif [ -n "$CSC_LINK" ]; then
+          elif [ -n "$CSC_LINK" ] && [ -n "$CSC_KEY_PASSWORD" ]; then
             echo "==> Signing via CSC_LINK (traditional Authenticode cert)"
             npx electron-builder --win --publish never
           else
-            echo "::warning::No Windows signing configured (need AZURE_CLIENT_ID+AZURE_CODE_SIGNING_ACCOUNT_NAME+AZURE_CERTIFICATE_PROFILE_NAME, or CSC_LINK) — building an UNSIGNED installer. Users will see a SmartScreen 'unknown publisher' warning."
-            npx electron-builder --win --publish never
+            echo "::error::No complete Windows signing path is configured. Refusing to build an unsigned press artifact."
+            exit 1
           fi
 
       - name: Verify build artifacts
@@ -75,6 +97,27 @@ jobs:
           for f in "dist/$PRODUCT_NAME-Setup-$VERSION.exe" "dist/$PRODUCT_NAME-Setup-$VERSION.exe.blockmap" "dist/latest.yml"; do
             [ -f "$f" ] || { echo "Expected build artifact missing: $f" >&2; exit 1; }
           done
+
+      - name: Verify Authenticode signature
+        shell: pwsh
+        env:
+          EXPECTED_WINDOWS_PUBLISHER: ${{ vars.WINDOWS_EXPECTED_PUBLISHER || vars.AZURE_PUBLISHER_NAME }}
+        run: |
+          $version = node -p "require('./package.json').version"
+          $product = node -p "require('./package.json').productName"
+          $installer = "dist/$product-Setup-$version.exe"
+          $signature = Get-AuthenticodeSignature $installer
+          Write-Host "Publisher: $($signature.SignerCertificate.Subject)"
+          Write-Host "Status: $($signature.Status)"
+          if ($signature.Status -ne "Valid" -or -not $signature.SignerCertificate) {
+            throw "Windows installer is not validly Authenticode-signed."
+          }
+          if ([string]::IsNullOrWhiteSpace($env:EXPECTED_WINDOWS_PUBLISHER)) {
+            throw "Expected Windows publisher is not configured."
+          }
+          if ($signature.SignerCertificate.Subject -notlike "*$($env:EXPECTED_WINDOWS_PUBLISHER)*") {
+            throw "Unexpected Windows publisher: $($signature.SignerCertificate.Subject)"
+          }
 
       - name: Upload to release
         shell: bash
@@ -93,15 +136,23 @@ jobs:
     if: ${{ inputs.platform == 'all' || inputs.platform == 'linux' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.tag }}
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
 
       - run: npm ci
+
+      - name: Verify tag matches package version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          [ "v$VERSION" = "${{ inputs.tag }}" ] || {
+            echo "Tag/version mismatch: ${{ inputs.tag }} vs package $VERSION" >&2
+            exit 1
+          }
 
       - name: Build
         run: npx electron-builder --linux --publish never

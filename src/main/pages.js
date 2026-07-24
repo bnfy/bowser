@@ -57,12 +57,14 @@ function setupPages(hooks = {}) {
   // page — the preload only exposes the API on blanc:// documents, but
   // IPC channels are reachable by name, so the main process must not
   // trust that alone.
-  const handle = (channel, fn) => {
+  const handle = (channel, fn, { host = null } = {}) => {
     ipcMain.handle(channel, (event, ...args) => {
       let senderUrl = null;
       try { senderUrl = new URL(event.senderFrame?.url ?? ''); } catch { /* denied below */ }
       const trusted = event.senderFrame === event.sender.mainFrame &&
-        senderUrl?.protocol === 'blanc:' && KNOWN_PAGES.has(senderUrl.host);
+        senderUrl?.protocol === 'blanc:' &&
+        KNOWN_PAGES.has(senderUrl.host) &&
+        (!host || senderUrl.host === host);
       if (!trusted) {
         throw new Error(`${channel}: denied for ${event.senderFrame?.url ?? event.sender.getURL()}`);
       }
@@ -189,8 +191,28 @@ function setupPages(hooks = {}) {
     groups: hooks.startPage?.groups() ?? [],
     blockedThisWeek: hooks.startPage?.blockedThisWeek() ?? 0,
     remoteDevices: hooks.startPage?.remoteDevices() ?? [],
-  }));
-  handle('pages:start:focus-group', (id) => hooks.startPage?.focusGroup(String(id)));
+    ...hooks.startPage?.status?.(),
+  }), { host: 'newtab' });
+  handle(
+    'pages:start:focus-group',
+    (id) => hooks.startPage?.focusGroup(String(id)),
+    { host: 'newtab' }
+  );
+  handle(
+    'pages:start:startup-retry',
+    () => hooks.startPage?.retryAdblock?.(),
+    { host: 'newtab' }
+  );
+  handle(
+    'pages:start:startup-continue',
+    () => hooks.startPage?.continueWithoutAdblock?.(),
+    { host: 'newtab' }
+  );
+  handle(
+    'pages:start:privacy-complete',
+    (choices) => hooks.startPage?.completePrivacy?.(choices ?? {}),
+    { host: 'newtab' }
+  );
 
   // Default-browser state lives in LaunchServices/the OS, not settings.json.
   // canSet: a dev run must never register the bare Electron binary as a

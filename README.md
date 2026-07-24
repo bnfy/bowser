@@ -11,13 +11,15 @@ Ad/tracker blocking is wired in at the network layer, independent of
 Chrome's extension store and Manifest V3's `declarativeNetRequest` limits.
 Plus favorites, history, downloads, settings, private tabs, per-site
 permission prompts, session restore, and signed + notarized auto-updating
-builds.
+macOS builds.
 
 ## Install
 
 Grab the latest build from
-[Releases](https://github.com/bnfy/blanc/releases/latest): macOS (dmg/zip,
-arm64, signed & notarized), Windows (NSIS installer), or Linux (AppImage).
+[Releases](https://github.com/bnfy/blanc/releases/latest): macOS (explicit
+Apple Silicon and/or Intel dmg/zip artifacts, signed & notarized), Windows
+(code-signed NSIS installer when included in the release), or Linux
+(x86_64 AppImage).
 Installed copies keep themselves current via auto-update.
 
 ## Run it from source
@@ -27,11 +29,15 @@ npm install
 npm start
 ```
 
-First launch takes a moment longer than usual — the ad blocker fetches and
-compiles EasyList + EasyPrivacy, then caches the compiled engine in the
-app's userData directory so subsequent launches are instant. Delete the
-`adblock-engine.v*.bin` file there to force a refresh. Dev runs use their
-own userData profile, so they never touch an installed copy's data.
+On first launch, local chrome and the start page appear immediately while
+the ad blocker fetches and compiles EasyList + EasyPrivacy. Web navigation
+waits for that protection; if the list build fails, the start page offers
+Retry or an explicit Continue without blocking. The compiled engine is
+cached in the app's userData directory so subsequent launches are instant.
+Delete the `adblock-engine.v*.bin` file there to force a rebuild. A truly
+fresh profile also records the search-suggestion and usage-ping choices
+before either feature can send data. Dev runs use their own userData profile,
+so they never touch an installed copy's data.
 
 To build an installable app: `npm run dist` (or `npm run dist:dir` for a
 quick unpacked build in `dist/`). Targets: macOS dmg/zip, Windows NSIS,
@@ -76,8 +82,8 @@ suggestions can be disabled in Settings.
 history, they're excluded from session restore and reopen-closed-tab, and
 popups they open stay private. Cookies, storage, cache, service workers, HTTP
 auth, and permission decisions live in a separate in-memory session that is
-discarded when Blanc quits. The whole chrome shifts to a dedicated
-green-night theme while one is active, and the pill grows a `private ✕`
+discarded when Blanc quits. The whole chrome shifts to a deeper neutral
+private theme while one is active, and the pill grows a `private ✕`
 chip for a quick exit.
 
 ## Auto-updates
@@ -95,10 +101,11 @@ Trusted Signing if configured (repo secrets `AZURE_TENANT_ID`/
 `AZURE_CLIENT_ID`/`AZURE_CLIENT_SECRET` + repo variables
 `AZURE_TRUSTED_SIGNING_ENDPOINT`/`AZURE_CODE_SIGNING_ACCOUNT_NAME`/
 `AZURE_CERTIFICATE_PROFILE_NAME`/`AZURE_PUBLISHER_NAME`), else falls back
-to a traditional cert via `CSC_LINK`/`CSC_KEY_PASSWORD` secrets, else
-builds unsigned — unsigned (or freshly-OV-signed) installers hit a
-SmartScreen "unknown publisher" warning until reputation builds up, which
-Azure Trusted Signing skips. Running installs pick releases up on their
+to a traditional cert via `CSC_LINK`/`CSC_KEY_PASSWORD` secrets. A release
+workflow without either complete signing path fails instead of publishing
+an unsigned Windows press artifact; a traditionally signed build that still
+has a SmartScreen reputation warning is treated as Preview, not Stable.
+Running installs pick releases up on their
 next check (startup + every
 4 h, or **Check for Updates…** in the menu) and prompt to restart. Dev
 builds (`npm start`) skip all of this.

@@ -3,6 +3,21 @@
    dashed borders + a "private" chip, not by a color cast. The theme follows
    Electron's nativeTheme (Settings → Appearance), which drives
    prefers-color-scheme here. */
+@font-face {
+  font-family: "Inter";
+  src: url("pages/inter-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("pages/jetbrains-mono-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+}
+
 :root {
   --bg: #ffffff;
   --surface: #f7f7f7;

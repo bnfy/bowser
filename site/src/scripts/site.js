@@ -16,14 +16,24 @@
   // devices. The individual links remain available as fallbacks.
   const downloadOptions = document.querySelector('[data-download-options]');
   if (os && downloadOptions) {
-    const preferred = links.find((link) => link.dataset.platform === os);
+    const preferred = links.find((link) =>
+      link.dataset.platform === os ||
+      (os === 'mac' && link.dataset.platform === 'mac-arm64')
+    );
     if (preferred?.parentElement === downloadOptions) downloadOptions.prepend(preferred);
   }
 
   const pickAsset = (assets, kind) => {
-    if (kind === 'mac') {
+    // A Mac user agent does not reliably reveal Apple Silicon vs Intel.
+    // Generic Mac CTAs therefore stay on /download, where both signed
+    // artifacts are explicit, instead of guessing the wrong binary.
+    if (kind === 'mac') return null;
+    if (kind === 'mac-arm64' || kind === 'mac-x64') {
       const dmgs = assets.filter((asset) => asset.name.endsWith('.dmg'));
-      return dmgs.find((asset) => asset.name.includes('arm64')) || dmgs[0];
+      if (kind === 'mac-x64') {
+        return dmgs.find((asset) => !asset.name.includes('arm64')) || null;
+      }
+      return dmgs.find((asset) => asset.name.includes('arm64')) || null;
     }
     if (kind === 'win') return assets.find((asset) => asset.name.endsWith('.exe'));
     if (kind === 'linux') return assets.find((asset) => asset.name.endsWith('.AppImage'));
@@ -35,7 +45,14 @@
     .then((release) => {
       links.forEach((link) => {
         const asset = pickAsset(release.assets, link.dataset.platform);
-        if (asset) link.href = asset.browser_download_url;
+        if (asset) {
+          link.href = asset.browser_download_url;
+        } else if (link.parentElement === downloadOptions) {
+          // The release pipeline may intentionally omit an architecture or
+          // platform that has not passed its native gate. Do not leave a card
+          // that promises an artifact the current release does not contain.
+          link.hidden = true;
+        }
       });
       if (!os) return;
       const asset = pickAsset(release.assets, os);

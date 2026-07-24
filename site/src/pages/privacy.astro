@@ -17,7 +17,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   <p class="legal-updated">Last updated: July 23, 2026</p>
 
   <div class="legal-tldr">
-    <p><strong>The short version.</strong> Blanc is built to collect as little as possible. Your browsing history, downloads, and favorites stay on your device — we never receive them. The installed app sends one small usage ping you can switch off, and nothing else leaves your device unless you opt in. This website uses analytics only if you allow it, and its newsletter only ever knows your email address if you choose to give it.</p>
+    <p><strong>The short version.</strong> Blanc keeps your browsing history, downloads, favorites, and settings on your device unless you enable end-to-end-encrypted Profile Sync for eligible data. A fresh install asks before search suggestions or the pseudonymous launch ping can send anything. Like any browser, Blanc still connects to sites you visit and makes clearly described service requests for blocking lists, updates, enabled suggestions, optional sync, and supporter activation. This website uses analytics only if you allow it.</p>
   </div>
 
   <h2>Who this covers</h2>
@@ -35,14 +35,14 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     <li>Cookies and site data from the pages you visit</li>
     <li>The permissions you've granted to individual websites</li>
   </ul>
-  <p>Private tabs go a step further: pages you open in a private tab are never written to history at all.</p>
-  <p>Because this data is local, you're the one in control of it — Blanc's history, downloads, and favorites screens let you remove items, and uninstalling Blanc removes its data folder.</p>
+  <p>Private tabs go a step further: pages you open in a private tab are never written to history. Private tabs share a separate in-memory browsing session with other private tabs opened during the same app run, not with regular tabs, and that session is discarded when Blanc quits.</p>
+  <p>Because this data is local, you're the one in control of it — Blanc's history, downloads, and favorites screens let you remove items. Removing the application itself may leave its local profile behind; clearing the app's data folder removes that remaining local record.</p>
 
-  <h2>What Blanc sends — and only when</h2>
-  <p>There are exactly three things Blanc can send off your device. One is a small pseudonymous usage ping that's on by default and easy to turn off. The other two happen only if you choose them.</p>
+  <h2>What Blanc sends — and when</h2>
+  <p>Blanc makes a small number of app-service requests in addition to the sites and search providers you choose to use. The sections below describe the optional data features first; ordinary blocking, update, favicon, and network requests are listed under “Browsing the web with Blanc.”</p>
 
   <h3>Usage ping</h3>
-  <p>So we can gauge roughly how many people use Blanc, the installed app sends a small ping when it launches. <strong>It's on by default, and you can turn it off any time in Settings, under "Help improve Blanc."</strong></p>
+  <p>So we can gauge roughly how many people use Blanc, an installed build can send a small ping when it launches. <strong>On a fresh profile, Blanc shows the choice before the first ping; the checkbox starts on, and you can turn it off before continuing or any time later in Settings under “Help improve Blanc.” Existing profiles retain their saved setting.</strong></p>
   <p>Each ping contains only:</p>
   <ul>
     <li>a random install ID — a token that identifies the installation, not you (this makes the ping <em>pseudonymous</em> rather than fully anonymous: repeat launches from the same install can be recognized as such, but nothing links the token to a person)</li>
@@ -60,23 +60,27 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   <p>The install ID is kept in its own small file on your device. You can reset it any time with the <strong>"Reset install ID"</strong> button in Settings — from then on you count as a brand-new install — and it's also cleared when you remove the app's data. Development builds send no pings at all.</p>
   <p>One transition note, in the interest of full honesty: before a migration in July 2026, our collector used the random token directly — in its own storage and in what it forwarded to Google Analytics — rather than a salted hash of it. The pre-hashing markers have been deleted from our storage, and the older Google Analytics events age out under its data-retention settings. Those events contained the same random token and version/platform details described above, and nothing more.</p>
 
+  <h3>Search suggestions (optional)</h3>
+  <p>If search suggestions are enabled, Blanc sends an eligible prefix typed in the Island to the search provider selected in Settings (DuckDuckGo, Google, Bing, or Brave Search) and displays that provider's suggestions. A fresh profile asks before the first request, and the device-local switch can be turned off at any time.</p>
+  <p>Suggestion requests are main-process-only, cookie-free, bounded, and never made from private tabs. Blanc also keeps pasted text, slash commands, URLs and URL-like values, local paths, payment-card-like numbers, and recognized credential/token prefixes out of autocomplete. Pressing Enter to perform a search still sends the completed search query to the selected provider, as expected.</p>
+
   <h3>Profile Sync (optional, off by default)</h3>
-  <p>If you turn on Profile Sync in Settings, Blanc can keep your <strong>favorites and settings</strong> in step across your own devices. It stays off until you set it up with a sync name and passphrase.</p>
+  <p>If you turn on Profile Sync in Settings, Blanc can keep your <strong>favorites and eligible settings</strong> in step across your own devices. It stays off until you set it up with a sync name and passphrase. Each device also has a separate, off-by-default choice to publish a bounded read-only snapshot of its open HTTP(S) tabs.</p>
   <p>Sync is end-to-end encrypted. The encryption key is derived from your passphrase on your device, and only encrypted data — which we cannot read, index, or decrypt — is stored on our server. Your passphrase never leaves your device, and we never store it. That also means that if you lose your passphrase, we can't recover your data, because we never had access to it.</p>
-  <p>Sync deliberately covers only favorites and settings. It does <strong>not</strong> sync your history, downloads, permissions, cookies or site data, your supporter status, your app-icon choice, or your usage-ping setting.</p>
+  <p>When open-tab sharing is enabled, Blanc can include bounded, source-rasterized PNG favicons in a separate encrypted sidecar. This lets the receiving device draw a remote tab without contacting that tab's website. Private tabs never enter a snapshot. Sync does <strong>not</strong> include history, downloads, permissions, cookies or site data, supporter status, app-icon choice, search-suggestion choice, or usage-ping choice.</p>
 
   <h3>Supporter purchase (optional)</h3>
-  <p>Blanc is free. If you choose to become a supporter, that one-time purchase is handled by our payment provider, <a href="https://polar.sh" target="_blank" rel="noopener">Polar</a>, which acts as the merchant of record. Polar processes your payment and email address under <a href="https://polar.sh/legal/privacy" target="_blank" rel="noopener">their privacy policy</a>. Blanc receives only a confirmation that you're a supporter and stores a small local flag to unlock the extra app-icon colorways. We never see your full payment details.</p>
+  <p>Blanc is free. If you choose to become a supporter, that one-time purchase is handled by our payment provider, <a href="https://polar.sh" target="_blank" rel="noopener">Polar</a>, which acts as the merchant of record. Polar processes your payment and email address under <a href="https://polar.sh/legal/privacy" target="_blank" rel="noopener">their privacy policy</a>. When you activate inside Blanc, the app sends your license key, Blanc's public organization ID, and the generic label “Blanc desktop” to Polar's activation API. Blanc stores the key and activation record locally and trusts it offline afterward; we never receive your full payment details.</p>
 
   <h2 id="browsing-the-web-with-blanc">Browsing the web with Blanc</h2>
   <p>Blanc is a web browser, so when you visit a site, Blanc connects you to it directly — that site and its servers see your requests just as they would in any browser. We don't sit between you and the web, and we don't log or monitor the pages you visit.</p>
   <p>Blanc's built-in ad and tracker blocking <em>reduces</em> how much third parties can follow you around the web, but no blocker catches everything, so it's best thought of as a strong default rather than a guarantee.</p>
   <p>Aside from the sites you choose to visit, Blanc itself makes a few ordinary network requests:</p>
   <ul>
-    <li>it loads its interface fonts from Google Fonts;</li>
-    <li>it downloads ad and tracker block lists (EasyList and EasyPrivacy) on first launch and to keep them current;</li>
-    <li>it fetches site icons (favicons) so your favorites, history, and tabs show the right logos;</li>
+    <li>it downloads ad and tracker block lists (EasyList and EasyPrivacy) when the local blocker cache must be created or rebuilt;</li>
+    <li>it loads site-provided icons while you browse and may retain a favorite's icon URL locally; encrypted remote-tab icons are supplied by the source device instead of being fetched by the receiver;</li>
     <li>in installed builds, it checks GitHub for app updates.</li>
+    <li>if you choose a named or custom secure-DNS provider, DNS lookups go to that provider under the policy shown in Settings.</li>
   </ul>
 
   <h2>This website (blancbrowser.com)</h2>

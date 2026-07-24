@@ -37,10 +37,11 @@
     "secureDns": "auto",
     "secureDnsTemplate": "",
     "usagePing": true,
+    "onboardingVersion": 0,
     "supporter": null
   },
   "$internalDefaults": "Keys present in settings.js DEFAULTS that are intentionally desktop-only (not mobile-parity settings); settings:check allowlists these instead of requiring them in the schema.",
-  "internalDefaults": ["_syncMeta"],
+  "internalDefaults": ["onboardingVersion", "_syncMeta"],
   "settings": [
     { "key": "searchEngine", "type": "enum", "enum": "searchEngines", "default": "duckduckgo" },
     { "key": "searchSuggestions", "type": "boolean", "default": true, "note": "device-local; not synced; private tabs override off" },

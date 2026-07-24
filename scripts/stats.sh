@@ -10,7 +10,7 @@ command -v gh >/dev/null 2>&1 || { echo "error: gh CLI is required" >&2; exit 1;
 gh auth status >/dev/null 2>&1 || { echo "error: gh is not authenticated (run: gh auth login)" >&2; exit 1; }
 
 {
-  printf 'tag\tinstalls\tupdate-checks\n'
+  printf 'tag\tartifact-downloads\tupdate-checks\n'
   gh api 'repos/bnfy/blanc/releases' --paginate --jq '
     .[] | [
       .tag_name,

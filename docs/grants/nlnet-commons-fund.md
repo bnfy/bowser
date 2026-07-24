@@ -6,7 +6,9 @@
 > Stack" effort — regular calls reopen after the summer (check
 > https://nlnet.nl/propose/ around September 2026). The questions below
 > match NLnet's long-standing form and should carry over. Nothing here has
-> been submitted.
+> been submitted. **Eligibility blocker:** Blanc is currently proprietary
+> (`UNLICENSED`) even though its source repository is visible. Do not submit
+> this open-source grant application unless the licensing decision changes.
 
 ## Project name
 
@@ -18,16 +20,18 @@ https://blancbrowser.com · https://github.com/bnfy/blanc
 
 ## Abstract (max ~1200 chars)
 
-Blanc is an independent, open-source desktop browser for macOS, Windows,
-and Linux that treats user agency as the baseline, not an extension.
+Blanc is an independent, source-visible proprietary desktop browser for
+macOS, Windows, and Linux that treats user agency as the baseline, not an
+extension.
 Ad and tracker blocking (EasyList/EasyPrivacy) is wired in at the network
 layer of the browser itself — independent of any extension store and of
 Manifest V3's declarativeNetRequest limits, which are steadily narrowing
 what user-installed blockers may do. The interface is a single floating
 "island" replacing the tab strip and toolbar, private tabs never touch
-disk history, permissions are explicit, and telemetry is a single opt-in,
-anonymous launch ping. This grant funds the work that makes an independent
-shell a *practical* daily browser rather than a demo: WebAuthn
+disk history, permissions are explicit, and the app's default-on
+pseudonymous launch ping is disclosed on first run and can be switched off.
+This grant funds work that strengthens Blanc as a practical daily browser:
+WebAuthn
 platform-authenticator (passkey) support, which today is gated behind
 OS-vendor allowlists that exclude independent browsers; feature parity for
 the Windows/Linux builds; hardened, reproducible filter-list update
@@ -69,7 +73,8 @@ a deliberately small, auditable codebase (~single-digit-thousands of
 lines around the Chromium engine via Electron) where blocking, privacy
 behavior, and UI are all first-party code — small enough for one person
 to understand end-to-end, which is precisely the property that makes
-user-agency guarantees credible.
+user-agency guarantees easier to inspect, while the current proprietary
+license limits reuse.
 
 ## What are significant technical challenges you expect to solve during the project?
 
@@ -84,6 +89,7 @@ reproducible cross-platform release infrastructure for a one-person team.
 Users: people who want a quiet, blocking-by-default browser without a
 corporate agenda. Ecosystem: EasyList/EasyPrivacy maintainers (upstream
 filter lists), Ghostery's adblocker library (engine), the Electron
-project, and Apple's password-manager-resources dataset. All outcomes
-land in the public repo; the entitlement documentation in particular
-fills a gap every independent browser project currently hits blind.
+project, and Apple's password-manager-resources dataset. Technical outcomes
+and documentation can land in the publicly visible repo under Blanc's current
+license; the entitlement documentation in particular fills a gap every
+independent browser project currently hits blind.

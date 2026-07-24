@@ -1,6 +1,21 @@
 /* Token roles mirror styles.css: neutral monochrome — pure paper/ink with
    graphite grays, no hue (matches the blancbrowser.com redesign). Theme
    follows nativeTheme via prefers-color-scheme. */
+@font-face {
+  font-family: "Inter";
+  src: url("inter-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("jetbrains-mono-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+}
+
 :root {
   --bg: #ffffff;
   --surface: #f7f7f7;
@@ -472,6 +487,73 @@ button.danger:hover { color: var(--on-danger); background: var(--danger); border
   font-weight: 600;
   letter-spacing: -0.015em;
   margin: 10px 0 0;
+}
+
+.launch-card {
+  margin-top: 28px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.launch-card-kicker {
+  margin-bottom: 7px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.launch-card h2 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.3;
+}
+.launch-card > p {
+  margin: 8px 0 0;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+.launch-card-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 16px;
+}
+.launch-card-actions button.quiet {
+  color: var(--text-dim);
+  background: transparent;
+}
+.launch-choice {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  margin-top: 16px;
+  cursor: pointer;
+}
+.launch-choice input {
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+.launch-choice strong,
+.launch-choice small {
+  display: block;
+}
+.launch-choice strong {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.launch-choice small {
+  margin-top: 3px;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.launch-error {
+  color: var(--danger);
+  font-size: 11.5px;
 }
 
 .ledger-section { margin-top: 50px; }

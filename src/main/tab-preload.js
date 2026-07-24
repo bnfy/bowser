@@ -33,6 +33,12 @@ if (window.location.protocol === 'blanc:') {
     start: {
       data: () => ipcRenderer.invoke('pages:start:data'),
       focusGroup: (id) => ipcRenderer.invoke('pages:start:focus-group', id),
+      retryStartup: () => ipcRenderer.invoke('pages:start:startup-retry'),
+      continueWithoutBlocking: () => ipcRenderer.invoke('pages:start:startup-continue'),
+      completePrivacy: (choices) => ipcRenderer.invoke('pages:start:privacy-complete', choices),
+      onStatus: (callback) => {
+        ipcRenderer.on('pages:start:status', (_event, status) => callback(status));
+      },
       // Subscribe-only: main pushes fresh remote-device tabs when a sync
       // pull lands after the page first painted (tab sync).
       onRemoteTabs: (callback) => {

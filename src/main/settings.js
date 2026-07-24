@@ -1,4 +1,7 @@
 const { JsonStore } = require('./store');
+const { app } = require('electron');
+const fs = require('fs');
+const path = require('path');
 const { isValidDohTemplate, reconcileSecureDnsWrite, coerceSecureDnsRead } = require('./network-privacy');
 const APP_ICON_ASSETS = require('./app-icon-assets');
 
@@ -14,6 +17,7 @@ const THEMES = ['system', 'light', 'dark'];
 // Network-privacy enums (bare arrays, like THEMES — build.mjs parses them by name).
 const WEBRTC_POLICIES = ['standard', 'strict'];
 const SECURE_DNS_OPTIONS = ['auto', 'off', 'cloudflare', 'quad9', 'mullvad', 'custom'];
+const FIRST_RUN_VERSION = 1;
 
 // Keys that sync across devices (see the profile-sync spec). Deliberately
 // excludes appIcon and searchSuggestions (device-local), usagePing
@@ -83,6 +87,11 @@ const DEFAULTS = {
   // (opt-out in Settings); no browsing data, only version/OS plus a random
   // per-install id used solely to count distinct active users.
   usagePing: true,
+  // Device-local completion marker for the compact first-run privacy card.
+  // Existing profiles are promoted to the current version when their
+  // pre-existing settings file is first opened; only a truly missing
+  // settings file starts at 0.
+  onboardingVersion: 0,
   // Blanc Supporter license — null, or { key, activationId, activatedAt }.
   // Written only by setSupporter() (the Polar activation flow), never by
   // the generic setSettings() path. Once set, trusted forever — offline OK.
@@ -93,10 +102,45 @@ const DEFAULTS = {
 };
 
 let store = null;
+let existingProfileHint = null;
 const listeners = new Set();
 
+function setExistingProfileHint(existed) {
+  if (store) throw new Error('setExistingProfileHint must run before settings are loaded');
+  existingProfileHint = !!existed;
+}
+
 function ensureStore() {
-  if (!store) store = new JsonStore('settings', DEFAULTS);
+  if (!store) {
+    const settingsFile = path.join(app.getPath('userData'), 'settings.json');
+    const profileAlreadyExisted = existingProfileHint ?? fs.existsSync(settingsFile);
+    let storedSettings = null;
+    try {
+      storedSettings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+    } catch {
+      // Missing/corrupt settings have no trustworthy onboarding marker.
+    }
+    const hasOnboardingMarker =
+      storedSettings &&
+      Object.prototype.hasOwnProperty.call(storedSettings, 'onboardingVersion');
+    store = new JsonStore('settings', DEFAULTS);
+    // Profiles created before the first-run card already made their privacy
+    // choices through Settings (or accepted the then-current defaults).
+    // An explicit marker — including version 0 — belongs to the new flow and
+    // must survive a quit before the user decides.
+    const legacyProfile =
+      profileAlreadyExisted &&
+      (!fs.existsSync(settingsFile) || (storedSettings && !hasOnboardingMarker));
+    if (legacyProfile && store.data.onboardingVersion < FIRST_RUN_VERSION) {
+      store.data.onboardingVersion = FIRST_RUN_VERSION;
+      store.flush();
+    } else if (!profileAlreadyExisted || !storedSettings) {
+      // Persist version 0 immediately. Other stores (especially session.json)
+      // may appear before the choice is made; this marker prevents the next
+      // launch from mistaking that interrupted first run for a legacy profile.
+      store.flush();
+    }
+  }
   return store;
 }
 
@@ -107,6 +151,9 @@ function getSettings() {
   const data = { ...ensureStore().data };
   if (typeof data.searchSuggestions !== 'boolean') {
     data.searchSuggestions = DEFAULTS.searchSuggestions;
+  }
+  if (!Number.isInteger(data.onboardingVersion) || data.onboardingVersion < 0) {
+    data.onboardingVersion = DEFAULTS.onboardingVersion;
   }
   if (!isAppIconAllowed(data.appIcon)) data.appIcon = DEFAULTS.appIcon;
   // Read coercion for a corrupted stored state (hand-edited settings.json): custom
@@ -185,6 +232,46 @@ function onSettingsChanged(fn) {
   listeners.add(fn);
 }
 
+function isFirstRunComplete() {
+  return ensureStore().data.onboardingVersion >= FIRST_RUN_VERSION;
+}
+
+/**
+ * Persist both network-affecting first-run choices and the completion marker
+ * in one synchronous commit. Callers must not start suggestions or telemetry
+ * unless `completed` is true.
+ */
+function completeFirstRunPrivacyChoices(partial = {}) {
+  if (isFirstRunComplete()) {
+    return { completed: true, settings: getSettings() };
+  }
+  if (
+    typeof partial.searchSuggestions !== 'boolean' ||
+    typeof partial.usagePing !== 'boolean'
+  ) {
+    return { completed: false, error: 'invalid-choices' };
+  }
+
+  const s = ensureStore();
+  const previous = {
+    searchSuggestions: s.data.searchSuggestions,
+    usagePing: s.data.usagePing,
+    onboardingVersion: s.data.onboardingVersion,
+  };
+  s.update((data) => {
+    data.searchSuggestions = partial.searchSuggestions;
+    data.usagePing = partial.usagePing;
+    data.onboardingVersion = FIRST_RUN_VERSION;
+  });
+  if (!s.flush()) {
+    Object.assign(s.data, previous);
+    return { completed: false, error: 'write-failed' };
+  }
+  const next = getSettings();
+  for (const fn of listeners) fn(next);
+  return { completed: true, settings: next };
+}
+
 function isSupporterActive() {
   return !!ensureStore().data.supporter;
 }
@@ -252,8 +339,11 @@ module.exports = {
   SUPPORTER_ICONS,
   SUPPORTER_ICON_LABELS,
   getSettings,
+  setExistingProfileHint,
   setSettings,
   onSettingsChanged,
+  isFirstRunComplete,
+  completeFirstRunPrivacyChoices,
   searchUrlFor,
   isSupporterActive,
   isAppIconAllowed,

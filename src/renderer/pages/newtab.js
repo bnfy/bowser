@@ -18,6 +18,94 @@ if (isPrivate) {
     'not saved to history · site data stays in a private in-memory session · passkeys created here are lost on quit';
 }
 
+const startupCard = document.getElementById('startupCard');
+const startupTitle = document.getElementById('startupTitle');
+const startupMessage = document.getElementById('startupMessage');
+const startupActions = document.getElementById('startupActions');
+const startupRetry = document.getElementById('startupRetry');
+const startupContinue = document.getElementById('startupContinue');
+const privacyCard = document.getElementById('privacyCard');
+const privacySuggestions = document.getElementById('privacySuggestions');
+const privacyPing = document.getElementById('privacyPing');
+const privacyContinue = document.getElementById('privacyContinue');
+const privacyError = document.getElementById('privacyError');
+
+function renderLaunchStatus({ startup, privacy } = {}) {
+  if (isPrivate) {
+    startupCard.hidden = true;
+    privacyCard.hidden = true;
+    return;
+  }
+
+  const showStartup = startup?.phase === 'initializing' || startup?.phase === 'failed';
+  const startupWasHidden = startupCard.hidden;
+  startupCard.hidden = !showStartup;
+  if (showStartup) {
+    const failed = startup.phase === 'failed';
+    startupTitle.textContent = failed
+      ? 'Blocking could not start.'
+      : startup.attempt > 1
+        ? 'Retrying blocking…'
+        : 'Preparing blocking…';
+    startupMessage.textContent = failed
+      ? 'Blanc has not opened queued web pages because its ad and tracker filters are unavailable. Retry, or explicitly continue with blocking turned off.'
+      : 'Blanc is preparing its local ad and tracker filters before opening web pages.';
+    startupActions.hidden = !failed;
+    if (failed && startupWasHidden) startupRetry.focus();
+  }
+
+  const showPrivacy = !!privacy?.required;
+  const privacyWasHidden = privacyCard.hidden;
+  privacyCard.hidden = !showPrivacy;
+  if (showPrivacy) {
+    if (privacyWasHidden) {
+      privacySuggestions.checked = !!privacy.searchSuggestions;
+      privacyPing.checked = !!privacy.usagePing;
+    }
+    if (privacyWasHidden && startup?.phase !== 'failed') privacyContinue.focus();
+  }
+}
+
+startupRetry.addEventListener('click', async () => {
+  startupRetry.disabled = true;
+  startupContinue.disabled = true;
+  try {
+    await window.bowserPages?.start.retryStartup();
+  } finally {
+    startupRetry.disabled = false;
+    startupContinue.disabled = false;
+  }
+});
+
+startupContinue.addEventListener('click', async () => {
+  startupRetry.disabled = true;
+  startupContinue.disabled = true;
+  try {
+    await window.bowserPages?.start.continueWithoutBlocking();
+  } finally {
+    startupRetry.disabled = false;
+    startupContinue.disabled = false;
+  }
+});
+
+privacyContinue.addEventListener('click', async () => {
+  privacyContinue.disabled = true;
+  privacyError.textContent = '';
+  try {
+    const result = await window.bowserPages?.start.completePrivacy({
+      searchSuggestions: privacySuggestions.checked,
+      usagePing: privacyPing.checked,
+    });
+    if (!result?.completed) {
+      privacyError.textContent = result?.error === 'write-failed'
+        ? 'Could not save these choices. Check disk access and try again.'
+        : 'Choose both options and try again.';
+    }
+  } finally {
+    privacyContinue.disabled = false;
+  }
+});
+
 window.bowserPages?.appVersion().then((version) => {
   document.getElementById('version').textContent = `v${version}`;
 });
@@ -106,7 +194,14 @@ function renderRemote(remoteDevices) {
   }
 }
 
-window.bowserPages?.start.data().then(({ groups, blockedThisWeek, remoteDevices }) => {
+window.bowserPages?.start.data().then(({
+  groups,
+  blockedThisWeek,
+  remoteDevices,
+  startup,
+  privacy,
+}) => {
+  renderLaunchStatus({ startup, privacy });
   if (!isPrivate) {
     document.getElementById('footerLeft').textContent =
       `${blockedThisWeek.toLocaleString()} ads blocked this week`;
@@ -135,3 +230,4 @@ window.bowserPages?.start.data().then(({ groups, blockedThisWeek, remoteDevices 
 });
 
 window.bowserPages?.start.onRemoteTabs(renderRemote);
+window.bowserPages?.start.onStatus(renderLaunchStatus);

@@ -8,6 +8,7 @@ const {
   isWebContentsExcepted,
   installCosmeticExceptionHandlers,
 } = require('./adblock-exceptions');
+const { createAdblockEventBridge } = require('./adblock-events');
 
 // Cache the compiled filter engine on disk so we don't re-fetch and
 // re-parse EasyList/EasyPrivacy on every launch. The engine validates the
@@ -21,6 +22,7 @@ const cachePath = () =>
 let blocker = null;
 /** Every browsing session protected by the shared blocker engine. */
 const attachedSessions = new Set();
+const eventBridge = createAdblockEventBridge();
 
 /** Read live (not cached) so edits to the exception list apply immediately. */
 function isExcepted(details) {
@@ -88,11 +90,11 @@ function applyBlockingWithExceptions(session) {
  * kind of cosmetic injection is allowed.
  *
  * @param {Electron.Session} session - typically session.defaultSession
- * @param {{ enabled?: boolean }} [options]
+ * @param {{ enabled?: boolean, fetchImpl?: typeof fetch }} [options]
  * @returns {Promise<ElectronBlocker>}
  */
-async function setupAdBlocker(session, { enabled = true } = {}) {
-  blocker = await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch, {
+async function setupAdBlocker(session, { enabled = true, fetchImpl = fetch } = {}) {
+  blocker = await ElectronBlocker.fromPrebuiltAdsAndTracking(fetchImpl, {
     path: cachePath(),
     read: fs.promises.readFile,
     write: fs.promises.writeFile,
@@ -103,6 +105,7 @@ async function setupAdBlocker(session, { enabled = true } = {}) {
   // declarations prevents one scriptlet from corrupting another's live
   // Proxy closures while preserving network blocking and cosmetic CSS.
   installScriptletIsolation(blocker);
+  eventBridge.bind(blocker);
 
   attachAdBlockerToSession(session, { enabled });
   return blocker;
@@ -129,4 +132,10 @@ function getBlocker() {
   return blocker;
 }
 
-module.exports = { setupAdBlocker, attachAdBlockerToSession, setAdBlockEnabled, getBlocker };
+module.exports = {
+  setupAdBlocker,
+  attachAdBlockerToSession,
+  setAdBlockEnabled,
+  getBlocker,
+  onRequestBlocked: eventBridge.onRequestBlocked,
+};

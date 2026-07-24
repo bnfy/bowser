@@ -85,7 +85,7 @@
     github:   { title: 'GitHub',    domain: 'github.com',      fav: 'github.com',   shield: 0 },
   };
 
-  const ICON_BASE = 'https://icons.duckduckgo.com/ip3/';
+  const ICON_BASE = '/favicons/';
   const favStyle = (t) => t.fav ? `background-image:url('${ICON_BASE}${t.fav}.ico')` : '';
 
   /* ---- real page renders for the tabs a scene can land on ----
